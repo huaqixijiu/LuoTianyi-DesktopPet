@@ -31,6 +31,7 @@ internal sealed partial class PlannerWindow : Window
     private bool _alarm,_editing,_batch,_manage,_details=true;
     private bool _calendarDragActive;
     private bool _calendarDragMoved;
+    private bool _calendarDragTargetSelected;
     private bool _suppressCalendarClick;
     private DateTime? _calendarDragStartDay;
     private Point _calendarDragLastPoint;
@@ -209,9 +210,17 @@ internal sealed partial class PlannerWindow : Window
     private void EditWorkdays(){_batch=true;_alarm=false;Render();}
     private UIElement RestControls()
     {
-        StackPanel inner=new();
-        DockPanel title=new();var close=IconButton("close",()=>{_batch=false;_selected.Clear();Render();},"完成班休");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);title.Children.Add(Text("调整班休",18,FontWeights.SemiBold));inner.Children.Add(title);
-        inner.Children.Add(Text("每周休息",13,FontWeights.SemiBold));
+        Grid inner=new();
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star),MinHeight=120});
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        DockPanel title=new();var close=IconButton("close",()=>{_batch=false;_selected.Clear();Render();},"完成班休");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);title.Children.Add(Text("调整班休",18,FontWeights.SemiBold));Grid.SetRow(title,0);inner.Children.Add(title);
+        var weeklyTitle=Text("每周休息",13,FontWeights.SemiBold);Grid.SetRow(weeklyTitle,1);inner.Children.Add(weeklyTitle);
         WrapPanel days=new(){Margin=new Thickness(0,2,0,6)};
         foreach(var d in Days)
         {
@@ -220,7 +229,8 @@ internal sealed partial class PlannerWindow : Window
             if(_service.Book.RestWeekdays.Contains(d)){btn.Background=PlannerTheme.AccentSoft;btn.Foreground=PlannerTheme.Accent;btn.BorderBrush=PlannerTheme.Accent;btn.FontWeight=FontWeights.SemiBold;}
             btn.Margin=new Thickness(0,0,6,6);days.Children.Add(btn);
         }
-        inner.Children.Add(days);
+        Grid.SetRow(days,2);inner.Children.Add(days);
+        var priorityHint=Text("指定日期会覆盖每周设置；恢复默认后跟随每周设置。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
         DockPanel head=new(){LastChildFill=false};
         head.Children.Add(Text("指定日期",13,FontWeights.SemiBold));
         head.Children.Add(Text($"已选 {_selected.Count} 天",12));
@@ -232,7 +242,7 @@ internal sealed partial class PlannerWindow : Window
         clearSelected.Click+=(_,_)=>{_selected.Clear();Render();};
         DockPanel.SetDock(clearSelected,Dock.Right);
         head.Children.Add(clearSelected);
-        inner.Children.Add(head);
+        Grid.SetRow(head,4);inner.Children.Add(head);
         StackPanel rows=new();
         foreach(var day in _selected.OrderBy(d=>d))
         {
@@ -242,7 +252,7 @@ internal sealed partial class PlannerWindow : Window
             rows.Children.Add(row);
         }
         if(rows.Children.Count==0)rows.Children.Add(Text("单击日期可选中或取消；按住左键拖动可连续选择日期。",12));
-        inner.Children.Add(new ScrollViewer{Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=168});
+        ScrollViewer selectedDates=new(){Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Stretch,MinHeight=120,Margin=new Thickness(0,2,0,4)};Grid.SetRow(selectedDates,5);inner.Children.Add(selectedDates);
         Button[] batchActions=[
             Primary(AsyncAction("设为休息日",()=>SetRest(true))),
             AsyncAction("设为工作日",()=>SetRest(false)),
@@ -256,10 +266,10 @@ internal sealed partial class PlannerWindow : Window
             b.IsEnabled=_selected.Count>0;
             b.HorizontalAlignment=HorizontalAlignment.Stretch;
             b.Margin=new Thickness(0,4,0,4);
-            inner.Children.Add(b);
+            if(b==batchActions[2])b.ToolTip="清除指定日期覆盖，恢复每周休息规则";
         }
-        foreach(var b in new[]{Primary(AsyncAction("完成班休",async()=>{_batch=false;_selected.Clear();await Task.CompletedTask;Render();}))})
-        {b.HorizontalAlignment=HorizontalAlignment.Stretch;b.Margin=new Thickness(0,4,0,4);inner.Children.Add(b);}
+        StackPanel actions=new();foreach(var b in batchActions)actions.Children.Add(b);Grid.SetRow(actions,6);inner.Children.Add(actions);
+        var finish=Primary(AsyncAction("完成班休",async()=>{_batch=false;_selected.Clear();await Task.CompletedTask;Render();}));finish.HorizontalAlignment=HorizontalAlignment.Stretch;finish.Margin=new Thickness(0,4,0,4);Grid.SetRow(finish,7);inner.Children.Add(finish);
         return new Border{Child=inner,Background=Brushes.White,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(14),Margin=new Thickness(14,0,2,0)};
     }
     private async Task SetRest(bool? rest)
@@ -298,6 +308,7 @@ internal sealed partial class PlannerWindow : Window
             if(!_batch||e.ChangedButton!=System.Windows.Input.MouseButton.Left||!dateButton.IsEnabled)return;
             _calendarDragActive=true;
             _calendarDragMoved=false;
+            _calendarDragTargetSelected=!_selected.Contains(day);
             _calendarDragStartDay=day;
             _calendarDragLastPoint=System.Windows.Input.Mouse.GetPosition(grid);
             System.Windows.Input.Mouse.Capture(dateButton,System.Windows.Input.CaptureMode.Element);
@@ -316,6 +327,7 @@ internal sealed partial class PlannerWindow : Window
             bool moved=_calendarDragMoved;
             _calendarDragActive=false;
             _calendarDragMoved=false;
+            _calendarDragTargetSelected=false;
             _calendarDragStartDay=null;
             System.Windows.Input.Mouse.Capture(null);
             if(!moved)return;
@@ -337,7 +349,7 @@ internal sealed partial class PlannerWindow : Window
             if(TryGetCalendarDate(grid,point,out DateTime day))
             {
                 if(_calendarDragStartDay is DateTime start&&day!=start)_calendarDragMoved=true;
-                _selected.Add(day);
+                if(_calendarDragTargetSelected)_selected.Add(day);else _selected.Remove(day);
             }
         }
         UpdateCalendarDateSelectionVisuals();
