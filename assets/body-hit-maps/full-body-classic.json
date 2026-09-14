@@ -4,7 +4,7 @@
   "hitTestRule": "first-matching-region",
   "model": {
     "presetId": "full-body-classic",
-    "name": "模式三 · 经典猫耳版",
+    "name": "模式三（心率共鸣表情包版）",
     "animationId": "user-chibi-classic-full-body-idle",
     "imageSource": "../assets/animations/processed/用户提供_Q版小人全身_经典_透明.png",
     "imageWidth": 480,

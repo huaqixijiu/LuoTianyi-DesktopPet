@@ -88,12 +88,12 @@
     },
     "fullBodyStyles": {
       "full-body-long-hair": {
-        "displayName": "华裳长发版",
+        "displayName": "模式一（心率共鸣完整Q版）",
         "animation": "official-v4-chibi-full-body-idle",
         "interactionMode": "disabled"
       },
       "full-body-crystal-dress": {
-        "displayName": "晶蓝礼服版",
+        "displayName": "模式二（心率共鸣简约Q版）",
         "animation": "user-chibi-crystal-full-body-idle",
         "interactionMode": "seamless-motion",
         "interactionAnimations": {
@@ -109,7 +109,7 @@
         }
       },
       "full-body-classic-cat-ears": {
-        "displayName": "经典猫耳版",
+        "displayName": "模式三（心率共鸣表情包版）",
         "animation": "user-chibi-classic-full-body-idle",
         "interactionMode": "expression-pack"
       }
@@ -122,12 +122,12 @@
     },
     "bunEatingStyles": {
       "bun-eating-original": {
-        "displayName": "元气追包版",
+        "displayName": "心率表情追包版",
         "runAnimation": "ai-bun-chase-run",
         "eatAnimation": "ai-bun-eat"
       },
       "bun-eating-new": {
-        "displayName": "甜笑寻包版",
+        "displayName": "心率简约追包版",
         "runAnimation": "ai-bun-v2-chase-run",
         "eatAnimation": "ai-bun-v2-eat"
       }

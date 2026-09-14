@@ -36,14 +36,14 @@ assert(
   "picker must default to mode one",
 );
 assert(
-  current.elements.get("usedOverviewList").innerHTML.includes("华裳长发") &&
-    !current.elements.get("usedOverviewList").innerHTML.includes("晶蓝礼服互动 · 遮眼睛"),
+  current.elements.get("usedOverviewList").innerHTML.includes("模式一（心率共鸣完整Q版）") &&
+    !current.elements.get("usedOverviewList").innerHTML.includes("模式二（心率共鸣简约Q版）互动 · 遮眼睛"),
   "mode one must show its own idle animation and hide mode-two interactions",
 );
 assert(current.elements.get("grid").innerHTML.includes("data-delete="), "cards must render delete checkboxes");
 assert(!current.elements.get("grid").innerHTML.includes("data-keep="), "legacy keep checkboxes must not render");
 assert(
-  ["华裳长发版", "晶蓝礼服版", "经典猫耳版"].every(name =>
+  ["模式一（心率共鸣完整Q版）", "模式二（心率共鸣简约Q版）", "模式三（心率共鸣表情包版）"].every(name =>
     current.elements.get("modeOverviewList").innerHTML.includes(name)),
   "mode overview must render all three appearance profiles",
 );
@@ -55,16 +55,16 @@ assert(
 
 const modeTwo = executePicker(null, "mode2");
 assert(
-  modeTwo.elements.get("usedOverviewList").innerHTML.includes("晶蓝礼服互动 · 遮眼睛") &&
-    modeTwo.elements.get("usedOverviewList").innerHTML.includes("晶蓝礼服长待机 · 睡觉") &&
-    !modeTwo.elements.get("usedOverviewList").innerHTML.includes("经典猫耳版拖拽"),
+  modeTwo.elements.get("usedOverviewList").innerHTML.includes("模式二（心率共鸣简约Q版）互动 · 遮眼睛") &&
+    modeTwo.elements.get("usedOverviewList").innerHTML.includes("模式二（心率共鸣简约Q版）长待机 · 睡觉") &&
+    !modeTwo.elements.get("usedOverviewList").innerHTML.includes("模式三（心率共鸣表情包版）拖拽"),
   "mode two must show crystal interactions and hide mode-three-only rules",
 );
 const modeThree = executePicker(null, "mode3");
 assert(
   modeThree.elements.get("usedOverviewList").innerHTML.includes("十周年 · 旋转舞") &&
     modeThree.elements.get("usedOverviewList").innerHTML.includes("心律共鸣 · 嘿嘿") &&
-    !modeThree.elements.get("usedOverviewList").innerHTML.includes("晶蓝礼服互动 · 遮眼睛"),
+    !modeThree.elements.get("usedOverviewList").innerHTML.includes("模式二（心率共鸣简约Q版）互动 · 遮眼睛"),
   "mode three must show classic interactions and hide mode-two-only rules",
 );
 const shared = executePicker(null, "shared");
