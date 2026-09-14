@@ -140,16 +140,17 @@ internal sealed partial class PlannerWindow : Window
         for(int r=0;r<count/7;r++)grid.RowDefinitions.Add(new());
         for(int n=0;n<count;n++)
         {
-            DateTime day=first.AddDays(n);bool isRest=_service.Book.IsRest(day);var items=DayItems(day).ToList();DockPanel cell=new();
+            DateTime day=first.AddDays(n);string dayKey=day.ToString("yyyy-MM-dd");bool overrideExists=_service.Book.RestOverrides.ContainsKey(dayKey);bool isRest=_service.Book.IsRest(day);var items=DayItems(day).ToList();DockPanel cell=new();
             StackPanel dates=new();DockPanel heading=new();var number=Text(week?day.ToString("M月d日"):day.Month==_date.Month?day.Day.ToString():day.ToString("M/d"),week?16:15,FontWeights.SemiBold);
             if(day==DateTime.Today){number.Foreground=PlannerTheme.Accent;number.TextDecorations=TextDecorations.Underline;}
             var badge=Text(isRest?"休":"班",11,foreground:isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground);badge.TextAlignment=TextAlignment.Center;badge.Margin=new Thickness(0);Border badgeBox=new(){Child=badge,Width=22,Height=22,Background=isRest?PlannerTheme.RestBackground:PlannerTheme.WorkBackground,CornerRadius=new CornerRadius(4),Margin=new Thickness(1)};
-            if(week||isRest||_service.Book.RestOverrides.ContainsKey(day.ToString("yyyy-MM-dd")))heading.Children.Add(badgeBox);heading.Children.Add(number);dates.Children.Add(heading);
+            if(week||isRest||overrideExists)heading.Children.Add(badgeBox);heading.Children.Add(number);dates.Children.Add(heading);
             var lunar=Text(CalendarLabels.LunarDay(day),12);dates.Children.Add(lunar);
             dates.Children.Add(HolidayText(day));
             if(!week&&items.Count>0){StackPanel dots=Row();dots.Margin=new Thickness(2,1,2,0);for(int d=0;d<Math.Min(3,items.Count);d++)dots.Children.Add(new Ellipse{Width=6,Height=6,Fill=PlannerTheme.Accent,Margin=new Thickness(0,0,3,0)});dates.Children.Add(dots);}
             foreach(var label in dates.Children.OfType<TextBlock>())label.Margin=new Thickness(2,0,2,0);
             Button dateButton=Action("",()=>OnCalendarDateClick(day));dateButton.Name="Day"+day.ToString("yyyyMMdd");dateButton.Content=dates;dateButton.Padding=new Thickness(0);dateButton.Margin=new Thickness(0);dateButton.BorderThickness=new Thickness(0);dateButton.Background=Brushes.Transparent;dateButton.HorizontalContentAlignment=HorizontalAlignment.Stretch;dateButton.VerticalAlignment=VerticalAlignment.Stretch;dateButton.VerticalContentAlignment=VerticalAlignment.Top;
+            dateButton.ToolTip=overrideExists?$"单独设置：{(isRest?"休息日":"工作日")}":"跟随每周设置";
             dateButton.IsEnabled=day>=ReminderSchedule.MinimumDate&&day<=ReminderSchedule.MaximumDate;
             if(_batch&&!week)AttachCalendarDragHandlers(dateButton,grid,day);
             dateButton.MouseDoubleClick+=(_,_)=>{if(!_batch){_date=day;_occurrenceDate=null;Edit(null,true);}};
@@ -277,6 +278,7 @@ internal sealed partial class PlannerWindow : Window
         await Execute(b=>{foreach(var d in selected)ReminderSchedule.SetRestOverride(b,d,rest,DateTime.Now);});
         _selected.Clear();
         Render();
+        if(rest==null)_status.Text="已清除指定设置，当前日期跟随每周设置。";
     }
 
     private void OnCalendarDateClick(DateTime day)
