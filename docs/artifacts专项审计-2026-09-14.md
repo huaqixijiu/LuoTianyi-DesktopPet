@@ -66,7 +66,7 @@
 |---|---|
 | `codex/compact-tray-menu` | 对应保留的紧凑托盘 worktree |
 | `codex/update-animation-picker-20260912` | 对应保留的音乐设置反馈 worktree |
-| `mode1-disable-file-drop-20260912` | 对应 `Documents/Codex` 下保留的 worktree |
+| `mode1-disable-file-drop-20260912` | 对应本机隔离工作区下保留的 worktree |
 | `codex/fix-recycle-animation-direction` | 有远端同名分支，含回收站方向修复提交 |
 | `codex/organize-project-files-20260912` | 有远端同名分支，含项目整理提交 |
 | `feedback-reduction-20260912` | 有远端同名分支，含反馈去重提交 |
@@ -85,4 +85,3 @@
 ## 阶段结论
 
 Module C 审计完成。当前没有可以在本模块直接判定并执行删除的对象；本模块不执行删除。按原始需求，下一步进入阶段 3「拆分启动组合根」。
-

@@ -36,10 +36,10 @@
 
 另外 4 个登记 worktree：
 
-- `.codex/worktrees/luo-planner-20260913`：已合并且干净；
-- `Documents/Codex/.../quick-actions-verified`：23 个未提交文件；
-- `Documents/Codex/.../stable-layout`：已合并且干净；
-- `Documents/Codex/.../feedback-commit`：有 1 个独有提交。
+- `本机隔离工作区/luo-planner-20260913`：已合并且干净；
+- `本机隔离工作区/quick-actions-verified`：23 个未提交文件；
+- `本机隔离工作区/stable-layout`：已合并且干净；
+- `本机隔离工作区/feedback-commit`：有 1 个独有提交。
 
 本轮不删除任何 worktree。
 
@@ -105,7 +105,7 @@
 |---|---|
 | `AGENTS.md`、`README.md`、`docs/项目总控.md` | 删除工具名称和“由工具维护”等表述，改为中性项目约定。 |
 | `docs/精细模型动画任务开场提示词.md` 等 | 将工具专用任务措辞改为普通维护任务。 |
-| `docs/design/`、`docs/开发日志.md`、`docs/动画状态映射.md` | 将“AI Agent”“AI 视频”等改为中性描述。 |
+| `docs/design/`、`docs/开发日志.md`、`docs/动画状态映射.md` | 将工具专用称呼和生成视频等表述改为中性描述。 |
 | `.gitignore` 注释 | 改为“视频帧导出”“互动帧导出”。 |
 | `process_bun_video.py`、`bun-eat*.meta.json` | 已完成文件名中性化；运行时动画 ID 保持不变。 |
 | Git 历史 | 发现 2 条合并提交信息包含 `codex/` 分支名；不建议现在重写历史。正式公开前另做备份和历史清理。 |
