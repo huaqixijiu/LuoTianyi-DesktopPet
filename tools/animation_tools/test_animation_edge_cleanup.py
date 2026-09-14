@@ -30,6 +30,15 @@ class EdgeCleanupTests(unittest.TestCase):
             self.assertLess(pixel[3], 255)
             self.assertGreater(pixel[3], 0)
 
+    def test_wide_dark_contour_matte_reaches_second_edge_pixel(self):
+        data = np.zeros((9, 9, 4), dtype=np.uint8)
+        data[2:7, 1:7] = [20, 20, 20, 255]
+        data[4, 1] = [192, 192, 192, 255]
+        data[4, 2] = [128, 128, 128, 255]
+        result = np.asarray(clean_edges(Image.fromarray(data), "dark-contour-white-matte-wide"))
+        self.assertLess(result[4, 2, 3], 255)
+        np.testing.assert_array_equal(data[4, 4], result[4, 4])
+
     def test_white_sticker_stroke_keeps_original_rgb(self):
         data = np.zeros((7, 7, 4), dtype=np.uint8)
         data[2:5, 2:5] = [20, 20, 20, 255]
@@ -43,6 +52,14 @@ class EdgeCleanupTests(unittest.TestCase):
             clean_edges(Image.new("RGBA", (4, 4), (80, 90, 100, 120)), "coverage")
         with self.assertRaises(ValueError):
             clean_edges(Image.new("RGBA", (4, 4)), "guess")
+
+    def test_transparent_rgb_is_cleared_without_changing_alpha(self):
+        data = np.zeros((5, 5, 4), dtype=np.uint8)
+        data[:, :, :3] = [255, 255, 255]
+        data[2, 2] = [20, 20, 20, 255]
+        result = np.asarray(clean_edges(Image.fromarray(data), "coverage"))
+        np.testing.assert_array_equal(result[data[:, :, 3] == 0, 3], data[data[:, :, 3] == 0, 3])
+        np.testing.assert_array_equal(result[0, 0, :3], [0, 0, 0])
 
 
 if __name__ == "__main__":

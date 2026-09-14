@@ -36,16 +36,21 @@ def validate(root, baseline):
             np.testing.assert_array_equal(before[:,:,3] > 0, after[:,:,3] > 0)
             alpha = Image.fromarray(before[:,:,3])
             from PIL import ImageFilter
-            interior = np.asarray(alpha.filter(ImageFilter.MinFilter(3))) == 255
+            interior_filter_size = 5 if source['edgeCleanup'] == 'dark-contour-white-matte-wide' else 3
+            interior = np.asarray(alpha.filter(ImageFilter.MinFilter(interior_filter_size))) == 255
             np.testing.assert_array_equal(before[interior], after[interior])
             assert np.all(after[:,:,3] <= before[:,:,3])
             changed_rgb = np.any(before[:,:,:3] != after[:,:,:3], axis=2)
-            if np.any(changed_rgb):
-                pixels = after[changed_rgb].astype(float)
+            # Fully transparent RGB is intentionally cleared to prevent WPF
+            # interpolation from sampling a hidden white matte. Recomposition
+            # is meaningful only for pixels that remain visible.
+            visible_changed_rgb = changed_rgb & (before[:,:,3] > 0)
+            if np.any(visible_changed_rgb):
+                pixels = after[visible_changed_rgb].astype(float)
                 recomposed = pixels[:,:3]*pixels[:,3:4]/255+255-pixels[:,3:4]
-                assert np.max(abs(recomposed-before[changed_rgb,:3])) <= 1
+                assert np.max(abs(recomposed-before[visible_changed_rgb,:3])) <= 1
             if source['edgeCleanup'] != 'dark-contour-white-matte':
-                white = np.all(before[:,:,:3] >= 235, axis=2)
+                white = np.all(before[:,:,:3] >= 235, axis=2) & (before[:,:,3] > 0)
                 np.testing.assert_array_equal(before[white,:3], after[white,:3])
             stats['softenedPixels'] += int(np.sum(after[:,:,3] != before[:,:,3]))
             stats['unmattedPixels'] += int(np.sum(changed_rgb))

@@ -469,7 +469,7 @@
       "defaultFrameDurationMilliseconds": 100,
       "anchorX": 0.5,
       "anchorY": 1.0,
-      "edgeCleanup": "dark-contour-white-matte"
+      "edgeCleanup": "dark-contour-white-matte-wide"
     },
     {
       "id": "startup-evening-hungry",
@@ -694,7 +694,7 @@
       "defaultFrameDurationMilliseconds": 100,
       "anchorX": 0.5,
       "anchorY": 1.0,
-      "edgeCleanup": "dark-contour-white-matte"
+      "edgeCleanup": "dark-contour-white-matte-wide"
     }
   ]
 }
