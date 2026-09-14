@@ -57,7 +57,10 @@ public partial class MainWindow
                 Check(!_fileDragPresentationActive && !_fileDragCursorOverrideActive,
                     $"{scale}% {kind}: leaving releases prompt and cursor");
                 SeedMirror(kind);
-                await PlayReactionAsync(FileDropSuccessAnimation, ReactionPriority.UserInteraction);
+                await PlayReactionAsync(
+                    FileDropSuccessAnimation,
+                    ReactionPriority.UserInteraction,
+                    interruptibleByDrag: false);
                 Check(_animationPlayer?.CurrentAnimationId == FileDropSuccessAnimation && Upright(),
                     $"{scale}% {kind}: recycle success is also upright");
                 if (kind == "both") CaptureQuickActionsQa(this, Path.Combine(directory, $"success-{scale}.png"));

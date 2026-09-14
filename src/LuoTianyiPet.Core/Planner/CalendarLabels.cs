@@ -38,6 +38,26 @@ public static class CalendarLabels
     public static string Get(DateTime day)
     {
         if (day < ReminderSchedule.MinimumDate || day > ReminderSchedule.MaximumDate) return "";
+        return string.Join(" · ", Collect(day, out _));
+    }
+    // Display-only split used by the month grid so solar terms and festivals can be tinted
+    // differently. Scheduling and reminder semantics never read these two helpers.
+    public static string SolarTerm(DateTime day)
+    {
+        if (day < ReminderSchedule.MinimumDate || day > ReminderSchedule.MaximumDate) return "";
+        Collect(day, out string? term);
+        return term ?? "";
+    }
+    public static string Festivals(DateTime day)
+    {
+        if (day < ReminderSchedule.MinimumDate || day > ReminderSchedule.MaximumDate) return "";
+        List<string> labels = Collect(day, out string? term);
+        if (term != null) labels.Remove(term);
+        return string.Join(" · ", labels);
+    }
+    private static List<string> Collect(DateTime day, out string? term)
+    {
+        term = null;
         List<string> labels = [];
         string? fixedHoliday = day.ToString("MM-dd") switch
         {
@@ -64,7 +84,11 @@ public static class CalendarLabels
             if (lunarHoliday != null) labels.Add(lunarHoliday);
         }
         if (Lunar.GetYear(day.AddDays(1)) != year) labels.Add("除夕");
-        if (Terms.Value.TryGetValue(day.ToString("yyyy-MM-dd"), out string? term)) labels.Add(term);
-        return string.Join(" · ", labels);
+        if (Terms.Value.TryGetValue(day.ToString("yyyy-MM-dd"), out string? solar))
+        {
+            term = solar;
+            labels.Add(solar);
+        }
+        return labels;
     }
 }

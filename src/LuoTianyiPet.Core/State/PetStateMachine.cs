@@ -35,7 +35,9 @@ public sealed record ReactionRequest(
     string? MergeKey = null,
     TimeSpan Cooldown = default,
     bool InterruptibleByDrag = true,
-    bool BlocksDisplayModeToggle = false);
+    bool BlocksDisplayModeToggle = false,
+    bool CancelOnClick = false,
+    bool CancelOnDrag = false);
 
 public sealed record ReactionStartOutcome(ReactionStartResult Result, Guid? Token);
 
@@ -70,6 +72,10 @@ public sealed class PetStateMachine
         _stateBeforeDrag == PetContinuousState.MediumIdle;
 
     public Guid? ActiveReactionToken => _activeReaction?.Token;
+
+    public bool ActiveReactionCancelsOnClick => _activeReaction?.Request.CancelOnClick == true;
+
+    public bool ActiveReactionCancelsOnDrag => _activeReaction?.Request.CancelOnDrag == true;
 
     public bool IsDisplayModeToggleBlocked(DateTimeOffset now)
     {
@@ -209,6 +215,10 @@ public sealed class PetStateMachine
         }
 
         _stateBeforeDrag = VisualState.ContinuousState;
+        if (_activeReaction?.Request.CancelOnDrag == true)
+        {
+            _activeReaction = null;
+        }
         VisualState = VisualState with { ContinuousState = PetContinuousState.Dragging };
         return true;
     }

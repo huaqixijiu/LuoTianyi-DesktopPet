@@ -42,7 +42,7 @@ internal sealed partial class PlannerWindow
         {
             await Execute(b => { if (day is DateTime d) ReminderSchedule.DeleteDate(b, selected[0], d); else ReminderSchedule.DeleteGroups(b, selected); });
             _selectedGroups.Clear(); _editing = false; Render();
-        }); confirm.Name = "ConfirmGroupDelete"; confirm.Background = Brushes.IndianRed; confirm.Foreground = Brushes.White; actions.Children.Add(confirm); panel.Children.Add(actions); ShowOverlay(panel);
+        }); confirm.Name = "ConfirmGroupDelete"; confirm.Background = PlannerTheme.Danger; confirm.Foreground = Brushes.White; actions.Children.Add(confirm); panel.Children.Add(actions); ShowOverlay(panel);
     }
     private void RenderGroups()
     {

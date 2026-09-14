@@ -28,7 +28,7 @@ public partial class MainWindow
             FrameworkElement Named(Window w,string name)=>Tree(w).OfType<FrameworkElement>().First(x=>x.Name==name);
             void Click(Window w,string name)=>((Button)Named(w,name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             void Tick(Window w,string name,bool value){var c=(CheckBox)Named(w,name);c.IsChecked=value;c.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));w.UpdateLayout();}
-            void Snapshot(Window w,string name){w.UpdateLayout();var bmp=new RenderTargetBitmap((int)w.ActualWidth,(int)w.ActualHeight,96,96,PixelFormats.Pbgra32);bmp.Render(w);PngBitmapEncoder png=new();png.Frames.Add(BitmapFrame.Create(bmp));using var f=File.Create(Path.Combine(path,name+".png"));png.Save(f);checks.Add("PASS rendered "+name);}
+            void Snapshot(Window w,string name,bool dpi=false){w.UpdateLayout();void Shot(string file,double scale){var bmp=new RenderTargetBitmap((int)Math.Ceiling(w.ActualWidth*scale),(int)Math.Ceiling(w.ActualHeight*scale),96*scale,96*scale,PixelFormats.Pbgra32);bmp.Render(w);PngBitmapEncoder png=new();png.Frames.Add(BitmapFrame.Create(bmp));using var f=File.Create(Path.Combine(path,file+".png"));png.Save(f);}Shot(name,1.0);if(dpi){Shot(name+"-125",1.25);Shot(name+"-150",1.5);}checks.Add("PASS rendered "+name+(dpi?" @100/125/150":""));}
             void Set(string name,object value)=>typeof(PlannerWindow).GetField(name,BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,value);
             void CaptureAttachment()
             {
@@ -37,13 +37,13 @@ public partial class MainWindow
                 var bmp=new RenderTargetBitmap((int)Math.Ceiling(bounds.Width),(int)Math.Ceiling(bounds.Height),96,96,PixelFormats.Pbgra32);bmp.Render(visual);PngBitmapEncoder png=new();png.Frames.Add(BitmapFrame.Create(bmp));using var file=File.Create(Path.Combine(path,"20-pet-attached.png"));png.Save(file);checks.Add("PASS rendered pet and attached card in their actual relative positions");
             }
             void Edit(ReminderItem? i,bool calendar){typeof(PlannerWindow).GetMethod("Edit",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(window,new object?[]{i,calendar});window.UpdateLayout();}
-            Set("_date",day);window.Navigate(false);Snapshot(window,"01-month");
+            Set("_date",day);window.Navigate(false);Snapshot(window,"01-month",true);
             var body=(ScrollViewer)typeof(PlannerWindow).GetField("_body",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(window)!;
             Check(((Grid)body.Content).ColumnDefinitions.Count==2,"A02 side panel with undimmed month");
             Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Check(((Grid)body.Content).ColumnDefinitions.Count==1,"A02 same date collapses panel");
-            Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Click(window,"SetWorkdays");Snapshot(window,"02-workdays");Click(window,"SetWorkdays");
-            await service.ChangeAsync(b=>b.WeekView=true);Snapshot(window,"03-week");await service.ChangeAsync(b=>b.WeekView=false);
-            Edit(null,true);Snapshot(window,"04-new-event");Check(((CheckBox)Named(window,"CreateAlarm")).IsChecked==false,"A06 new calendar reminder disabled");
+            Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Click(window,"SetWorkdays");Snapshot(window,"02-workdays",true);Click(window,"SetWorkdays");
+            await service.ChangeAsync(b=>b.WeekView=true);Snapshot(window,"03-week",true);await service.ChangeAsync(b=>b.WeekView=false);
+            Edit(null,true);Snapshot(window,"04-new-event",true);Check(((CheckBox)Named(window,"CreateAlarm")).IsChecked==false,"A06 new calendar reminder disabled");
             Check(!Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="EarlyReminder"),"A06 early row absent while disabled");
             var dateControl=(DatePicker)Named(window,"ReminderDate");dateControl.ApplyTemplate();
             ((Button)dateControl.Template.FindName("PART_Button",dateControl)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));await Task.Delay(100);
@@ -52,10 +52,10 @@ public partial class MainWindow
             Tick(window,"CreateAlarm",true);Check(((CheckBox)Named(window,"EarlyReminder")).IsChecked==false,"A07 early starts disabled");Tick(window,"EarlyReminder",true);Check(((TextBox)Named(window,"EarlyMinutes")).Text=="30","A07 thirty minute initial value");
             Tick(window,"NoTime",true);Check(((CheckBox)Named(window,"CreateAlarm")).IsChecked==false&&!((CheckBox)Named(window,"CreateAlarm")).IsEnabled,"A29 unspecified time disables reminder");
             ((TextBox)Named(window,"ReminderTitle")).Text="不指定时间事项";Click(window,"SaveReminder");await Task.Delay(250);Check(service.Book.Items.Last().HasTime==false&&!service.Book.Items.Last().Enabled,"A29 unspecified time persists without midnight alarm");
-            var eventItem=service.Book.Items.First();Edit(eventItem,true);Snapshot(window,"05-edit-event");Check(((TextBox)Named(window,"ReminderNotes")).AcceptsReturn==false,"A09 single line note");
+            var eventItem=service.Book.Items.First();Edit(eventItem,true);Snapshot(window,"05-edit-event",true);Check(((TextBox)Named(window,"ReminderNotes")).AcceptsReturn==true,"A09 multi-line note");
             Tick(window,"EarlyReminder",true);((TextBox)Named(window,"EarlyMinutes")).Text="45";Click(window,"SaveReminder");await Task.Delay(250);Check(service.Book.Items.First(i=>i.Id==eventItem.Id).EarlyMinutes==45,"A10 early duration persists");
-            window.Navigate(true);Snapshot(window,"06-alarms");Edit(null,false);Snapshot(window,"07-new-alarm");
-            var countdownButton=Tree(window).OfType<Button>().First(b=>Equals(b.Content,"⌛ 倒计时"));countdownButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.UpdateLayout();Snapshot(window,"08-new-countdown");
+            window.Navigate(true);Snapshot(window,"06-alarms",true);Edit(null,false);Snapshot(window,"07-new-alarm",true);
+            var countdownButton=Tree(window).OfType<Button>().First(b=>Equals(b.Content,"⌛ 倒计时"));countdownButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.UpdateLayout();Snapshot(window,"08-new-countdown",true);
             void Digits(string h,string m,string s){((TextBox)Named(window,"CountdownHours")).Text=h;((TextBox)Named(window,"CountdownMinutes")).Text=m;((TextBox)Named(window,"CountdownSeconds")).Text=s;}
             foreach(var preset in new[]{("5分钟",300),("15分钟",900),("30分钟",1800),("1小时",3600)}){Tree(window).OfType<Button>().First(b=>Equals(b.Content,preset.Item1)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));int h=int.Parse(((TextBox)Named(window,"CountdownHours")).Text),m=int.Parse(((TextBox)Named(window,"CountdownMinutes")).Text),sec=int.Parse(((TextBox)Named(window,"CountdownSeconds")).Text);Check(h*3600+m*60+sec==preset.Item2,"A16 preset "+preset.Item1);}
             foreach(string part in new[]{"CountdownHours","CountdownMinutes","CountdownSeconds"}){var input=(TextBox)Named(window,part);input.Text="01";input.RaiseEvent(new System.Windows.Input.MouseWheelEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,120){RoutedEvent=System.Windows.Input.Mouse.PreviewMouseWheelEvent});Check(input.Text=="02","A16 wheel "+part);}

@@ -29,7 +29,7 @@ public partial class MainWindow
             PlayResolvedContinuousAnimation();
             DesktopRectangle work=GetCurrentWorkArea(); Left=work.Left+work.Width/2-Width/2; Top=work.Top+work.Height/2-Height/2;
         }
-        void Drag(string name)
+        void Drag(string name, bool preserveReaction = true)
         {
             string? id=_animationPlayer.CurrentAnimationId; int frame=_animationPlayer.CurrentFrameIndex;
             Guid? token=_stateMachine.ActiveReactionToken; var state=_stateMachine.CurrentContinuousState;
@@ -38,11 +38,20 @@ public partial class MainWindow
             if(state==PetContinuousState.Sleeping) ApplyIdleScene(TimeSpan.Zero);
             Check(_animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex==frame,name+": mouse press preserves frame");
             _dragPressScreenPoint=new Point(600,450); BeginWindowDrag();
-            Check(_isWindowDragging && _animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex==frame,name+": drag begins without replay");
+            if (preserveReaction)
+                Check(_isWindowDragging && _animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex==frame,name+": drag begins without replay");
+            else
+                Check(_isWindowDragging && _animationPlayer.CurrentAnimationId!=id && _stateMachine.ActiveReactionToken is null,name+": drag cancels the reaction before moving");
             MoveWindowWithPointer(new Point(630,470),DateTimeOffset.Now);
-            Check(PetDirectionTransform.ScaleX==mirror && _stateMachine.ActiveReactionToken==token,name+": mirror and reaction token preserved");
+            if (preserveReaction)
+                Check(PetDirectionTransform.ScaleX==mirror && _stateMachine.ActiveReactionToken==token,name+": mirror and reaction token preserved");
+            else
+                Check(_stateMachine.ActiveReactionToken is null,name+": cancelled reaction does not return while moving");
             EndWindowDrag(); _pointerGesture.Cancel(); if(IsMouseCaptured)ReleaseMouseCapture();
-            Check(_animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex==frame && _stateMachine.CurrentContinuousState==state,name+": drop preserves frame and state");
+            if (preserveReaction)
+                Check(_animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex==frame && _stateMachine.CurrentContinuousState==state,name+": drop preserves frame and state");
+            else
+                Check(_animationPlayer.CurrentAnimationId!=id && _stateMachine.CurrentContinuousState==state,name+": drop keeps the continuous state after cancellation");
         }
         try
         {
@@ -79,13 +88,23 @@ public partial class MainWindow
             foreach(string id in new[]{"resonance-soft-heart","resonance-kiss","twelfth-anniversary-hug","crystal-yawn","startup-afternoon-hurry","resonance-loading-sway","resonance-no-playing","resonance-big-success"})
             {
                 await Reset(id.StartsWith("crystal")?AppearanceOptionIds.FullBodyCrystalDress:AppearanceOptionIds.FullBodyClassicCatEars);
-                _stateMachine.TryStartReaction(new(id,ReactionPriority.UserInteraction,DateTimeOffset.Now.AddMinutes(1)),DateTimeOffset.Now);
+                bool isBodyReaction = id is "resonance-soft-heart" or "resonance-kiss" or "twelfth-anniversary-hug";
+                bool isTimeGreeting = id == "startup-afternoon-hurry";
+                bool cancelOnDrag = isBodyReaction || isTimeGreeting;
+                ReactionPriority priority = isTimeGreeting ? ReactionPriority.TimeGreeting : ReactionPriority.UserInteraction;
+                _stateMachine.TryStartReaction(new(id,priority,DateTimeOffset.Now.AddMinutes(1),CancelOnClick:isBodyReaction,CancelOnDrag:cancelOnDrag),DateTimeOffset.Now);
                 PlayAnimation(id); ShowAnimationFrame(id,Math.Min(2,_animationCatalog.GetRequired(id).FrameDurationsMilliseconds.Count-1));
                 ApplyBodyReactionMirror(id=="resonance-soft-heart");
-                _timeGreetingPresentationInFlight=id=="startup-afternoon-hurry";
-                Drag(id);
-                if(_timeGreetingPresentationInFlight)Check(_stateMachine.ActiveReactionToken is not null,"Greeting survives press and movement");
+                Drag(id, preserveReaction:!cancelOnDrag);
             }
+            await Reset(AppearanceOptionIds.FullBodyClassicCatEars);
+            ReactionStartOutcome clickReaction = _stateMachine.TryStartReaction(
+                new("resonance-kiss",ReactionPriority.UserInteraction,DateTimeOffset.Now.AddMinutes(1),CancelOnClick:true,CancelOnDrag:true),
+                DateTimeOffset.Now);
+            PlayAnimation("resonance-kiss");
+            HandleSingleClick(new PointerPoint(-10,-10));
+            Check(clickReaction.Token is not null && _stateMachine.ActiveReactionToken is null &&
+                _animationPlayer.CurrentAnimationId!="resonance-kiss","Confirmed click cancels a body reaction and restores continuous playback");
             await Reset(AppearanceOptionIds.FullBodyClassicCatEars);
             _dragPressScreenPoint=new Point(600,450); BeginWindowDrag();
             Check(_classicDragExpansionStarted && _animationPlayer.CurrentAnimationId==PetVisualState.CompactDraggingAnimation,$"Classic idle still expands (state={_stateMachine.CurrentContinuousState}, animation={_animationPlayer.CurrentAnimationId}, drag={_isWindowDragging})");
@@ -96,10 +115,10 @@ public partial class MainWindow
             HandleSingleClick(new PointerPoint(-10,-10)); Check(!_classicSpinDanceActive,"Confirmed click still stops spin");
             await Reset(AppearanceOptionIds.FullBodyClassicCatEars);
             bool completed=false; string shortId="startup-afternoon-hurry";
-            var reaction=_stateMachine.TryStartReaction(new(shortId,ReactionPriority.TimeGreeting,DateTimeOffset.Now.AddMinutes(1)),DateTimeOffset.Now);
+            var reaction=_stateMachine.TryStartReaction(new(shortId,ReactionPriority.TimeGreeting,DateTimeOffset.Now.AddMinutes(1),CancelOnDrag:true),DateTimeOffset.Now);
             PlayAnimationRange(shortId,0,2,()=>{completed=true;CompleteReaction(reaction.Token!.Value,false);});
-            _dragPressScreenPoint=new Point(600,450); BeginWindowDrag(); await Task.Delay(900);
-            Check(completed && _stateMachine.ActiveReactionToken is null,"Natural animation completion runs during drag"); EndWindowDrag();
+            _dragPressScreenPoint=new Point(600,450); BeginWindowDrag(); await Task.Delay(300);
+            Check(!completed && _stateMachine.ActiveReactionToken is null && _animationPlayer.CurrentAnimationId!=shortId,"Time greeting drag interruption cancels its playback"); EndWindowDrag();
             await Task.Delay(400);
             foreach(string blocked in new[]{"resonance-cute-bun-request","resonance-give-me"})
             {

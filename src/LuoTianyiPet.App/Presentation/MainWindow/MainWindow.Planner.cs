@@ -200,7 +200,7 @@ public partial class MainWindow
         StopClassicSpinDance(false,"planner.alarm");
         CancelCrystalLongIdle();_bodyReactionMotion.Cancel();ResetBodyReactionMirror();
         DateTimeOffset now=DateTimeOffset.Now;
-        var outcome=_stateMachine.TryStartReaction(new ReactionRequest("alarm-tenth-birthday-coming",ReactionPriority.Alarm,now.AddSeconds(ReminderEngine.MaximumRoundSeconds),"planner:reminder",BlocksDisplayModeToggle:true),now);
+        var outcome=_stateMachine.TryStartReaction(new ReactionRequest("alarm-tenth-birthday-coming",ReactionPriority.Alarm,now.AddSeconds(ReminderEngine.MaximumRoundSeconds),"planner:reminder",BlocksDisplayModeToggle:true,InterruptibleByDrag:false),now);
         if(outcome.Result is ReactionStartResult.Started or ReactionStartResult.Replaced){_plannerAlarmReaction=outcome.Token;PlayAnimation("alarm-tenth-birthday-coming");}
     }
     private Guid? _plannerAlarmReaction,_plannerAlarmTopmost;

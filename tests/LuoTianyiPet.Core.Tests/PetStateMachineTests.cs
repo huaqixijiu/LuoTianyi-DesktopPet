@@ -127,6 +127,31 @@ public sealed class PetStateMachineTests
     }
 
     [Fact]
+    public void ReactionInputPoliciesCanCancelOnClickWithoutEnablingDragCancellation()
+    {
+        PetStateMachine machine = new();
+        machine.TryStartReaction(
+            Request("body") with { CancelOnClick = true },
+            Now);
+
+        Assert.True(machine.ActiveReactionCancelsOnClick);
+        Assert.False(machine.ActiveReactionCancelsOnDrag);
+    }
+
+    [Fact]
+    public void DragCancelsReactionMarkedForDragCancellation()
+    {
+        PetStateMachine machine = new();
+        machine.TryStartReaction(
+            Request("time-greeting") with { CancelOnDrag = true },
+            Now);
+
+        Assert.True(machine.BeginDrag());
+        Assert.Null(machine.ActiveReactionToken);
+        Assert.Equal(PetVisualState.CompactIdleAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
     public void FullBodyDragKeepsFullBodyIdleVisualAndDisablesBodyRegions()
     {
         PetStateMachine machine = new(new PetVisualState(PetDisplayMode.FullBodyInteractive));

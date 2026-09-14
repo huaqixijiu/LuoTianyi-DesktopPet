@@ -817,7 +817,8 @@ public partial class MainWindow : Window
             new ReactionRequest(
                 decision.AnimationId,
                 ReactionPriority.TimeGreeting,
-                startedAt.Add(TimeGreetingPresentationDuration).AddSeconds(5)),
+                startedAt.Add(TimeGreetingPresentationDuration).AddSeconds(5),
+                CancelOnDrag: true),
             startedAt);
         if (outcome.Token is not Guid token)
         {
@@ -1544,7 +1545,12 @@ public partial class MainWindow : Window
             return;
         }
         _singleClickTimer.Stop();
+        bool cancelReactionOnDrag = _stateMachine.ActiveReactionCancelsOnDrag;
         if (!_stateMachine.BeginDrag()) { _rapidDragTracker.Cancel(); return; }
+        if (cancelReactionOnDrag)
+        {
+            CancelReactionForDrag();
+        }
         _sleepHeldAfterDrag = _stateMachine.CurrentContinuousState == PetContinuousState.Sleeping;
         // A moved cameo must finish at its new position instead of jumping back.
         _genshinCameoRestorePosition = null;
@@ -1764,6 +1770,12 @@ public partial class MainWindow : Window
             _logger.Info("idle.user_click_restored", PetContinuousState.MediumIdle.ToString());
         }
 
+        if (_stateMachine.ActiveReactionCancelsOnClick)
+        {
+            CancelReactionFromConfirmedClick();
+            return;
+        }
+
         PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
         if (!plan.BodyRegionInteractionsEnabled)
         {
@@ -1807,6 +1819,37 @@ public partial class MainWindow : Window
         }
     }
 
+    private void CancelReactionFromConfirmedClick()
+    {
+        _stateMachine.CancelActiveReaction();
+        _bodyReactionMotion.Cancel();
+        CancelVisualTransition();
+        ResetBodyReactionMirror();
+        if (!_isClosing)
+        {
+            PlayResolvedContinuousAnimation();
+        }
+
+        _logger.Info(
+            "interaction.click_cancelled_reaction",
+            "Confirmed click cancelled the active body reaction and restored the continuous state.");
+    }
+
+    private void CancelReactionForDrag()
+    {
+        if (_timeGreetingPresentationInFlight)
+        {
+            CancelTimeGreetingPresentation(false, "Interrupted by drag.");
+        }
+
+        _bodyReactionMotion.Cancel();
+        CancelVisualTransition();
+        ResetBodyReactionMirror();
+        _logger.Info(
+            "interaction.drag_cancelled_reaction",
+            "Drag cancelled the active reaction according to its input policy.");
+    }
+
     private Task<Guid?> PlayBodyReactionAsync(
         string animationId,
         bool blocksDisplayModeToggle = false,
@@ -1816,7 +1859,9 @@ public partial class MainWindow : Window
             ReactionPriority.UserInteraction,
             suppressBodyAfter: true,
             blocksDisplayModeToggle: blocksDisplayModeToggle,
-            mirrorHorizontally: mirrorHorizontally);
+            mirrorHorizontally: mirrorHorizontally,
+            cancelOnClick: true,
+            cancelOnDrag: true);
 
     private async Task<Guid?> PlayReactionAsync(
         string animationId,
@@ -1824,7 +1869,10 @@ public partial class MainWindow : Window
         bool suppressBodyAfter = false,
         bool blocksDisplayModeToggle = false,
         bool mirrorHorizontally = false,
-        TimeSpan? minimumDisplayDuration = null)
+        TimeSpan? minimumDisplayDuration = null,
+        bool cancelOnClick = false,
+        bool cancelOnDrag = false,
+        bool interruptibleByDrag = true)
     {
         double playbackRate = BodyInteractionResolver.ResolvePlaybackRate(animationId);
         DateTimeOffset now = DateTimeOffset.Now;
@@ -1836,7 +1884,10 @@ public partial class MainWindow : Window
                 animationId,
                 priority,
                 now.Add(reactionLifetime),
-                BlocksDisplayModeToggle: blocksDisplayModeToggle),
+                BlocksDisplayModeToggle: blocksDisplayModeToggle,
+                CancelOnClick: cancelOnClick,
+                CancelOnDrag: cancelOnDrag,
+                InterruptibleByDrag: interruptibleByDrag),
             now);
         if (outcome.Token is not Guid token)
         {
@@ -4894,7 +4945,10 @@ public partial class MainWindow : Window
             _logger.Info(
                 "file_drop.recycled",
                 $"Requested={result.RequestedCount}; Recycled={result.RecycledCount}.");
-            _ = PlayReactionAsync(FileDropSuccessAnimation, ReactionPriority.UserInteraction);
+            _ = PlayReactionAsync(
+                FileDropSuccessAnimation,
+                ReactionPriority.UserInteraction,
+                interruptibleByDrag: false);
             return;
         }
 
