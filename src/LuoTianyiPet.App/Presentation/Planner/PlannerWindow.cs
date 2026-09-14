@@ -31,7 +31,7 @@ internal sealed partial class PlannerWindow : Window
     private bool _alarm,_editing,_batch,_manage,_details=true;
     private bool _calendarDragActive;
     private bool _calendarDragMoved;
-    private bool _calendarDragTargetSelected;
+    private readonly HashSet<DateTime> _calendarDragVisited=[];
     private bool _suppressCalendarClick;
     private DateTime? _calendarDragStartDay;
     private Point _calendarDragLastPoint;
@@ -88,6 +88,7 @@ internal sealed partial class PlannerWindow : Window
     private void UpdateDateStatus(DateTime day)=>_status.Text=$"{day:yyyy年M月d日 dddd}  {CalendarLabels.FullLunar(day)}";
     private void Render()
     {
+        _calendarDragVisited.Clear();
         while(_shell.Children.Count>1)_shell.Children.RemoveAt(_shell.Children.Count-1);_root.IsEnabled=true;_header.Children.Clear();_footer.Children.Clear();_running.Clear();
         DockPanel brand=new(){Margin=new Thickness(18,10,14,8)};
         StackPanel windows=Row();
@@ -308,7 +309,7 @@ internal sealed partial class PlannerWindow : Window
             if(!_batch||e.ChangedButton!=System.Windows.Input.MouseButton.Left||!dateButton.IsEnabled)return;
             _calendarDragActive=true;
             _calendarDragMoved=false;
-            _calendarDragTargetSelected=!_selected.Contains(day);
+            _calendarDragVisited.Clear();
             _calendarDragStartDay=day;
             _calendarDragLastPoint=System.Windows.Input.Mouse.GetPosition(grid);
             System.Windows.Input.Mouse.Capture(dateButton,System.Windows.Input.CaptureMode.Element);
@@ -327,7 +328,7 @@ internal sealed partial class PlannerWindow : Window
             bool moved=_calendarDragMoved;
             _calendarDragActive=false;
             _calendarDragMoved=false;
-            _calendarDragTargetSelected=false;
+            _calendarDragVisited.Clear();
             _calendarDragStartDay=null;
             System.Windows.Input.Mouse.Capture(null);
             if(!moved)return;
@@ -349,7 +350,8 @@ internal sealed partial class PlannerWindow : Window
             if(TryGetCalendarDate(grid,point,out DateTime day))
             {
                 if(_calendarDragStartDay is DateTime start&&day!=start)_calendarDragMoved=true;
-                if(_calendarDragTargetSelected)_selected.Add(day);else _selected.Remove(day);
+                if(!_calendarDragVisited.Add(day))continue;
+                if(!_selected.Add(day))_selected.Remove(day);
             }
         }
         UpdateCalendarDateSelectionVisuals();

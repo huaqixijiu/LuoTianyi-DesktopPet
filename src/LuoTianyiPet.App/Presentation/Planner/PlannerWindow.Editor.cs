@@ -43,8 +43,14 @@ internal sealed partial class PlannerWindow
         ComboBox repeat=new(){Name="ReminderRepeat",ItemsSource=Repeats,SelectedIndex=(int)(original?.Repeat??ReminderRepeat.Once),Margin=new Thickness(3)};
         var checks=Days.Select(d=>new CheckBox{Content="周"+"日一二三四五六"[(int)d],IsChecked=original?.Weekdays.Contains(d)==true,Margin=new Thickness(5)}).ToArray();StackPanel weekdays=Row();foreach(var c in checks)weekdays.Children.Add(c);
         List<DateTime> selectedDates=original?.Dates.Count>0?original.Dates.ToList():[start.Date];
-        Button picker=null!;picker=Action("",()=>{DateSelectionWindow w=new(selectedDates,date.SelectedDate??start){Owner=this};if(w.ShowDialog()==true){selectedDates=w.Selection.OrderBy(d=>d).ToList();UpdateDateSummary();}});picker.Name="ModifyDates";
-        void UpdateDateSummary()=>picker.Content=selectedDates.Count<4?string.Join("、",selectedDates.Select(d=>d.ToString("M/d")))+" · 修改":$"已选{selectedDates.Count}天 · 修改";
+        bool multiMode=calendar?multiple.IsChecked==true:repeat.SelectedIndex==3;
+        Button picker=null!;picker=Action("",()=>{DateSelectionWindow w=new(selectedDates,date.SelectedDate??start){Owner=this};if(w.ShowDialog()==true){selectedDates=w.Selection.OrderBy(d=>d).ToList();UpdateDateSummary();}});picker.Name="ModifyDates";picker.Width=260;picker.Height=42;picker.HorizontalContentAlignment=HorizontalAlignment.Left;picker.ToolTip="点击选择日期";
+        void UpdateDateSummary()
+        {
+            string[] labels=selectedDates.OrderBy(d=>d).Select(d=>d.ToString("M/d")).ToArray();
+            picker.Content=labels.Length switch{0=>"请选择日期",1=>labels[0],2 or 3=>$"已选 {labels.Length} 天 · {string.Join("、",labels)}",_=>$"已选 {labels.Length} 天 · {string.Join("、",labels.Take(2))}…"};
+            picker.ToolTip=labels.Length==0?"点击选择日期":string.Join("、",labels);
+        }
         UpdateDateSummary();
         var enabled=new CheckBox{Name="CreateAlarm",Content="创建闹钟提醒",IsChecked=original?.Enabled??false,Style=(Style)FindResource("PlannerSwitch"),Margin=new Thickness(3,12,3,12)};
         var early=new CheckBox{Name="EarlyReminder",Content="提前提醒",IsChecked=original?.EarlyEnabled??false,Style=(Style)FindResource("PlannerSwitch"),Margin=new Thickness(3,12,3,12)};
@@ -69,6 +75,25 @@ internal sealed partial class PlannerWindow
         StackPanel quick=Row();quick.HorizontalAlignment=HorizontalAlignment.Center;foreach(var preset in new[]{(300,"5分钟"),(900,"15分钟"),(1800,"30分钟"),(3600,"1小时")}){var button=Action(preset.Item2,()=>{hours.Input.Text=(preset.Item1/3600).ToString("00");minutes.Input.Text=(preset.Item1/60%60).ToString("00");secs.Input.Text="00";});button.Width=140;quick.Children.Add(button);presets.Add((preset.Item1,button));}foreach(var input in new[]{hours.Input,minutes.Input,secs.Input})input.TextChanged+=(_,_)=>HighlightPreset();HighlightPreset();
         void Field(string label,UIElement input){Grid row=new(){Margin=new Thickness(0,9,0,9)};row.ColumnDefinitions.Add(new(){Width=new GridLength(140)});row.ColumnDefinitions.Add(new());var labelRow=Row();if(label.Length>0){string icon=label.Contains("日期")?"calendar":label.Contains("时间")||label.Contains("提前")?"clock":label.Contains("重复")?"repeat":"note";labelRow.Children.Add(PlannerTheme.Icon(icon,18));labelRow.Children.Add(Text(label,14));}row.Children.Add(labelRow);Grid.SetColumn(input,1);row.Children.Add(input);form.Children.Add(row);}
         Button? save=null;
+        void SetMultiMode(bool enabled)
+        {
+            if(enabled==multiMode)return;
+            DateTime current=date.SelectedDate?.Date??start.Date;
+            if(enabled)
+            {
+                if(selectedDates.Count<=1||!selectedDates.Contains(current))
+                {
+                    selectedDates.Clear();selectedDates.Add(current);
+                }
+            }
+            else
+            {
+                DateTime single=selectedDates.Count>0?selectedDates.Min().Date:current;
+                date.SelectedDate=single;
+                selectedDates.Clear();selectedDates.Add(single);
+            }
+            multiMode=enabled;UpdateDateSummary();
+        }
         void Update()
         {
             form.Children.Clear();error.Text="";
@@ -86,7 +111,8 @@ internal sealed partial class PlannerWindow
             else
             {
                 if(calendar)Field("事项名称 *",nameBox);
-                StackPanel dateRow=Row();dateRow.Children.Add(date);if(calendar)dateRow.Children.Add(multiple);Field("日期 *",dateRow);
+                bool multi=calendar?multiple.IsChecked==true:repeat.SelectedIndex==3;
+                StackPanel dateRow=Row();dateRow.Children.Add(multi?picker:date);if(calendar)dateRow.Children.Add(multiple);Field("日期 *",dateRow);
                 StackPanel timeRow=Row();timeRow.Children.Add(time);if(calendar)timeRow.Children.Add(noTime);Field("时间",timeRow);
                 if(!calendar)Field("名称（可选）",nameBox);
                 if(!calendar || original?.Repeat is ReminderRepeat.Daily or ReminderRepeat.Weekly or ReminderRepeat.Workdays or ReminderRepeat.RestDays)
@@ -95,8 +121,6 @@ internal sealed partial class PlannerWindow
                     foreach(int index in new[]{0,1,2,4,5,3}){int value=index;var choice=Action(labels[index],()=>repeat.SelectedIndex=value);choice.Padding=new Thickness(7,8,7,8);choice.FontSize=12;if(repeat.SelectedIndex==index)Primary(choice);choices.Children.Add(choice);}
                     Field("重复",choices);repeat.Visibility=Visibility.Collapsed;form.Children.Add(repeat);
                 }
-                bool multi=calendar?multiple.IsChecked==true:repeat.SelectedIndex==3;
-                if(multi)Field("已选日期",picker);
                 if(repeat.SelectedIndex==2)form.Children.Add(weekdays);
                 time.IsEnabled=noTime.IsChecked!=true;
                 enabled.IsEnabled=noTime.IsChecked!=true;
@@ -109,7 +133,7 @@ internal sealed partial class PlannerWindow
             if(save!=null){save.Content=relative?"▶ 开始倒计时":"保存";save.Width=relative?280:150;}
         }
         specified.Click+=(_,_)=>{relative=false;Update();};countdown.Click+=(_,_)=>{relative=true;Update();};
-        multiple.Click+=(_,_)=>Update();noTime.Click+=(_,_)=>Update();enabled.Click+=(_,_)=>Update();early.Click+=(_,_)=>Update();repeat.SelectionChanged+=(_,_)=>Update();
+        multiple.Click+=(_,_)=>{SetMultiMode(multiple.IsChecked==true);Update();};noTime.Click+=(_,_)=>Update();enabled.Click+=(_,_)=>Update();early.Click+=(_,_)=>Update();repeat.SelectionChanged+=(_,_)=>{if(!calendar)SetMultiMode(repeat.SelectedIndex==3);Update();};
         panel.Children.Add(error);
         save=Action("保存",async()=>
         {
