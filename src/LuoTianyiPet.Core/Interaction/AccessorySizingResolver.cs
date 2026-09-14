@@ -2,7 +2,8 @@ namespace LuoTianyiPet.Core;
 
 public readonly record struct AccessorySizing(
     double TrackInfoWidth,
-    double MediaControlsScale);
+    double MediaControlsScale,
+    double MusicIslandScale);
 
 /// <summary>
 /// Keeps the music islands readable without letting them inherit every change
@@ -13,6 +14,7 @@ public static class AccessorySizingResolver
     public const double HorizontalInset = 10;
     public const double MediaControlsNaturalWidth = 178;
     public const double MaximumTrackInfoWidth = 240;
+    public const double MusicIslandNaturalWidth = 316;
 
     public static AccessorySizing Resolve(double windowWidth)
     {
@@ -24,6 +26,7 @@ public static class AccessorySizingResolver
         double availableWidth = windowWidth - HorizontalInset;
         return new AccessorySizing(
             Math.Min(availableWidth, MaximumTrackInfoWidth),
-            Math.Min(1, availableWidth / MediaControlsNaturalWidth));
+            Math.Min(1, availableWidth / MediaControlsNaturalWidth),
+            Math.Min(1, availableWidth / MusicIslandNaturalWidth));
     }
 }

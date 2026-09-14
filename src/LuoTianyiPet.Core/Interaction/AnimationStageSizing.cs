@@ -14,7 +14,7 @@ public readonly record struct AnimationStageSizing(double Width, double Height, 
         double scale = scalePercent / 100.0;
         return new AnimationStageSizing(
             Math.Max(220, maximumArtworkWidth) * scale + 16,
-            maximumArtworkHeight * scale + 126,
+            maximumArtworkHeight * scale + 146,
             AccessorySizingResolver.Resolve(220 * scale + 16));
     }
 }

@@ -44,8 +44,8 @@ public partial class MainWindow : Window
     private const int CrystalDuckSitHoldFrame = 120;
     private const int CrystalDuckSitLastFrame = 216;
     private const double GenshinCameoSafeMargin = 24;
-    private const double MediaControlsReservedHeight = 58;
-    private const double TrackInfoReservedHeight = 52;
+    private const double MediaControlsReservedHeight = 86;
+    private const double TrackInfoReservedHeight = 86;
     private static readonly TimeSpan AccessoryMouseLeaveDelay = TimeSpan.FromSeconds(5);
     private const double EdgeDockActivationFraction = 0.25;
     private const double EdgeDockReleaseFraction = 1.0 / 6.0;
@@ -98,8 +98,7 @@ public partial class MainWindow : Window
     private readonly AnimationFramePlayer? _crystalLongIdleDecorationPlayer;
     private readonly VisualSwapTransition _visualSwapTransition;
     private readonly BodyReactionMotion _bodyReactionMotion;
-    private readonly MediaControlsVisibilityMotion _mediaControlsMotion;
-    private readonly MediaControlsVisibilityMotion _trackInfoMotion;
+    private readonly MediaControlsVisibilityMotion _musicIslandMotion;
     private readonly PointerGestureRecognizer _pointerGesture = new(6, DoubleClickInterval);
     private readonly RapidBackAndForthDragTracker _rapidDragTracker = new();
     private readonly PettingGestureRecognizer _pettingGesture = new(
@@ -222,6 +221,7 @@ public partial class MainWindow : Window
     private int _edgeDockAnimationGeneration;
     private MediaTrackSnapshot _lastTrackSnapshot = MediaTrackSnapshot.Unavailable;
     private string _lastTrackIdentity = string.Empty;
+    private byte[]? _displayedArtworkBytes;
     private Point _dragPressScreenPoint;
     private double _dragStartLeft;
     private double _dragStartTop;
@@ -432,13 +432,9 @@ public partial class MainWindow : Window
             MusicTransitionFlash,
             MusicTransitionFlashScale);
         _bodyReactionMotion = new BodyReactionMotion(PetScaleTransform, PetShakeTransform);
-        _mediaControlsMotion = new MediaControlsVisibilityMotion(
+        _musicIslandMotion = new MediaControlsVisibilityMotion(
             MediaControls,
             MediaControlsTranslate);
-        _trackInfoMotion = new MediaControlsVisibilityMotion(
-            TrackInfoBubble,
-            TrackInfoTranslate,
-            enableHitTesting: false);
         _petPointerCursor = TryLoadCursorAsset("pet-pointer.cur");
         _headPatCursor = TryLoadCursorAsset("pet-headpat.cur");
         ApplyMediaControlCursor();
@@ -543,8 +539,7 @@ public partial class MainWindow : Window
         TogglePlayPauseButton.ToolTip = $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}）";
         NextTrackButton.ToolTip = $"下一首（{_settings.Media.NextTrackShortcut}）";
         UpdatePlayPauseGlyph();
-        _mediaControlsMotion.Hide(animate: false);
-        _trackInfoMotion.Hide(animate: false);
+        _musicIslandMotion.Hide(animate: false);
 
         DesktopRectangle workArea = GetCurrentWorkArea();
         double desiredLeft = _settings.Window.Left ?? workArea.Right - ActualWidth - 32;
@@ -2965,8 +2960,7 @@ public partial class MainWindow : Window
 
         int generation = ++_edgeDockAnimationGeneration;
         _stateMachine.CancelActiveReaction();
-        _mediaControlsMotion.Hide(animate: false);
-        _trackInfoMotion.Hide(animate: false);
+        _musicIslandMotion.Hide(animate: false);
         SetEdgeMirror(side == EdgeDockSide.Left);
         EdgeDockHandle.Visibility = Visibility.Collapsed;
         PlayEdgeDockToward(
@@ -3349,32 +3343,26 @@ public partial class MainWindow : Window
             case AccessoryLayout.AbovePet:
                 PetVisual.Margin = new Thickness(8, 118 + _feedbackSlotHeight, 8, 8);
                 MusicTransitionFlash.Margin = PetVisual.Margin;
-                TrackInfoBubble.VerticalAlignment = VerticalAlignment.Top;
-                TrackInfoBubble.Margin = new Thickness(5, 7, 5, 0);
                 MediaControls.VerticalAlignment = VerticalAlignment.Top;
-                MediaControls.Margin = new Thickness(0, 60 + _feedbackSlotHeight, 0, 0);
+                MediaControls.Margin = new Thickness(0, 7, 0, 0);
                 FeedbackBubble.VerticalAlignment = VerticalAlignment.Top;
-                FeedbackBubble.Margin = new Thickness(5, 57, 5, 0);
+                FeedbackBubble.Margin = new Thickness(5, 92, 5, 0);
                 break;
             case AccessoryLayout.BelowPet:
                 PetVisual.Margin = new Thickness(8, 8, 8, 118 + _feedbackSlotHeight);
                 MusicTransitionFlash.Margin = PetVisual.Margin;
-                TrackInfoBubble.VerticalAlignment = VerticalAlignment.Bottom;
-                TrackInfoBubble.Margin = new Thickness(5, 0, 5, 60 + _feedbackSlotHeight);
                 MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
                 MediaControls.Margin = new Thickness(0, 0, 0, 7);
                 FeedbackBubble.VerticalAlignment = VerticalAlignment.Bottom;
-                FeedbackBubble.Margin = new Thickness(5, 0, 5, 60);
+                FeedbackBubble.Margin = new Thickness(5, 0, 5, 92);
                 break;
             case AccessoryLayout.Split:
-                PetVisual.Margin = new Thickness(8, 60 + _feedbackSlotHeight, 8, 66);
+                PetVisual.Margin = new Thickness(8, 60 + _feedbackSlotHeight, 8, 86);
                 MusicTransitionFlash.Margin = PetVisual.Margin;
-                TrackInfoBubble.VerticalAlignment = VerticalAlignment.Top;
-                TrackInfoBubble.Margin = new Thickness(5, 6, 5, 0);
                 MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
                 MediaControls.Margin = new Thickness(0, 0, 0, 7);
                 FeedbackBubble.VerticalAlignment = VerticalAlignment.Top;
-                FeedbackBubble.Margin = new Thickness(5, 56, 5, 0);
+                FeedbackBubble.Margin = new Thickness(5, 92, 5, 0);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(layout));
@@ -3915,8 +3903,10 @@ public partial class MainWindow : Window
 
         if (_settings.Media.EnableCloudMusicShortcutControl)
         {
+            UpdateMediaControlButtonsVisibility();
             _mediaControlsHideTimer.Stop();
-            _mediaControlsMotion.Show();
+            _musicIslandMotion.Show();
+            MediaControls.IsHitTestVisible = true;
         }
 
         if (!_isClosing)
@@ -3972,7 +3962,7 @@ public partial class MainWindow : Window
         _mediaControlsHideTimer.Stop();
         if (!_previewMediaControls && !IsMouseOver && !CloudMusicVolumePopup.IsOpen)
         {
-            _mediaControlsMotion.Hide();
+            _musicIslandMotion.Hide();
         }
     }
 
@@ -5173,8 +5163,7 @@ public partial class MainWindow : Window
         _trackInfoHideTimer.Stop();
         _feedbackBubbleTimer.Stop();
         CloudMusicVolumePopup.IsOpen = false;
-        _mediaControlsMotion.Hide(animate: false);
-        _trackInfoMotion.Hide(animate: false);
+        _musicIslandMotion.Hide(animate: false);
         HideFeedbackBubble(restoreTrackInfo: false);
         HideMessageNotification();
     }
@@ -5333,6 +5322,8 @@ public partial class MainWindow : Window
             bool trackChanged = _hasObservedTrackSnapshot &&
                 snapshot.HasTrack &&
                 !identity.Equals(_lastTrackIdentity, StringComparison.Ordinal);
+            bool artworkChanged = _hasObservedTrackSnapshot &&
+                !ReferenceEquals(_lastTrackSnapshot.ArtworkBytes, snapshot.ArtworkBytes);
             _hasObservedTrackSnapshot = true;
             _lastTrackSnapshot = snapshot;
             _lastTrackIdentity = identity;
@@ -5348,7 +5339,7 @@ public partial class MainWindow : Window
             {
                 bool confirmsPendingSwitch = _showNextTrackChange &&
                     !identity.Equals(_trackSwitchInitialIdentity, StringComparison.Ordinal);
-                bool automaticDisplay = trackChanged || confirmsPendingSwitch;
+                bool automaticDisplay = trackChanged || artworkChanged || confirmsPendingSwitch;
                 if (shouldShowWhenFound || automaticDisplay)
                 {
                     ShowTrackInfo(snapshot, holdAfterLeave: automaticDisplay);
@@ -5468,6 +5459,7 @@ public partial class MainWindow : Window
         TrackTitleText.Text = "正在切换歌曲…";
         TrackArtistText.Text = "等待网易云更新歌曲信息";
         TrackArtistText.Visibility = Visibility.Visible;
+        UpdateTrackArtwork(null);
         System.Windows.Automation.AutomationProperties.SetName(
             TrackInfoBubble,
             "正在切换歌曲，等待网易云更新歌曲信息");
@@ -5481,6 +5473,7 @@ public partial class MainWindow : Window
         TrackArtistText.Visibility = string.IsNullOrWhiteSpace(snapshot.Artist)
             ? Visibility.Collapsed
             : Visibility.Visible;
+        UpdateTrackArtwork(snapshot.ArtworkBytes);
         System.Windows.Automation.AutomationProperties.SetName(
             TrackInfoBubble,
             MediaTrackText.BuildAccessibleLabel(snapshot));
@@ -5492,21 +5485,71 @@ public partial class MainWindow : Window
         TrackTitleText.Text = "未在播放";
         TrackArtistText.Text = string.Empty;
         TrackArtistText.Visibility = Visibility.Collapsed;
+        UpdateTrackArtwork(null);
         System.Windows.Automation.AutomationProperties.SetName(
             TrackInfoBubble,
             "未在播放");
         ShowTrackInfoSurface(holdAfterLeave: false);
     }
 
+    private void UpdateMediaControlButtonsVisibility()
+    {
+        Visibility visibility = _settings.Media.EnableCloudMusicShortcutControl
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        PreviousTrackButton.Visibility = visibility;
+        TogglePlayPauseButton.Visibility = visibility;
+        NextTrackButton.Visibility = visibility;
+        CloudMusicVolumeButton.Visibility = visibility;
+    }
+
+    private void UpdateTrackArtwork(byte[]? artworkBytes)
+    {
+        if (ReferenceEquals(_displayedArtworkBytes, artworkBytes))
+        {
+            return;
+        }
+
+        _displayedArtworkBytes = artworkBytes;
+        TrackArtworkImage.Source = null;
+        TrackArtworkImage.Visibility = Visibility.Collapsed;
+        TrackArtworkPlaceholder.Visibility = Visibility.Visible;
+        if (artworkBytes is null || artworkBytes.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            BitmapImage image = new();
+            using MemoryStream stream = new(artworkBytes, writable: false);
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            TrackArtworkImage.Source = image;
+            TrackArtworkImage.Visibility = Visibility.Visible;
+            TrackArtworkPlaceholder.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or ArgumentException or IOException)
+        {
+            _logger.Info("media.track_artwork_unavailable", "Track artwork could not be decoded.");
+        }
+    }
+
     private void ShowTrackInfoSurface(bool holdAfterLeave)
     {
         if (!CanShowMusicIslands)
         {
-            _trackInfoMotion.Hide(animate: false);
+            _musicIslandMotion.Hide(animate: false);
             return;
         }
 
-        _trackInfoMotion.Show();
+        UpdateMediaControlButtonsVisibility();
+        _musicIslandMotion.Show();
+        MediaControls.IsHitTestVisible = _settings.Media.EnableCloudMusicShortcutControl;
         _trackInfoHideTimer.Stop();
         if (holdAfterLeave && !_previewTrackInfo)
         {
@@ -5519,7 +5562,7 @@ public partial class MainWindow : Window
         _trackInfoHideTimer.Stop();
         if (!_previewTrackInfo && !IsMouseOver)
         {
-            _trackInfoMotion.Hide();
+            _musicIslandMotion.Hide();
         }
     }
 
@@ -5588,7 +5631,7 @@ public partial class MainWindow : Window
         Topmost = true;
         if (CanShowMusicIslands)
         {
-            _mediaControlsMotion.Show();
+            _musicIslandMotion.Show();
         }
     }
 
@@ -5677,8 +5720,7 @@ public partial class MainWindow : Window
         _pettingGesture.Cancel();
         ReleaseFileDragCursorOverride();
         _bodyReactionMotion.Cancel();
-        _mediaControlsMotion.Cancel();
-        _trackInfoMotion.Cancel();
+        _musicIslandMotion.Cancel();
         CancelGenshinPresentations(restoreContinuousAnimation: false);
         CancelMessageNotificationPresentation(restoreContinuousAnimation: false);
         CancelBunChase(restorePosition: false, restoreContinuousAnimation: false);

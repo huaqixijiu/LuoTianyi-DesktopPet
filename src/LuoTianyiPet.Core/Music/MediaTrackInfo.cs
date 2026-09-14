@@ -4,7 +4,8 @@ public readonly record struct MediaTrackSnapshot(
     bool ProbeSucceeded,
     bool SessionFound,
     string Title,
-    string Artist)
+    string Artist,
+    byte[]? ArtworkBytes = null)
 {
     public static MediaTrackSnapshot Unavailable => new(false, false, string.Empty, string.Empty);
 

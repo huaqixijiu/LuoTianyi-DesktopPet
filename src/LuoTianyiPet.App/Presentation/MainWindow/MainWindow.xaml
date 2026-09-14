@@ -260,52 +260,6 @@
             </Ellipse.RenderTransform>
         </Ellipse>
 
-        <Border x:Name="TrackInfoBubble"
-                Panel.ZIndex="5"
-                Width="186"
-                Height="44"
-                Margin="5,6,5,0"
-                Padding="12,5"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Top"
-                Background="#F2083448"
-                BorderBrush="#D966CCFF"
-                BorderThickness="1"
-                CornerRadius="14"
-                IsHitTestVisible="False"
-                Opacity="0"
-                Visibility="Collapsed"
-                AutomationProperties.Name="当前歌曲">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="10"
-                                  Color="#FF0A719D"
-                                  Direction="270"
-                                  Opacity="0.32"
-                                  ShadowDepth="2" />
-            </Border.Effect>
-            <Border.RenderTransform>
-                <TranslateTransform x:Name="TrackInfoTranslate" Y="-6" />
-            </Border.RenderTransform>
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock x:Name="TrackTitleText"
-                           Foreground="White"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           TextAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-                <TextBlock x:Name="TrackArtistText"
-                           Grid.Row="1"
-                           Foreground="#D8C8F2FF"
-                           FontSize="10"
-                           TextAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-            </Grid>
-        </Border>
-
         <Border x:Name="FeedbackBubble"
                 Panel.ZIndex="6"
                 MaxWidth="250"
@@ -350,15 +304,15 @@
 
         <Border x:Name="MediaControls"
                 Panel.ZIndex="5"
-                Width="178"
-                Height="46"
+                Width="316"
+                Height="78"
                 Margin="0,0,0,7"
-                Padding="5,4"
+                Padding="7"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Bottom"
                 BorderBrush="#B366CCFF"
                 BorderThickness="1"
-                CornerRadius="23"
+                CornerRadius="24"
                 IsHitTestVisible="False"
                 Opacity="0"
                 Visibility="Collapsed">
@@ -367,9 +321,9 @@
             </Border.LayoutTransform>
             <Border.Background>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Offset="0" Color="#F2F4FCFF" />
-                    <GradientStop Offset="0.55" Color="#E8DFF6FF" />
-                    <GradientStop Offset="1" Color="#EAD1F0FF" />
+                    <GradientStop Offset="0" Color="#F8FFFFFF" />
+                    <GradientStop Offset="0.52" Color="#EEF0F8FF" />
+                    <GradientStop Offset="1" Color="#EBDCF3FF" />
                 </LinearGradientBrush>
             </Border.Background>
             <Border.Effect>
@@ -384,14 +338,64 @@
             </Border.RenderTransform>
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="42" />
-                    <ColumnDefinition Width="42" />
-                    <ColumnDefinition Width="42" />
-                    <ColumnDefinition Width="42" />
+                    <ColumnDefinition Width="56" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="38" />
+                    <ColumnDefinition Width="38" />
+                    <ColumnDefinition Width="38" />
+                    <ColumnDefinition Width="38" />
                 </Grid.ColumnDefinitions>
 
-                <Button x:Name="PreviousTrackButton"
+                <Border x:Name="TrackArtworkHost"
                         Grid.Column="0"
+                        Width="52"
+                        Height="52"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Background="#2432B9F2"
+                        CornerRadius="15"
+                        ClipToBounds="True">
+                    <Grid>
+                        <TextBlock x:Name="TrackArtworkPlaceholder"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="#FF176A90"
+                                   FontSize="25"
+                                   FontWeight="SemiBold"
+                                   Text="♪" />
+                        <Image x:Name="TrackArtworkImage"
+                               Stretch="UniformToFill"
+                               Visibility="Collapsed" />
+                    </Grid>
+                </Border>
+
+                <Grid x:Name="TrackInfoBubble"
+                      Grid.Column="1"
+                      Margin="9,2,7,2"
+                      VerticalAlignment="Center"
+                      IsHitTestVisible="False"
+                      AutomationProperties.Name="当前歌曲">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="TrackTitleText"
+                               Foreground="#FF123E56"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               TextAlignment="Left"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="TrackArtistText"
+                               Grid.Row="1"
+                               Margin="0,4,0,0"
+                               Foreground="#FF5C7484"
+                               FontSize="10"
+                               TextAlignment="Left"
+                               TextTrimming="CharacterEllipsis" />
+                </Grid>
+
+                <Button x:Name="PreviousTrackButton"
+                        Grid.Column="2"
                         Style="{StaticResource MediaIconButtonStyle}"
                         Click="OnPreviousTrackClick"
                         AutomationProperties.Name="上一首"
@@ -405,7 +409,7 @@
                 </Button>
 
                 <Button x:Name="TogglePlayPauseButton"
-                        Grid.Column="1"
+                        Grid.Column="3"
                         Style="{StaticResource MediaPrimaryButtonStyle}"
                         Click="OnTogglePlayPauseClick"
                         AutomationProperties.Name="播放或暂停"
@@ -427,7 +431,7 @@
                 </Button>
 
                 <Button x:Name="NextTrackButton"
-                        Grid.Column="2"
+                        Grid.Column="4"
                         Style="{StaticResource MediaIconButtonStyle}"
                         Click="OnNextTrackClick"
                         AutomationProperties.Name="下一首"
@@ -441,7 +445,7 @@
                 </Button>
 
                 <Button x:Name="CloudMusicVolumeButton"
-                        Grid.Column="3"
+                        Grid.Column="5"
                         Style="{StaticResource MediaPrimaryButtonStyle}"
                         Click="OnCloudMusicVolumeClick"
                         AutomationProperties.Name="网易云音乐独立音量"

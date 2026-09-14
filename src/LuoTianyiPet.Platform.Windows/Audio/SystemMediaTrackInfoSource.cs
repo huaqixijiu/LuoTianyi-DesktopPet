@@ -1,12 +1,17 @@
 using System.Diagnostics;
 using LuoTianyiPet.Core;
 using Windows.Media.Control;
+using Windows.Storage.Streams;
 
 namespace LuoTianyiPet.Platform.Windows;
 
 public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
 {
+    private const ulong MaximumArtworkBytes = 1024 * 1024;
     private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
+    private string _artworkIdentity = string.Empty;
+    private byte[]? _cachedArtworkBytes;
+    private bool _artworkRead;
 
     public async ValueTask<MediaTrackSnapshot> ReadAsync(string targetProcessName)
     {
@@ -26,21 +31,29 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
                     targetProcessName));
             if (session is null)
             {
+                ClearArtworkCache();
                 return ReadFromWindowTitle(targetProcessName);
             }
 
             GlobalSystemMediaTransportControlsSessionMediaProperties properties =
                 await session.TryGetMediaPropertiesAsync();
-            MediaTrackSnapshot snapshot = MediaTrackText.Normalize(new MediaTrackSnapshot(
+            MediaTrackSnapshot metadata = MediaTrackText.Normalize(new MediaTrackSnapshot(
                 ProbeSucceeded: true,
                 SessionFound: true,
                 properties?.Title ?? string.Empty,
                 properties?.Artist ?? string.Empty));
+            MediaTrackSnapshot snapshot = metadata with
+            {
+                ArtworkBytes = metadata.HasTrack
+                    ? await ReadArtworkAsync(properties, BuildIdentity(metadata.Title, metadata.Artist))
+                    : null,
+            };
             return SupplementArtistFromWindow(snapshot, ReadFromWindowTitle(targetProcessName));
         }
         catch (Exception)
         {
             _sessionManager = null;
+            ClearArtworkCache();
             MediaTrackSnapshot fallback = ReadFromWindowTitle(targetProcessName);
             return fallback.HasTrack ? fallback : MediaTrackSnapshot.Unavailable;
         }
@@ -68,6 +81,76 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
         }
 
         return media;
+    }
+
+    private async Task<byte[]?> ReadArtworkAsync(
+        GlobalSystemMediaTransportControlsSessionMediaProperties? properties,
+        string identity)
+    {
+        if (properties is null || string.IsNullOrWhiteSpace(identity))
+        {
+            ClearArtworkCache();
+            return null;
+        }
+
+        if (_artworkRead && string.Equals(_artworkIdentity, identity, StringComparison.Ordinal))
+        {
+            return _cachedArtworkBytes;
+        }
+
+        _artworkIdentity = identity;
+        _artworkRead = true;
+        _cachedArtworkBytes = await TryReadArtworkAsync(properties.Thumbnail);
+        return _cachedArtworkBytes;
+    }
+
+    private static async Task<byte[]?> TryReadArtworkAsync(IRandomAccessStreamReference? reference)
+    {
+        try
+        {
+            if (reference is null)
+            {
+                return null;
+            }
+
+            using IRandomAccessStreamWithContentType stream = await reference.OpenReadAsync();
+            if (stream.Size is 0 or > MaximumArtworkBytes)
+            {
+                return null;
+            }
+
+            uint byteCount = checked((uint)stream.Size);
+            using DataReader reader = new(stream.GetInputStreamAt(0));
+            uint loaded = await reader.LoadAsync(byteCount);
+            if (loaded == 0)
+            {
+                return null;
+            }
+
+            byte[] bytes = new byte[loaded];
+            reader.ReadBytes(bytes);
+            return bytes;
+        }
+        catch (Exception exception) when (
+            exception is UnauthorizedAccessException or InvalidOperationException or IOException ||
+            exception is ArgumentException or OverflowException ||
+            exception.HResult is unchecked((int)0x800706BA) or
+                unchecked((int)0x800706BE) or
+                unchecked((int)0x80010108) or
+                unchecked((int)0x8001010E))
+        {
+            return null;
+        }
+    }
+
+    private static string BuildIdentity(string? title, string? artist) =>
+        $"{title ?? string.Empty}\u001f{artist ?? string.Empty}";
+
+    private void ClearArtworkCache()
+    {
+        _artworkIdentity = string.Empty;
+        _cachedArtworkBytes = null;
+        _artworkRead = false;
     }
 
     internal static MediaTrackSnapshot ReadFromWindowTitle(string targetProcessName)

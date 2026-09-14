@@ -43,11 +43,9 @@ public partial class MainWindow
                 ShowTrackInfo(new MediaTrackSnapshot(true, true, "布局回归测试", "测试歌手"), true);
                 _trackInfoHideTimer.Stop();
                 _mediaControlsHideTimer.Stop();
-                _trackInfoMotion.Show(animate: false);
-                _mediaControlsMotion.Show(animate: false);
+                _musicIslandMotion.Show(animate: false);
                 await Task.Delay(250);
-                _trackInfoMotion.Show(animate: false);
-                _mediaControlsMotion.Show(animate: false);
+                _musicIslandMotion.Show(animate: false);
                 CaptureQuickActionsQa(this, Path.Combine(directory, "snapshot-" + id + ".png"));
                 Close();
                 return;
@@ -70,7 +68,7 @@ public partial class MainWindow
                         corner.StartsWith("bottom") ? work.Bottom - stage.Bottom : work.Top + (work.Height - Height) / 2;
                     UpdateAccessoryLayoutForCurrentPosition();
                     double x = Left, y = Top, width = Width, height = Height;
-                    double track = TrackInfoBubble.Width, controls = MediaControlsLayoutScale.ScaleX;
+                    double island = MediaControls.Width, controls = MediaControlsLayoutScale.ScaleX;
                     AccessoryLayout layout = _accessoryLayout;
                     for (int repeat = 0; repeat < 2; repeat++)
                     foreach (string id in sequence)
@@ -82,7 +80,7 @@ public partial class MainWindow
                         UpdateAccessoryLayoutForCurrentPosition();
                         await Task.Delay(20);
                         Check(Near(Left, x) && Near(Top, y) && Near(Width, width) && Near(Height, height) &&
-                            Near(track, TrackInfoBubble.Width) && Near(controls, MediaControlsLayoutScale.ScaleX) && layout == _accessoryLayout,
+                            Near(island, MediaControls.Width) && Near(controls, MediaControlsLayoutScale.ScaleX) && layout == _accessoryLayout,
                             $"{scale}% {corner} round {repeat} {id}: stable window, islands and attachment side");
                         var frame = GetPetImageBoundsInWindow();
                         Check(Left + frame.Left >= work.Left - .1 && Left + frame.Right <= work.Right + .1 &&
@@ -94,20 +92,17 @@ public partial class MainWindow
                             _trackInfoHideTimer.Stop();
                             _mediaControlsHideTimer.Stop();
                             ShowTrackInfo(new MediaTrackSnapshot(true, true, "布局回归测试", "测试歌手"), true);
-                            _mediaControlsMotion.Show();
+                            _musicIslandMotion.Show();
                             _trackInfoHideTimer.Stop();
                             await Task.Delay(200);
-                            Check(TrackInfoBubble.Opacity > .99 && MediaControls.Opacity > .99 &&
-                                TrackInfoBubble.IsVisible && MediaControls.IsVisible,
-                                "Snapshot islands are fully visible: " + id);
+                            Check(MediaControls.Opacity > .99 && MediaControls.IsVisible &&
+                                TrackInfoBubble.IsVisible,
+                                "Combined music island is fully visible: " + id);
                             // Fresh effect instances avoid reusing a GPU effect surface from the previous offscreen capture.
-                            TrackInfoBubble.Effect = TrackInfoBubble.Effect?.CloneCurrentValue();
                             MediaControls.Effect = MediaControls.Effect?.CloneCurrentValue();
-                            TrackInfoBubble.InvalidateVisual();
                             MediaControls.InvalidateVisual();
                             await Task.Delay(80);
-                            _trackInfoMotion.Show(animate: false);
-                            _mediaControlsMotion.Show(animate: false);
+                            _musicIslandMotion.Show(animate: false);
                             CaptureQuickActionsQa(this, Path.Combine(directory, id + ".png"));
                         }
                     }
@@ -122,7 +117,9 @@ public partial class MainWindow
                 double x = Left, y = Top;
                 PlayAnimation(asset.Id);
                 UpdateLayout();
-                Check(Near(Left, x) && Near(Top, y) && Near(TrackInfoBubble.Width, 226), "Catalog: " + asset.Id);
+                Check(Near(Left, x) && Near(Top, y) &&
+                    Near(MediaControls.Width, AccessorySizingResolver.MusicIslandNaturalWidth),
+                    "Catalog: " + asset.Id);
                 await Task.Delay(10);
             }
             foreach (string style in new[] { AppearanceOptionIds.FullBodyCrystalDress, AppearanceOptionIds.FullBodyClassicCatEars })

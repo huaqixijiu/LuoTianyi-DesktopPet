@@ -28,25 +28,33 @@ public partial class MainWindow
             OnRootMouseEnter(this, new MouseEventArgs(Mouse.PrimaryDevice, 0));
             ShowTrackInfo(new MediaTrackSnapshot(true, true, "测试歌曲", "洛天依"), true);
             ShowTrackSwitchPending();
-            Check(TrackInfoBubble.Visibility == Visibility.Collapsed &&
-                MediaControls.Visibility == Visibility.Collapsed && !MediaControls.IsHitTestVisible,
+            Check(MediaControls.Visibility == Visibility.Collapsed && !MediaControls.IsHitTestVisible,
                 "Disabled islands reject hover, track updates and track-switch feedback");
             CaptureQuickActionsQa(this, Path.Combine(directory, "01-hidden.png"));
 
             SetMusicIslandsVisible(true);
             OnRootMouseEnter(this, new MouseEventArgs(Mouse.PrimaryDevice, 0));
             await Task.Delay(220);
-            Check(MediaControls.Visibility == Visibility.Visible && MediaControls.IsHitTestVisible,
-                "Enabling islands exposes the complete four-button control surface");
+            Check(MediaControls.Visibility == Visibility.Visible && MediaControls.IsHitTestVisible &&
+                PreviousTrackButton.Visibility == Visibility.Visible &&
+                TogglePlayPauseButton.Visibility == Visibility.Visible &&
+                NextTrackButton.Visibility == Visibility.Visible &&
+                CloudMusicVolumeButton.Visibility == Visibility.Visible,
+                "Enabling islands exposes the combined surface and all four controls");
             Check(TrackTitleText.Text == "未在播放", "No track uses a quiet empty state");
-            ShowTrackInfo(new MediaTrackSnapshot(true, true, "测试歌曲", "洛天依"), true);
+            byte[] sampleArtwork = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+            ShowTrackInfo(new MediaTrackSnapshot(true, true, "测试歌曲", "洛天依", sampleArtwork), true);
             await Task.Delay(220);
+            Check(TrackArtworkImage.Visibility == Visibility.Visible &&
+                TrackArtworkPlaceholder.Visibility == Visibility.Collapsed,
+                "Track artwork decodes in memory and replaces the placeholder");
             CaptureQuickActionsQa(this, Path.Combine(directory, "02-visible.png"));
             SetMusicIslandsVisible(false);
             HideFeedbackBubble(restoreTrackInfo: true);
             // Simulate a metadata response already in flight when the switch was turned off.
             ShowTrackInfo(new MediaTrackSnapshot(true, true, "延迟返回的歌曲", "测试歌手"), true);
-            Check(TrackInfoBubble.Visibility == Visibility.Collapsed && !CloudMusicVolumePopup.IsOpen,
+            Check(MediaControls.Visibility == Visibility.Collapsed && !CloudMusicVolumePopup.IsOpen,
                 "Late metadata and feedback restoration cannot reopen disabled islands");
 
             SetPositionLocked(true);

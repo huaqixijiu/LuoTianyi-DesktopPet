@@ -82,8 +82,7 @@ public partial class MainWindow
                         ApplyAccessoryLayout(layout);
                         var before = GetStableStageDesktopBounds();
                         ShowTrackInfo(new MediaTrackSnapshot(true, true, "歌名与提示各有位置", "洛天依"), true);
-                        _trackInfoMotion.Show(false);
-                        _mediaControlsMotion.Show(false);
+                        _musicIslandMotion.Show(false);
                         _trackInfoHideTimer.Stop();
                         _mediaControlsHideTimer.Stop();
                         ShowPersistentFeedbackBubble(message);
@@ -100,7 +99,8 @@ public partial class MainWindow
                             $"Islands remain on screen {scale}/{layout}/{message.Length}");
                         Check(Math.Abs(before.Bottom - pet.Bottom) < 0.1 && Math.Abs(before.Height - pet.Height) < 0.1,
                             $"Feedback does not shift or resize pet {scale}/{layout}/{message.Length}");
-                        Check(TrackInfoBubble.Opacity == 1, "Feedback does not hide the song");
+                        Check(MediaControls.Opacity == 1 && TrackInfoBubble.IsVisible,
+                            "Feedback does not hide the song island");
                         if (message == messages[0]) CaptureQuickActionsQa(this, Path.Combine(directory, $"{scale}-{layout}.png"));
                         HideFeedbackBubble(true);
                         Check(Math.Abs(GetStableStageDesktopBounds().Bottom - before.Bottom) < 0.1 && _feedbackSlotHeight == 0,
@@ -110,7 +110,7 @@ public partial class MainWindow
             }
             SetMusicIslandsVisible(false);
             ShowPersistentFeedbackBubble(messages[1]);
-            Check(TrackInfoBubble.Visibility == Visibility.Collapsed, "Important feedback never re-enables disabled islands");
+            Check(MediaControls.Visibility == Visibility.Collapsed, "Important feedback never re-enables disabled islands");
             SetDisplayScalePercent(50, false);
             UpdateLayout();
             Check(FeedbackBubble.Width <= Width - 10 && Bounds(FeedbackBubble).Bottom <= Height,

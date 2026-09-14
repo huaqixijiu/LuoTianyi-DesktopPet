@@ -77,7 +77,9 @@ public partial class MainWindow
         {
             if (_settings.Media.EnableCloudMusicShortcutControl)
             {
-                _mediaControlsMotion.Show();
+                UpdateMediaControlButtonsVisibility();
+                _musicIslandMotion.Show();
+                MediaControls.IsHitTestVisible = true;
                 _mediaControlsHideTimer.Start();
             }
             if (_lastTrackSnapshot.HasTrack)
@@ -103,8 +105,8 @@ public partial class MainWindow
         _trackInfoHideTimer.Stop();
         _trackInfoShowRequested = false;
         CloudMusicVolumePopup.IsOpen = false;
-        _mediaControlsMotion.Hide(animate: false);
-        _trackInfoMotion.Hide(animate: false);
+        UpdateMediaControlButtonsVisibility();
+        _musicIslandMotion.Hide(animate: false);
     }
 
     private void ShowPetFromTray()

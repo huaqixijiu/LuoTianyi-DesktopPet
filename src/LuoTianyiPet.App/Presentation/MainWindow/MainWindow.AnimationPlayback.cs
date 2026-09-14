@@ -145,8 +145,7 @@ public partial class MainWindow
 
     private void ApplyAccessorySizing(AccessorySizing sizing)
     {
-        TrackInfoBubble.Width = sizing.TrackInfoWidth;
-        MediaControlsLayoutScale.ScaleX = sizing.MediaControlsScale;
-        MediaControlsLayoutScale.ScaleY = sizing.MediaControlsScale;
+        MediaControlsLayoutScale.ScaleX = sizing.MusicIslandScale;
+        MediaControlsLayoutScale.ScaleY = sizing.MusicIslandScale;
     }
 }

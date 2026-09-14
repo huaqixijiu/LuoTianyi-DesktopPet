@@ -86,8 +86,7 @@ public partial class MainWindow
                     if (appearance == AppearanceOptionIds.FullBodyClassicCatEars && scale == 200 && edge == "right")
                     {
                         ShowTrackInfo(new MediaTrackSnapshot(true, true, "贴边回归测试", "测试歌手"), true);
-                        _trackInfoMotion.Show(animate: false);
-                        _mediaControlsMotion.Show(animate: false);
+                        _musicIslandMotion.Show(animate: false);
                         CaptureQuickActionsQa(this, Path.Combine(directory, "right-after.png"));
                     }
                 }
