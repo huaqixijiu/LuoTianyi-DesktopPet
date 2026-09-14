@@ -215,7 +215,6 @@ internal sealed partial class PlannerWindow : Window
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
-        inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         inner.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star),MinHeight=120});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
@@ -230,7 +229,7 @@ internal sealed partial class PlannerWindow : Window
             btn.Margin=new Thickness(0,0,6,6);days.Children.Add(btn);
         }
         Grid.SetRow(days,2);inner.Children.Add(days);
-        var priorityHint=Text("指定日期会覆盖每周设置；恢复默认后跟随每周设置。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
+        var priorityHint=Text("指定日期会覆盖每周设置；清除指定设置后不再单独指定。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
         DockPanel head=new(){LastChildFill=false};
         head.Children.Add(Text("指定日期",13,FontWeights.SemiBold));
         head.Children.Add(Text($"已选 {_selected.Count} 天",12));
@@ -252,11 +251,11 @@ internal sealed partial class PlannerWindow : Window
             rows.Children.Add(row);
         }
         if(rows.Children.Count==0)rows.Children.Add(Text("单击日期可选中或取消；按住左键拖动可连续选择日期。",12));
-        ScrollViewer selectedDates=new(){Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Stretch,MinHeight=120,Margin=new Thickness(0,2,0,4)};Grid.SetRow(selectedDates,5);inner.Children.Add(selectedDates);
+        ScrollViewer selectedDates=new(){Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Top,Height=144,Margin=new Thickness(0,2,0,4)};Grid.SetRow(selectedDates,5);inner.Children.Add(selectedDates);
         Button[] batchActions=[
             Primary(AsyncAction("设为休息日",()=>SetRest(true))),
             AsyncAction("设为工作日",()=>SetRest(false)),
-            AsyncAction("恢复默认",()=>SetRest(null))
+            AsyncAction("清除指定设置",()=>SetRest(null))
         ];
         batchActions[0].Name="SetSelectedRestDays";
         batchActions[1].Name="SetSelectedWorkdays";
@@ -266,10 +265,9 @@ internal sealed partial class PlannerWindow : Window
             b.IsEnabled=_selected.Count>0;
             b.HorizontalAlignment=HorizontalAlignment.Stretch;
             b.Margin=new Thickness(0,4,0,4);
-            if(b==batchActions[2])b.ToolTip="清除指定日期覆盖，恢复每周休息规则";
+            if(b==batchActions[2])b.ToolTip="清除该日期的单独设置，回到未单独指定状态";
         }
         StackPanel actions=new();foreach(var b in batchActions)actions.Children.Add(b);Grid.SetRow(actions,6);inner.Children.Add(actions);
-        var finish=Primary(AsyncAction("完成班休",async()=>{_batch=false;_selected.Clear();await Task.CompletedTask;Render();}));finish.HorizontalAlignment=HorizontalAlignment.Stretch;finish.Margin=new Thickness(0,4,0,4);Grid.SetRow(finish,7);inner.Children.Add(finish);
         return new Border{Child=inner,Background=Brushes.White,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(14),Margin=new Thickness(14,0,2,0)};
     }
     private async Task SetRest(bool? rest)
@@ -355,7 +353,7 @@ internal sealed partial class PlannerWindow : Window
         UpdateCalendarDateSelectionVisuals();
     }
 
-    private static bool TryGetCalendarDate(Grid grid,Point point,out DateTime day)
+    private bool TryGetCalendarDate(Grid grid,Point point,out DateTime day)
     {
         DependencyObject? current=VisualTreeHelper.HitTest(grid,point)?.VisualHit;
         while(current is not null&&current!=grid)
@@ -367,6 +365,20 @@ internal sealed partial class PlannerWindow : Window
             }
             current=VisualTreeHelper.GetParent(current);
         }
+
+        DateTime? nearest=null;
+        double nearestDistance=double.MaxValue;
+        foreach(var pair in _calendarDateBorders)
+        {
+            if(pair.Key<ReminderSchedule.MinimumDate||pair.Key>ReminderSchedule.MaximumDate||pair.Value.ActualWidth<=0||pair.Value.ActualHeight<=0)continue;
+            Rect bounds=pair.Value.TransformToAncestor(grid).TransformBounds(new Rect(0,0,pair.Value.ActualWidth,pair.Value.ActualHeight));
+            bounds.Inflate(8,8);
+            if(!bounds.Contains(point))continue;
+            Point center=new(bounds.X+bounds.Width/2,bounds.Y+bounds.Height/2);
+            double distance=(center-point).Length;
+            if(distance<nearestDistance){nearestDistance=distance;nearest=pair.Key;}
+        }
+        if(nearest is DateTime candidate){day=candidate;return true;}
         day=default;
         return false;
     }
