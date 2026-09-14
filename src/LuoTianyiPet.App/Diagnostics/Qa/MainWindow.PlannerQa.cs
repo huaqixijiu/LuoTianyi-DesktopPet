@@ -25,7 +25,7 @@ public partial class MainWindow
             PlannerWindow window=new(service,false);window.Show();await Task.Delay(150);
             void Check(bool condition,string name){if(!condition)throw new InvalidOperationException(name);checks.Add("PASS "+name);}
             IEnumerable<DependencyObject> Tree(DependencyObject d){yield return d;for(int n=0;n<VisualTreeHelper.GetChildrenCount(d);n++)foreach(var x in Tree(VisualTreeHelper.GetChild(d,n)))yield return x;}
-            FrameworkElement Named(Window w,string name)=>Tree(w).OfType<FrameworkElement>().First(x=>x.Name==name);
+            FrameworkElement Named(Window w,string name)=>Tree(w).OfType<FrameworkElement>().FirstOrDefault(x=>x.Name==name)??throw new InvalidOperationException($"missing named element: {name}");
             void Click(Window w,string name)=>((Button)Named(w,name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             void Tick(Window w,string name,bool value){var c=(CheckBox)Named(w,name);c.IsChecked=value;c.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));w.UpdateLayout();}
             void Snapshot(Window w,string name,bool dpi=false){w.UpdateLayout();void Shot(string file,double scale){var bmp=new RenderTargetBitmap((int)Math.Ceiling(w.ActualWidth*scale),(int)Math.Ceiling(w.ActualHeight*scale),96*scale,96*scale,PixelFormats.Pbgra32);bmp.Render(w);PngBitmapEncoder png=new();png.Frames.Add(BitmapFrame.Create(bmp));using var f=File.Create(Path.Combine(path,file+".png"));png.Save(f);}Shot(name,1.0);if(dpi){Shot(name+"-125",1.25);Shot(name+"-150",1.5);}checks.Add("PASS rendered "+name+(dpi?" @100/125/150":""));}
@@ -41,7 +41,20 @@ public partial class MainWindow
             var body=(ScrollViewer)typeof(PlannerWindow).GetField("_body",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(window)!;
             Check(((Grid)body.Content).ColumnDefinitions.Count==2,"A02 side panel with undimmed month");
             Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Check(((Grid)body.Content).ColumnDefinitions.Count==1,"A02 same date collapses panel");
-            Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Click(window,"SetWorkdays");Snapshot(window,"02-workdays",true);Click(window,"SetWorkdays");
+            Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Click(window,"SetWorkdays");window.UpdateLayout();
+            Check(!Tree(window).OfType<Button>().Any(b=>Equals(b.Content,"添加日期")),"A30 rest panel uses the main calendar without a duplicate date picker");
+            Check(!((Button)Named(window,"ClearSelectedDates")).IsEnabled&&!((Button)Named(window,"SetSelectedRestDays")).IsEnabled&&!((Button)Named(window,"SetSelectedWorkdays")).IsEnabled&&!((Button)Named(window,"ResetSelectedRestDays")).IsEnabled,"A30 empty rest selection disables batch actions");
+            var restSelection=(HashSet<DateTime>)typeof(PlannerWindow).GetField("_selected",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(window)!;
+            var dragStartButton=(Button)Named(window,"Day"+day.ToString("yyyyMMdd"));var dragEndButton=(Button)Named(window,"Day"+day.AddDays(3).ToString("yyyyMMdd"));var cellPanel=(DockPanel)VisualTreeHelper.GetParent(dragStartButton)!;var dayBorder=(Border)VisualTreeHelper.GetParent(cellPanel)!;var calendarGrid=(Grid)VisualTreeHelper.GetParent(dayBorder)!;
+            Point dragFrom=dragStartButton.TransformToAncestor(calendarGrid).Transform(new Point(dragStartButton.ActualWidth/2,dragStartButton.ActualHeight/2));Point dragTo=dragEndButton.TransformToAncestor(calendarGrid).Transform(new Point(dragEndButton.ActualWidth/2,dragEndButton.ActualHeight/2));
+            typeof(PlannerWindow).GetField("_calendarDragStartDay",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,day);typeof(PlannerWindow).GetMethod("AddCalendarDragPath",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(window,new object[]{calendarGrid,dragFrom,dragTo});
+            Check(restSelection.Count==4&&Enumerable.Range(0,4).All(n=>restSelection.Contains(day.AddDays(n))),"A30 drag selection includes every date along the path");restSelection.Clear();typeof(PlannerWindow).GetMethod("Render",BindingFlags.NonPublic|BindingFlags.Instance,null,Type.EmptyTypes,null)!.Invoke(window,null);window.UpdateLayout();
+            restSelection.Add(day);typeof(PlannerWindow).GetMethod("Render",BindingFlags.NonPublic|BindingFlags.Instance,null,Type.EmptyTypes,null)!.Invoke(window,null);window.UpdateLayout();
+            Check(((Button)Named(window,"ClearSelectedDates")).IsEnabled&&((Button)Named(window,"SetSelectedRestDays")).IsEnabled,"A30 selected rest dates enable clear and batch actions");
+            Click(window,"SetSelectedWorkdays");await Task.Delay(200);window.UpdateLayout();
+            Check(restSelection.Count==0&&Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="SetWorkdays")&&Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="ClearSelectedDates"),"A30 applying a rest rule clears selection and stays in adjust mode");
+            Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Check(restSelection.Count==1,"A30 adjust mode still selects dates after applying a rule");Click(window,"ClearSelectedDates");window.UpdateLayout();Check(restSelection.Count==0,"A30 clear selection removes all selected dates");
+            Snapshot(window,"02-workdays",true);Click(window,"SetWorkdays");
             await service.ChangeAsync(b=>b.WeekView=true);Snapshot(window,"03-week",true);await service.ChangeAsync(b=>b.WeekView=false);
             Edit(null,true);Snapshot(window,"04-new-event",true);Check(((CheckBox)Named(window,"CreateAlarm")).IsChecked==false,"A06 new calendar reminder disabled");
             Check(!Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="EarlyReminder"),"A06 early row absent while disabled");
