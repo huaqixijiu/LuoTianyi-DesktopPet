@@ -49,7 +49,7 @@ def validate(root, baseline):
                 pixels = after[visible_changed_rgb].astype(float)
                 recomposed = pixels[:,:3]*pixels[:,3:4]/255+255-pixels[:,3:4]
                 assert np.max(abs(recomposed-before[visible_changed_rgb,:3])) <= 1
-            if source['edgeCleanup'] != 'dark-contour-white-matte':
+            if source['edgeCleanup'] not in ('dark-contour-white-matte', 'dark-contour-white-matte-wide'):
                 white = np.all(before[:,:,:3] >= 235, axis=2) & (before[:,:,3] > 0)
                 np.testing.assert_array_equal(before[white,:3], after[white,:3])
             stats['softenedPixels'] += int(np.sum(after[:,:,3] != before[:,:,3]))

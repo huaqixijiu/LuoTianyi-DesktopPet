@@ -44,7 +44,7 @@ def clean_edges(frame: Image.Image, profile: str) -> Image.Image:
             color = source[y, x, :3].astype(float)
             # True white/cream strokes are artwork, not background. Only
             # neutral grey next to a solid dark contour is eligible to unmatte.
-            full_matte = profile == "dark-contour-white-matte"
+            full_matte = profile in ("dark-contour-white-matte", "dark-contour-white-matte-wide")
             if not 96 <= min(color) <= (255 if full_matte else 234) or max(color)-min(color) > 28:
                 continue
             nearby = source[

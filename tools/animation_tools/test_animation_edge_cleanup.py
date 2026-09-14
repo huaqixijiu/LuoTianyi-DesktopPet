@@ -39,6 +39,14 @@ class EdgeCleanupTests(unittest.TestCase):
         self.assertLess(result[4, 2, 3], 255)
         np.testing.assert_array_equal(data[4, 4], result[4, 4])
 
+    def test_wide_dark_contour_matte_removes_opaque_white_matte(self):
+        data = np.zeros((7, 7, 4), dtype=np.uint8)
+        data[2:5, 2:5] = [20, 20, 20, 255]
+        data[1, 3] = [255, 255, 255, 255]
+        result = np.asarray(clean_edges(Image.fromarray(data), "dark-contour-white-matte-wide"))
+        self.assertLess(result[1, 3, 3], 255)
+        self.assertGreater(result[1, 3, 3], 0)
+
     def test_white_sticker_stroke_keeps_original_rgb(self):
         data = np.zeros((7, 7, 4), dtype=np.uint8)
         data[2:5, 2:5] = [20, 20, 20, 255]
