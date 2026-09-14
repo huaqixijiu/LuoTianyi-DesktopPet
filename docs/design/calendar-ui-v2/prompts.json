@@ -1,0 +1,22 @@
+{
+  "tool": "built-in image_gen",
+  "status": "仅视觉设计，日期文字可能存在生成偏差；提醒图中的角色和音乐岛仅示意位置，不替换原素材。",
+  "prompts": [
+    [
+      "月周日历新版",
+      "One landscape design board with TWO equally sized readable windows side by side labelled 月视图 and 周视图. Month window: header 日历. Left ‹ 2026年9月 › 今天; top right ＋新增行程, below segmented 周 月 and 调整休息日. Month accurate September2026 seven columns Mon-Sun, five rows Aug31 toOct4. Each date cell top line SOLAR AND LUNAR SIDE BY SIDE such as 25日｜八月十五; second line holiday only where applicable 中秋节 Sep25 秋分 Sep23; thin separator below date/holiday header then visible pastel event strip 18:00 家庭聚餐 with alarm icon AFTER text. Tiny cyan 休 badges weekends and 班 Sep19. Other events 14日09:00周会 and16日14:00项目讨论 icons at END. Footer left 2026年9月25日 星期五 农历八月十五, footer right 平凡的日子里，也有可爱的期待。 Week window Sep21–27 same right controls with 周 selected, left ‹9月21日—9月27日›今天. Seven columns headers weekday then SOLAR | LUNAR then festival: Wed23秋分 Fri25中秋节; below separator visible event cards, no hourly timeline. Both same compact visual language. No title/notes fields, no alarm navigation or import export."
+    ],
+    [
+      "行程编辑与多日期新版",
+      "One landscape design board showing TWO compact edit dialogs side by side, labels ① 平时收起 and ② 点击修改后. Both dialogs about520px wide. Header 编辑行程 and close. SINGLE multiline input labelled 行程内容 containing 项目讨论，准备演示资料，确认下一阶段安排。 Absolutely no separate title field, no title/body distinction. Below time14:00, repeat指定多个日期. Left collapsed date row 日期 9月16日、9月23日 修改. No calendar permanently visible in left. Then 开启提醒 toggle on, 提前30分钟倒计时 checked, 到点提示音 checked, helper 关闭倒计时仍会到点提醒. Bottom 删除 quiet, 取消, 保存 primary. Right same underlying dialog with compact date picker popover anchored to 修改; popover header ‹2026年9月›, accurate seven-column month starting Tuesday1 with16and23 highlighted; footer 已选2天 清空 确定. Clear relationship between compact row and temporary popover. All controls fit; no huge empty areas."
+    ],
+    [
+      "闹钟与班休新版",
+      "One landscape board with TWO separate compact panels. Left 闹钟 window, top ＋新增闹钟 and checkbox显示剩余时间. Three compact list rows:08:30 起床 每周一至周五 switch;14:00 项目讨论 来自日历 badge switch;00:25:00 休息一下 倒计时 badge 剩余18:42 switch. Below small dialog preview 新增闹钟 segmented 指定时间 / 倒计时, duration00时25分00秒, 最长24小时·沿用上次时长, 开始. Never use 多久以后 anywhere. Right 日历 window in 调整休息日 mode, week-month toggle and month header; inline toolbar 每周作息 双休 单休 自定义; 已选3天 设为休息日 设为工作日 恢复常规 完成. Calendar small September2026 solar and lunar SIDE BY SIDE in date header, festival on next line, thin separator and events below; selected18,19,20 tealoutline. Small休班 badges. No import export."
+    ],
+    [
+      "提醒位置新版",
+      "One landscape visual mockup board split into TWO columns, captions ① 显示切歌悬浮岛 and ② 不显示切歌悬浮岛. Each column has same small chibi Luo Tianyi grey-haired teal-and-white desktop pet, full body with headphones, on otherwise empty subtle pale gray Windows desktop backdrop. Left strict vertical stack: PET at top; directly below PET compact rounded MUSIC FLOATING ISLAND displaying 歌曲名称 and previous play next tiny controls; directly BELOW MUSIC ISLAND centered narrow countdown card ⏰ 项目讨论 还剩29:48. No reminder to side of pet. Right strict vertical stack: PET at top; NO MUSIC ISLAND; directly below PET centered compact expanded due reminder card titled 项目讨论, subline14:00·来自日历, full text准备演示资料，确认下一阶段安排。, bottom 完成 and5分钟后提醒, corner收起. Under main examples small strip labelled 收起状态 with ⏰1项待处理提醒 chevron. The position relation is key, maintain clearly visible small gaps, cards narrower than halfboard, no arrows over pet, no extra panels or slogans."
+    ]
+  ]
+}

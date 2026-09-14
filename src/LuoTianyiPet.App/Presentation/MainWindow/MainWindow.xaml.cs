@@ -1,0 +1,5786 @@
+﻿using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
+using System.Windows.Threading;
+using LuoTianyiPet.Animation;
+using LuoTianyiPet.Core;
+using LuoTianyiPet.Platform.Windows;
+using WpfDataObject = System.Windows.IDataObject;
+using WpfDataFormats = System.Windows.DataFormats;
+using WpfDragDropEffects = System.Windows.DragDropEffects;
+using WpfDragEventArgs = System.Windows.DragEventArgs;
+
+namespace LuoTianyiPet.App;
+
+public partial class MainWindow : Window
+{
+    private const string CloseAnimation = "resonance-cracked-shake";
+    private const string GenshinLaunchAnimation = "resonance-no-playing";
+    private const string GenshinCameoAnimation = "resonance-please";
+    private const string MessageNotificationAnimation = "codename-curious-sway";
+    private static readonly TimeSpan MessageNotificationPresentationDuration =
+        MessageNotificationPresentationPolicy.DefaultDuration;
+    private const string FileDropPromptAnimation = "resonance-give-me";
+    private const string FileDropSuccessAnimation = "resonance-big-success";
+    private const string ClassicSpinDanceAnimation = "tenth-anniversary-spin-dance";
+    private const string CloudMusicLaunchWaitingAnimation = "resonance-loading-sway";
+    private const string BunRequestAnimation = "resonance-cute-bun-request";
+    private const string CrystalLongIdleSleepAnimation = "crystal-long-idle-sleep";
+    private const string CrystalLongIdleDuckSitAnimation = "crystal-long-idle-duck-sit";
+    private const string CrystalSleepZzzDecoration = "crystal-sleep-decoration-zzz";
+    private const string CrystalSleepBunDecoration = "crystal-sleep-decoration-bun";
+    private const string CrystalSleepYuezhengLingDecoration = "crystal-sleep-decoration-yuezhengling";
+    private const string CrystalSleepCloudDissolveDecoration = "crystal-sleep-decoration-cloud-dissolve";
+    private const int CrystalSleepHoldFrame = 220;
+    private const int CrystalSleepLastFrame = 360;
+    private const int CrystalDuckSitHoldFrame = 120;
+    private const int CrystalDuckSitLastFrame = 216;
+    private const double GenshinCameoSafeMargin = 24;
+    private const double MediaControlsReservedHeight = 58;
+    private const double TrackInfoReservedHeight = 52;
+    private static readonly TimeSpan AccessoryMouseLeaveDelay = TimeSpan.FromSeconds(5);
+    private const double EdgeDockActivationFraction = 0.25;
+    private const double EdgeDockReleaseFraction = 1.0 / 6.0;
+    private const double EdgeDockMinimumDragOverscan = 96;
+    private const double EdgeAlignmentTolerance = 3;
+    private const double EdgeDockAlphaInset = 2;
+    private const double EdgeAccessoryLayoutDistance = 80;
+    private const double SideDockWallClipLeftRatio = 0.952;
+    private const double SideDockWallClipWidthRatio = 0.048;
+    private const double SideDockRevealPlaybackRate = 1.3;
+    private const double BottomDockHidePlaybackRate = 0.7;
+    private const double BunStartingSpeed = 180;
+    private const double BunChaseMaximumSpeed = 800;
+    private const double BunReturnSpeed = 850;
+    private static readonly TimeSpan BunAccelerationDuration = TimeSpan.FromSeconds(3.5);
+    private static readonly TimeSpan BunRequestDragDuration = TimeSpan.FromSeconds(3);
+    private const int BunEatOriginalClosingStartFrame = 120;
+    private const int BunEatNewClosingStartFrame = 112;
+    private const int BunEatLastFrame = 172;
+    private const double BunEatClosingPlaybackRate = 1.1;
+    private static readonly TimeSpan BunMaximumRenderedStep = TimeSpan.FromMilliseconds(34);
+    private const int SideDockHiddenFrame = 3;
+    private const int SideDockHideStartFrame = 7;
+    private const int SideDockRevealEndFrame = 19;
+    private const int BottomDockHiddenFrame = 3;
+    private const int BottomDockHideStartFrame = 5;
+    private const int BottomDockRevealEndFrame = 7;
+    private static readonly TimeSpan DoubleClickInterval = TimeSpan.FromMilliseconds(300);
+    private static readonly TimeSpan BodyInteractionRecoveryDelay = TimeSpan.FromMilliseconds(800);
+    private static readonly TimeSpan TrackInfoAutomaticDisplayDuration = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan TimeGreetingPresentationDuration =
+        StartupTimeSceneResolver.PresentationDuration;
+    private static readonly TimeSpan UserPauseFastConfirmationWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan PlaybackIndicatorCommandExpectationWindow =
+        TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan VolumePopupSameClickSuppression =
+        TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan GenshinLaunchPresentationDuration = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan FileDropDwellDuration = TimeSpan.FromMilliseconds(400);
+    private static readonly TimeSpan CloudMusicLaunchShortcutDelay = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan CloudMusicLaunchRetryInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan CloudMusicLaunchFallbackCommandDelay = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan CloudMusicLaunchTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CrystalDecorationSelectionInterval = TimeSpan.FromMinutes(5);
+    private const int CloudMusicLaunchMaximumAttempts = 3;
+    private readonly ISettingsStore _settingsStore;
+    private readonly IAppLogger _logger;
+    private readonly AnimationCatalog? _animationCatalog;
+    private readonly AnimationFramePlayer? _animationPlayer;
+    private readonly AnimationFramePlayer? _crystalLongIdleDecorationPlayer;
+    private readonly VisualSwapTransition _visualSwapTransition;
+    private readonly BodyReactionMotion _bodyReactionMotion;
+    private readonly MediaControlsVisibilityMotion _mediaControlsMotion;
+    private readonly MediaControlsVisibilityMotion _trackInfoMotion;
+    private readonly PointerGestureRecognizer _pointerGesture = new(6, DoubleClickInterval);
+    private readonly RapidBackAndForthDragTracker _rapidDragTracker = new();
+    private readonly PettingGestureRecognizer _pettingGesture = new(
+        TimeSpan.FromMilliseconds(350),
+        24,
+        1,
+        24);
+    private readonly BodyHitMap _crystalBodyHitMap;
+    private readonly BodyHitMap _classicBodyHitMap;
+    private BodyHitMap _bodyHitMap;
+    private readonly BodyInteractionResolver _bodyInteractionResolver = new();
+    private readonly CrystalBodyInteractionResolver _crystalBodyInteractionResolver = new();
+    private readonly MusicPlaybackAnimationSelector _musicAnimationSelector = new();
+    private readonly DispatcherTimer _singleClickTimer;
+    private readonly DispatcherTimer _musicDetectionTimer;
+    private readonly DispatcherTimer _feedbackBubbleTimer;
+    private readonly DispatcherTimer _mediaControlsHideTimer;
+    private readonly DispatcherTimer _trackInfoRefreshTimer;
+    private readonly DispatcherTimer _trackInfoHideTimer;
+    private readonly DispatcherTimer _idleSceneTimer;
+    private long? _fishingCountdownStartedTimestamp;
+
+    private TimeSpan FishingCountdownElapsed => _fishingCountdownStartedTimestamp is long start
+        ? TimeSpan.FromSeconds((Stopwatch.GetTimestamp() - start) / (double)Stopwatch.Frequency)
+        : TimeSpan.Zero;
+    private readonly DispatcherTimer _timeSceneTimer;
+    private readonly DispatcherTimer _genshinStatusTimer;
+    private readonly DispatcherTimer _messageNotificationStatusTimer;
+    private readonly IAudioSessionProbe? _audioSessionProbe;
+    private readonly IApplicationVolumeService? _applicationVolumeService;
+    private readonly IMediaCommandSender _mediaCommandSender;
+    private readonly IMediaApplicationLauncher _mediaApplicationLauncher;
+    private readonly IStartupRegistrationService? _startupRegistrationService;
+    private readonly IMediaTrackInfoSource? _mediaTrackInfoSource;
+    private readonly IUserIdleTimeSource _userIdleTimeSource;
+    private readonly ISystemResumeSource? _systemResumeSource;
+    private readonly IProtectedGameProcessMonitor? _protectedGameMonitor;
+    private readonly IForegroundApplicationProbe? _foregroundApplicationProbe;
+    private readonly IMessageNotificationSource? _messageNotificationSource;
+    private readonly IRecycleBinService _recycleBinService;
+    private readonly IDesktopItemDisappearanceSource? _desktopItemDisappearanceSource;
+    private readonly IWindowWorkAreaProvider _windowWorkAreaProvider;
+    private readonly BirthdayEasterEggScheduler _birthdayEasterEggScheduler = new();
+    private readonly CrystalYawnScheduler _crystalYawnScheduler = new();
+    private readonly CrystalLongIdleSelector _crystalLongIdleSelector = new();
+    private readonly SystemResumeEventGate _systemResumeEventGate = new();
+    private readonly TimeSceneTransitionTracker _timeSceneTransitionTracker = new();
+    private readonly GenshinBackgroundCameoScheduler _genshinCameoScheduler = new();
+    private readonly RandomPetPositionSelector _randomPetPositionSelector = new();
+    private readonly ProtectedGamePresenceTracker _genshinProcessMatcher;
+    private readonly MessageProviderMatcher _messageProviderMatcher;
+    private readonly MessageNotificationCoordinator _messageNotificationCoordinator;
+    private readonly MusicAudioActivityDetector _musicActivityDetector;
+    private readonly MusicPlaybackIndicatorTracker _musicPlaybackIndicator;
+    private readonly System.Windows.Input.Cursor? _petPointerCursor;
+    private readonly System.Windows.Input.Cursor? _headPatCursor;
+    private readonly string _musicTargetProcessName;
+    private readonly bool _previewExit;
+    private readonly bool _previewMusicTransition;
+    private readonly bool _previewBodyHitDebug;
+    private readonly bool _previewDragCycle;
+    private readonly bool _previewMediaControls;
+    private readonly bool _previewLiveCloudMusicControl;
+    private readonly bool _previewTrackInfo;
+    private readonly bool _previewLiveTrackInfo;
+    private readonly bool _previewSettings;
+    private readonly bool _previewTray;
+    private readonly bool _previewSystemResume;
+    private readonly CrystalLongIdlePreviewMode _previewLongIdle;
+    private readonly CrystalSleepDecoration? _previewLongIdleDecoration;
+    private readonly bool _previewLongIdleRightEdge;
+    private readonly bool _previewGenshinLaunch;
+    private readonly bool _previewGenshinCameo;
+    private readonly bool _previewBunChase;
+    private readonly bool _showQaTaskbar;
+    private readonly MessageProvider? _previewMessageNotification;
+    private readonly EdgeDockSide? _previewEdgeDock;
+    private readonly bool _previewBottomControlsLayout;
+    private readonly bool _previewTopControlsLayout;
+    private readonly string? _previewBodyReaction;
+    private readonly string? _previewFeedback;
+    private readonly bool _persistSettings;
+    private AppSettings _settings;
+    private readonly PetStateMachine _stateMachine;
+    private bool _isClosing;
+    private bool _isWindowDragging;
+    private bool _sleepHeldAfterDrag;
+    private bool _dragPreservesAnimation;
+    private double _bunSubpixelX, _bunSubpixelY;
+    private bool _pettingGestureConsumedPress;
+    private bool _musicPreviewOverride;
+    private bool _audioProbeFailureLogged;
+    private bool _trackInfoProbeFailureLogged;
+    private bool _trackInfoRefreshInFlight;
+    private bool _trackInfoShowRequested;
+    private bool _hasObservedTrackSnapshot;
+    private bool _showNextTrackChange;
+    private bool _updatingCloudMusicVolumeSlider;
+    private bool _isCloudMusicVolumeTrackDragging;
+    private DateTimeOffset? _cloudMusicVolumePopupClosedAt;
+    private bool _permanentTopmost;
+    private CancellationTokenSource? _trackSwitchCancellation;
+    private CancellationTokenSource? _cloudMusicLaunchCancellation;
+    private CancellationTokenSource? _timeGreetingPresentationCancellation;
+    private string _trackSwitchInitialIdentity = string.Empty;
+    private string _musicAnimationTrackIdentity = string.Empty;
+    private bool _trackSwitchSawAudioGap;
+    private bool _trackSwitchPlaybackHoldActive;
+    private DateTimeOffset? _userPauseFastConfirmationUntil;
+    private Guid? _cloudMusicLaunchReactionToken;
+    private bool _cloudMusicLaunchWaiting;
+    private EdgeDockSide _edgeDockSide;
+    private EdgeDockSide _dragEdgeCandidate;
+    private DesktopRectangle? _dragIntentPetBoundsInWindow;
+    private bool _classicDragExpansionStarted;
+    private bool _classicSpinDanceActive;
+    private Guid? _classicSpinDanceReactionToken;
+    private bool _edgeDockRevealed;
+    private AccessoryLayout _accessoryLayout = AccessoryLayout.Split;
+    private int _edgeDockAnimationGeneration;
+    private MediaTrackSnapshot _lastTrackSnapshot = MediaTrackSnapshot.Unavailable;
+    private string _lastTrackIdentity = string.Empty;
+    private Point _dragPressScreenPoint;
+    private double _dragStartLeft;
+    private double _dragStartTop;
+    private BodyRegionId? _lastDebugHitRegion;
+    private readonly HashSet<Guid> _transientTopmostRequests = [];
+    private Guid? _genshinLaunchReactionToken;
+    private Guid? _genshinLaunchTopmostToken;
+    private Guid? _genshinCameoReactionToken;
+    private Guid? _genshinCameoTopmostToken;
+    private Point? _genshinCameoRestorePosition;
+    private bool _pendingGenshinLaunch;
+    private bool _systemSessionUnavailable;
+    private bool _messageNotificationSubscribed;
+    private Guid? _messageNotificationReactionToken;
+    private Guid? _messageNotificationTopmostToken;
+    private MessageProvider? _activeMessageProvider;
+    private Guid? _fileDropReactionToken;
+    private bool _fileDragPresentationActive;
+    private bool _fileDragCursorOverrideActive;
+    private bool _fileDropTargetReady;
+    private bool _fileDropInProgress;
+    private DateTimeOffset? _fileDropHoverStartedAt;
+    private TrayIconController? _trayIcon;
+    private StartupTimeSceneDecision? _pendingTimeGreetingDecision;
+    private DateTimeOffset? _pendingTimeGreetingEligibleAt;
+    private string _pendingTimeGreetingEventName = "time.period_boundary_greeting";
+    private Guid? _timeGreetingReactionToken;
+    private bool _timeGreetingPresentationInFlight;
+    private readonly List<BunTargetWindow> _bunTargets = [];
+    private BunTargetWindow? _activeBunTarget;
+    private Point? _bunReturnPosition;
+    private Guid? _bunChaseReactionToken;
+    private long _bunLastMotionTimestamp;
+    private TimeSpan _bunMotionStageElapsed;
+    private DateTimeOffset _bunLastSafetyCheckAt;
+    private bool _bunChaseActive;
+    private bool _bunReturning;
+    private bool _bunEating;
+    private bool _bunWaitingForManualFeed;
+    private bool _bunRequestShown;
+    private bool _bunMotionRenderingSubscribed;
+    private int _bunRequestPresentationGeneration;
+    private bool _bodyReactionMirrorActive;
+    private double _feedbackSlotHeight;
+    private double _bunMotionSpeed = BunStartingSpeed;
+    private DateTimeOffset _suppressDesktopTreatUntil;
+    private DesktopToolWindowBehavior? _desktopToolWindowBehavior;
+    private readonly ShellAttentionSessionTracker _shellAttentionSessions =
+        new(TimeSpan.FromSeconds(8));
+    private CrystalLongIdleVariant? _crystalLongIdleVariant;
+    private CrystalSleepDecoration? _crystalSleepDecoration;
+    private DateTimeOffset? _nextCrystalDecorationSelectionAt;
+    private bool _crystalLongIdleHolding;
+    private bool _crystalLongIdleWaking;
+    private bool _crystalLongIdleWakeRequested;
+
+    public MainWindow(
+        AppSettings settings,
+        ISettingsStore settingsStore,
+        IAppLogger logger,
+        AnimationCatalog? animationCatalog,
+        IAudioSessionProbe? audioSessionProbe,
+        IApplicationVolumeService? applicationVolumeService,
+        IMediaCommandSender mediaCommandSender,
+        IMediaApplicationLauncher mediaApplicationLauncher,
+        IStartupRegistrationService? startupRegistrationService,
+        IMediaTrackInfoSource? mediaTrackInfoSource,
+        IUserIdleTimeSource userIdleTimeSource,
+        ISystemResumeSource? systemResumeSource,
+        IProtectedGameProcessMonitor? protectedGameMonitor,
+        IForegroundApplicationProbe? foregroundApplicationProbe,
+        IMessageNotificationSource? messageNotificationSource,
+        IRecycleBinService recycleBinService,
+        IDesktopItemDisappearanceSource? desktopItemDisappearanceSource,
+        IWindowWorkAreaProvider windowWorkAreaProvider,
+        PetVisualState initialVisualState,
+        bool previewExit,
+        bool previewMusicTransition,
+        bool previewBodyHitDebug,
+        bool previewDragCycle,
+        bool previewMediaControls,
+        bool previewLiveCloudMusicControl,
+        bool previewTrackInfo,
+        bool previewLiveTrackInfo,
+        bool previewSettings,
+        bool previewTray,
+        bool previewSystemResume,
+        CrystalLongIdlePreviewMode previewLongIdle,
+        CrystalSleepDecoration? previewLongIdleDecoration,
+        bool previewLongIdleRightEdge,
+        bool previewGenshinLaunch,
+        bool previewGenshinCameo,
+        bool previewBunChase,
+        MessageProvider? previewMessageNotification,
+        EdgeDockSide? previewEdgeDock,
+        bool previewBottomControlsLayout,
+        bool previewTopControlsLayout,
+        string? previewBodyReaction,
+        string? previewFeedback,
+        bool showQaTaskbar,
+        bool persistSettings)
+    {
+        _settings = settings with
+        {
+            Appearance = AppearancePreferences.Normalize(settings.Appearance),
+            Media = MediaPreferences.Normalize(settings.Media),
+        };
+        _permanentTopmost = settings.Window.AlwaysOnTop;
+        _settingsStore = settingsStore;
+        _logger = logger;
+        _animationCatalog = animationCatalog;
+        _audioSessionProbe = audioSessionProbe;
+        _applicationVolumeService = applicationVolumeService;
+        _mediaCommandSender = mediaCommandSender;
+        _mediaApplicationLauncher = mediaApplicationLauncher ??
+            throw new ArgumentNullException(nameof(mediaApplicationLauncher));
+        _startupRegistrationService = startupRegistrationService;
+        _mediaTrackInfoSource = mediaTrackInfoSource;
+        _userIdleTimeSource = userIdleTimeSource;
+        _systemResumeSource = systemResumeSource;
+        _protectedGameMonitor = protectedGameMonitor;
+        _foregroundApplicationProbe = foregroundApplicationProbe;
+        _messageNotificationSource = messageNotificationSource;
+        _recycleBinService = recycleBinService ?? throw new ArgumentNullException(nameof(recycleBinService));
+        _desktopItemDisappearanceSource = desktopItemDisappearanceSource;
+        _windowWorkAreaProvider = windowWorkAreaProvider;
+        _genshinProcessMatcher = new ProtectedGamePresenceTracker(
+            ParseGenshinProcessNames(settings.Genshin.ProcessNames));
+        _messageProviderMatcher = new MessageProviderMatcher(settings.Notifications);
+        _messageNotificationCoordinator = new MessageNotificationCoordinator(
+            TimeSpan.FromMilliseconds(
+                settings.Notifications.DuplicateWindowMilliseconds >= 0
+                    ? settings.Notifications.DuplicateWindowMilliseconds
+                    : MessageNotificationPreferences.DefaultDuplicateWindowMilliseconds));
+        _musicTargetProcessName = string.IsNullOrWhiteSpace(settings.Media.TargetProcessName)
+            ? "cloudmusic.exe"
+            : settings.Media.TargetProcessName;
+        float audiblePeakThreshold = Numeric.IsFinite(settings.Media.AudiblePeakThreshold) &&
+            settings.Media.AudiblePeakThreshold is > 0 and <= 1
+                ? settings.Media.AudiblePeakThreshold
+                : MediaPreferences.DefaultAudiblePeakThreshold;
+        int silenceGraceMilliseconds = settings.Media.SilenceGraceMilliseconds >= 0
+            ? settings.Media.SilenceGraceMilliseconds
+            : MediaPreferences.DefaultSilenceGraceMilliseconds;
+        _musicActivityDetector = new MusicAudioActivityDetector(
+            audiblePeakThreshold,
+            TimeSpan.FromMilliseconds(silenceGraceMilliseconds));
+        _musicPlaybackIndicator = new MusicPlaybackIndicatorTracker(
+            audiblePeakThreshold,
+            MusicPlaybackIndicatorTracker.DefaultSilenceDelay,
+            initialVisualState.ContinuousState == PetContinuousState.MusicPlaying);
+        string fullBodyAnimation = AppearanceOptionIds.ResolveFullBodyAnimation(
+            _settings.Appearance.FullBodyStyle);
+        _crystalBodyHitMap = LoadBodyHitMap(
+            "full-body-crystal.json",
+            AppearanceOptionIds.CrystalDressAnimation,
+            BodyHitMap.CrystalDress,
+            "CrystalDress");
+        _classicBodyHitMap = LoadBodyHitMap(
+            "full-body-classic.json",
+            AppearanceOptionIds.ClassicCatEarsAnimation,
+            BodyHitMap.ClassicCatEars,
+            "ClassicCatEars");
+        _bodyHitMap = ResolveBodyHitMap(fullBodyAnimation);
+        _stateMachine = new PetStateMachine(initialVisualState with
+        {
+            FullBodyAnimationId = fullBodyAnimation,
+            FullBodyInteractionsEnabled = AppearanceOptionIds.HasFullBodyInteractions(
+                _settings.Appearance.FullBodyStyle),
+        });
+        _previewExit = previewExit;
+        _previewMusicTransition = previewMusicTransition;
+        _previewBodyHitDebug = previewBodyHitDebug;
+        _previewDragCycle = previewDragCycle;
+        _previewMediaControls = previewMediaControls;
+        _previewLiveCloudMusicControl = previewLiveCloudMusicControl;
+        _previewTrackInfo = previewTrackInfo;
+        _previewLiveTrackInfo = previewLiveTrackInfo;
+        _previewSettings = previewSettings;
+        _previewTray = previewTray;
+        _previewSystemResume = previewSystemResume;
+        _previewLongIdle = previewLongIdle;
+        _previewLongIdleDecoration = previewLongIdleDecoration;
+        _previewLongIdleRightEdge = previewLongIdleRightEdge;
+        _previewGenshinLaunch = previewGenshinLaunch;
+        _previewGenshinCameo = previewGenshinCameo;
+        _previewBunChase = previewBunChase;
+        _showQaTaskbar = showQaTaskbar;
+        _previewMessageNotification = previewMessageNotification;
+        _previewEdgeDock = previewEdgeDock;
+        _previewBottomControlsLayout = previewBottomControlsLayout;
+        _previewTopControlsLayout = previewTopControlsLayout;
+        _previewBodyReaction = previewBodyReaction;
+        _previewFeedback = previewFeedback;
+        _persistSettings = persistSettings;
+        InitializeComponent();
+        if (!_showQaTaskbar)
+        {
+            _desktopToolWindowBehavior = new DesktopToolWindowBehavior(
+                this,
+                keepVisibleOnShowDesktop: true);
+            _desktopToolWindowBehavior.WindowAttentionRequested +=
+                OnShellWindowAttentionRequested;
+        }
+        _visualSwapTransition = new VisualSwapTransition(
+            PetVisual,
+            PetScaleTransform,
+            MusicTransitionFlash,
+            MusicTransitionFlashScale);
+        _bodyReactionMotion = new BodyReactionMotion(PetScaleTransform, PetShakeTransform);
+        _mediaControlsMotion = new MediaControlsVisibilityMotion(
+            MediaControls,
+            MediaControlsTranslate);
+        _trackInfoMotion = new MediaControlsVisibilityMotion(
+            TrackInfoBubble,
+            TrackInfoTranslate,
+            enableHitTesting: false);
+        _petPointerCursor = TryLoadCursorAsset("pet-pointer.cur");
+        _headPatCursor = TryLoadCursorAsset("pet-headpat.cur");
+        ApplyMediaControlCursor();
+        _singleClickTimer = new DispatcherTimer(DispatcherPriority.Input)
+        {
+            Interval = DoubleClickInterval,
+        };
+        _singleClickTimer.Tick += OnSingleClickTimerTick;
+        _musicDetectionTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(
+                settings.Media.PollIntervalMilliseconds > 0
+                    ? settings.Media.PollIntervalMilliseconds
+                    : MediaPreferences.DefaultPollIntervalMilliseconds),
+        };
+        _musicDetectionTimer.Tick += OnMusicDetectionTimerTick;
+        _feedbackBubbleTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(2.4),
+        };
+        _feedbackBubbleTimer.Tick += OnFeedbackBubbleTimerTick;
+        _mediaControlsHideTimer = new DispatcherTimer(DispatcherPriority.Input)
+        {
+            Interval = AccessoryMouseLeaveDelay,
+        };
+        _mediaControlsHideTimer.Tick += OnMediaControlsHideTimerTick;
+        _trackInfoRefreshTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _trackInfoRefreshTimer.Tick += OnTrackInfoRefreshTimerTick;
+        _trackInfoHideTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TrackInfoAutomaticDisplayDuration,
+        };
+        _trackInfoHideTimer.Tick += OnTrackInfoHideTimerTick;
+        _idleSceneTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _idleSceneTimer.Tick += OnIdleSceneTimerTick;
+        _timeSceneTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _timeSceneTimer.Tick += OnTimeSceneTimerTick;
+        _genshinStatusTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(
+                settings.Genshin.StatusPollIntervalMilliseconds > 0
+                    ? settings.Genshin.StatusPollIntervalMilliseconds
+                    : GenshinPreferences.DefaultStatusPollIntervalMilliseconds),
+        };
+        _genshinStatusTimer.Tick += OnGenshinStatusTimerTick;
+        _messageNotificationStatusTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(500),
+        };
+        _messageNotificationStatusTimer.Tick += OnMessageNotificationStatusTimerTick;
+        ShowInTaskbar = showQaTaskbar;
+        _animationPlayer = animationCatalog is null
+            ? null
+            : new AnimationFramePlayer(PetImage, animationCatalog, OnAnimationDecodeFailed);
+        _crystalLongIdleDecorationPlayer = animationCatalog is null
+            ? null
+            : new AnimationFramePlayer(
+                CrystalLongIdleDecorationImage,
+                animationCatalog,
+                OnCrystalDecorationDecodeFailed);
+    }
+
+    private void OnAnimationDecodeFailed(string animationId, Exception exception)
+    {
+        _logger.Error($"animation.progressive_decode_failed.{animationId}", exception);
+        ShowFallback("Animation playback failed during background decoding.");
+    }
+
+    private void OnCrystalDecorationDecodeFailed(string animationId, Exception exception)
+    {
+        _logger.Error($"animation.decoration_decode_failed.{animationId}", exception);
+        HideCrystalLongIdleDecoration();
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        InitializePlanner();
+        if (!_showQaTaskbar)
+        {
+            _logger.Info(
+                "window.desktop_tool_mode",
+                _desktopToolWindowBehavior?.IsToolWindowStyleApplied == true
+                    ? "Desktop tool-window mode enabled; excluded from task switchers and protected from Show Desktop minimization."
+                    : "Desktop tool-window mode requested, but native style verification did not succeed.");
+            _logger.Info(
+                "notification.shell_attention_status",
+                _desktopToolWindowBehavior?.IsShellAttentionMonitoringAvailable == true
+                    ? "Available"
+                    : "Unavailable");
+        }
+        ApplyEffectiveTopmost();
+        PreviousTrackButton.ToolTip = $"上一首（{_settings.Media.PreviousTrackShortcut}）";
+        TogglePlayPauseButton.ToolTip = $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}）";
+        NextTrackButton.ToolTip = $"下一首（{_settings.Media.NextTrackShortcut}）";
+        UpdatePlayPauseGlyph();
+        _mediaControlsMotion.Hide(animate: false);
+        _trackInfoMotion.Hide(animate: false);
+
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        double desiredLeft = _settings.Window.Left ?? workArea.Right - ActualWidth - 32;
+        double desiredTop = _settings.Window.Top ?? workArea.Bottom - ActualHeight - 32;
+        Left = Clamp(desiredLeft, workArea.Left, workArea.Right - ActualWidth);
+        Top = Clamp(
+            desiredTop,
+            workArea.Top - TrackInfoReservedHeight - 32,
+            workArea.Bottom - ActualHeight);
+
+        PlayResolvedContinuousAnimation();
+        UpdateAccessoryLayoutForCurrentPosition(preservePetPosition: false);
+        if (_previewBottomControlsLayout)
+        {
+            ApplyAccessoryLayout(AccessoryLayout.AbovePet);
+            DesktopRectangle petBounds = GetPetImageBoundsInWindow();
+            Top = workArea.Bottom - petBounds.Bottom;
+        }
+        else if (_previewTopControlsLayout)
+        {
+            ApplyAccessoryLayout(AccessoryLayout.BelowPet, preservePetPosition: false);
+            DesktopRectangle petBounds = GetPetImageAlphaBoundsInWindow();
+            Top = workArea.Top - petBounds.Top;
+        }
+        if (_persistSettings)
+        {
+            _timeSceneTransitionTracker.Seed(TimeOnly.FromDateTime(DateTime.Now));
+            QueueTimeGreeting(
+                StartupTimeSceneResolver.Resolve(TimeOnly.FromDateTime(DateTime.Now)),
+                "time.startup_greeting",
+                DateTimeOffset.Now);
+            _timeSceneTimer.Start();
+        }
+        StartSystemResumeMonitoring();
+        StartGenshinMonitoring();
+        StartMessageNotificationMonitoring();
+        if (_desktopItemDisappearanceSource is not null)
+        {
+            _desktopItemDisappearanceSource.ItemDisappeared += OnDesktopItemDisappeared;
+            if (_settings.FileTreats.EnableDesktopFileTreats)
+            {
+                _desktopItemDisappearanceSource.Start();
+                _logger.Info(
+                    "file_treat.desktop_observer_started",
+                    "Desktop disappearance observer started without retaining file paths.");
+            }
+        }
+        if (_previewLongIdle == CrystalLongIdlePreviewMode.Disabled)
+        {
+            _idleSceneTimer.Start();
+        }
+        if (_audioSessionProbe is not null)
+        {
+            OnMusicDetectionTimerTick(null, EventArgs.Empty);
+            _musicDetectionTimer.Start();
+            _logger.Info("media.detection_started", "Cloud music Core Audio detection enabled.");
+        }
+
+        if (_persistSettings)
+        {
+            _ = TryPlayPendingTimeGreetingAsync();
+        }
+
+        if (_mediaTrackInfoSource is not null)
+        {
+            _trackInfoRefreshTimer.Start();
+            _ = RefreshTrackInfoAsync(showWhenFound: false);
+            _logger.Info("media.track_detection_started", "System media track detection enabled.");
+        }
+
+        UpdateBodyHitDebugOverlay();
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-music-settings-feedback"))
+            _ = RunMusicSettingsFeedbackQaAsync();
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-afternoon-greeting"))
+            _ = RunAfternoonGreetingQaAsync();
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-message-details"))
+            _ = RunMessageInboxQaAsync();
+
+        if (_persistSettings || _previewTray)
+        {
+            CreateTrayIcon();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-preserve-drag"))
+            _ = RunPreserveDragQaAsync();
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-quick-actions"))
+        {
+            _ = RunQuickActionsQaAsync();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-top-drag"))
+        {
+            _ = RunTopDragQaAsync();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-stable-layout"))
+        {
+            _ = RunStableLayoutQaAsync();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-drag-edges"))
+        {
+            _ = RunDragEdgesQaAsync();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-fishing"))
+        {
+            _ = RunFishingQaAsync();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-recycle-direction"))
+        {
+            _ = RunRecycleDirectionQaAsync();
+        }
+        if (!_persistSettings && Environment.GetCommandLineArgs().Contains("--qa-animation-edges"))
+        {
+            _ = RunAnimationEdgesQaAsync();
+        }
+        if (_previewExit)
+        {
+            _ = BeginPreviewExitAsync();
+        }
+
+        if (_previewMusicTransition)
+        {
+            _ = BeginPreviewMusicTransitionAsync();
+        }
+
+        if (_previewDragCycle)
+        {
+            _ = BeginPreviewDragCycleAsync();
+        }
+        if (_previewEdgeDock is EdgeDockSide edgeDockSide)
+        {
+            _ = BeginEdgeDockPreviewAsync(edgeDockSide);
+        }
+
+        if (_previewBodyReaction is not null)
+        {
+            _ = BeginPreviewBodyReactionAsync(_previewBodyReaction);
+        }
+        if (_previewFeedback is not null)
+        {
+            ShowPersistentFeedbackBubble(_previewFeedback);
+        }
+
+        if (_previewMediaControls)
+        {
+            _ = BeginMediaControlsPreviewAsync();
+        }
+        if (_previewLiveCloudMusicControl)
+        {
+            _ = BeginLiveCloudMusicControlPreviewAsync();
+        }
+
+        if (_previewTrackInfo)
+        {
+            ShowTrackInfo(new MediaTrackSnapshot(true, true, "达拉崩吧", "洛天依"), holdAfterLeave: true);
+        }
+        else if (_previewLiveTrackInfo)
+        {
+            _ = BeginLiveTrackInfoPreviewAsync();
+        }
+
+        if (_previewSettings)
+        {
+            Dispatcher.BeginInvoke(ShowSettingsDialog, DispatcherPriority.ApplicationIdle);
+        }
+        if (_previewSystemResume)
+        {
+            _ = BeginSystemResumePreviewAsync();
+        }
+        if (_previewLongIdle != CrystalLongIdlePreviewMode.Disabled)
+        {
+            _ = BeginLongIdlePreviewAsync();
+        }
+        if (_previewGenshinLaunch)
+        {
+            _ = BeginGenshinLaunchPreviewAsync();
+        }
+        if (_previewGenshinCameo)
+        {
+            _ = BeginGenshinCameoPreviewAsync();
+        }
+        if (_previewBunChase)
+        {
+            _ = BeginBunChasePreviewAsync();
+        }
+        if (_previewMessageNotification is MessageProvider provider)
+        {
+            _ = BeginMessageNotificationPreviewAsync(provider);
+        }
+    }
+
+    private bool IsMusicPlaybackActive =>
+        _musicActivityDetector.IsPlaying ||
+        _musicPlaybackIndicator.IsPlaying ||
+        _stateMachine.CurrentContinuousState == PetContinuousState.MusicPlaying;
+
+    private void QueueTimeGreeting(
+        StartupTimeSceneDecision decision,
+        string eventName,
+        DateTimeOffset now)
+    {
+        _pendingTimeGreetingDecision = decision;
+        _pendingTimeGreetingEventName = eventName;
+        _pendingTimeGreetingEligibleAt = IsMusicPlaybackActive ? null : now;
+        if (IsMusicPlaybackActive)
+        {
+            _logger.Info(eventName + ".deferred", "Music playback has priority.");
+        }
+    }
+
+    private void OnTimeSceneTimerTick(object? sender, EventArgs e)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        StartupTimeSceneDecision? decision = _timeSceneTransitionTracker.Observe(
+            TimeOnly.FromDateTime(DateTime.Now));
+        if (decision is not null)
+        {
+            QueueTimeGreeting(decision, "time.period_boundary_greeting", DateTimeOffset.Now);
+            _logger.Info("time.period_boundary_detected", decision.Scene.ToString());
+        }
+
+        if (_pendingTimeGreetingDecision is not null && !_timeGreetingPresentationInFlight)
+        {
+            _ = TryPlayPendingTimeGreetingAsync();
+        }
+    }
+
+    private async Task TryPlayPendingTimeGreetingAsync()
+    {
+        DateTimeOffset now = DateTimeOffset.Now;
+        if (_pendingTimeGreetingDecision is not StartupTimeSceneDecision decision ||
+            _timeGreetingPresentationInFlight ||
+            _classicSpinDanceActive ||
+            IsMusicPlaybackActive ||
+            _pendingTimeGreetingEligibleAt is not DateTimeOffset eligibleAt ||
+            now < eligibleAt)
+        {
+            return;
+        }
+
+        _timeGreetingPresentationInFlight = true;
+        try
+        {
+            bool accepted = await PlayTimeGreetingPresentationAsync(
+                decision,
+                _pendingTimeGreetingEventName);
+            if (accepted && _pendingTimeGreetingDecision == decision)
+            {
+                _pendingTimeGreetingDecision = null;
+            }
+        }
+        finally
+        {
+            _timeGreetingPresentationInFlight = false;
+        }
+    }
+
+    private async Task<bool> PlayTimeGreetingPresentationAsync(
+        StartupTimeSceneDecision decision,
+        string eventName)
+    {
+        if (IsMusicPlaybackActive || _classicSpinDanceActive)
+        {
+            return false;
+        }
+
+        DateTimeOffset startedAt = DateTimeOffset.Now;
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                decision.AnimationId,
+                ReactionPriority.TimeGreeting,
+                startedAt.Add(TimeGreetingPresentationDuration).AddSeconds(5)),
+            startedAt);
+        if (outcome.Token is not Guid token)
+        {
+            _logger.Info(eventName + ".deferred", outcome.Result.ToString());
+            return false;
+        }
+
+        _timeGreetingReactionToken = token;
+        CancellationTokenSource cancellation = new();
+        _timeGreetingPresentationCancellation = cancellation;
+
+        if (outcome.Result == ReactionStartResult.Replaced)
+        {
+            CleanupReplacedGenshinPresentation();
+            CleanupReplacedMessageNotificationPresentation();
+        }
+
+        UpdateBodyHitDebugOverlay();
+        bool transitioned = await _visualSwapTransition.PlayAsync(
+            () => PlayAnimation(decision.AnimationId, preserveVisualTransition: true));
+        if (!transitioned || _isClosing ||
+            _animationPlayer?.CurrentAnimationId != decision.AnimationId)
+        {
+            if (_stateMachine.ActiveReactionToken == token)
+            {
+                _stateMachine.CancelActiveReaction();
+            }
+            ReleaseTimeGreetingCancellation(cancellation, token);
+            return false;
+        }
+
+        _bodyReactionMotion.PlayFor(decision.AnimationId);
+        _logger.Info(
+            eventName,
+            $"Scene={decision.Scene}; DurationSeconds={TimeGreetingPresentationDuration.TotalSeconds:0}.");
+        try
+        {
+            await Task.Delay(
+                TimeGreetingPresentationDuration,
+                cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            ReleaseTimeGreetingCancellation(cancellation, token);
+            return false;
+        }
+
+        if (_isClosing || !_stateMachine.CompleteReaction(token, DateTimeOffset.Now))
+        {
+            ReleaseTimeGreetingCancellation(cancellation, token);
+            return true;
+        }
+
+        _bodyReactionMotion.Cancel();
+        ReleaseTimeGreetingCancellation(cancellation, token);
+        await TransitionToResolvedContinuousAnimationAsync(eventName + ".completed");
+        return true;
+    }
+
+    private void ReleaseTimeGreetingCancellation(CancellationTokenSource cancellation, Guid token)
+    {
+        if (ReferenceEquals(_timeGreetingPresentationCancellation, cancellation))
+        {
+            _timeGreetingPresentationCancellation = null;
+        }
+
+        cancellation.Dispose();
+        if (_timeGreetingReactionToken == token)
+        {
+            _timeGreetingReactionToken = null;
+        }
+    }
+
+    private void CancelTimeGreetingPresentation(bool restoreContinuousAnimation, string reason)
+    {
+        _timeGreetingPresentationCancellation?.Cancel();
+        _timeGreetingPresentationCancellation = null;
+        if (_timeGreetingReactionToken is Guid token &&
+            _stateMachine.ActiveReactionToken == token)
+        {
+            _stateMachine.CancelActiveReaction();
+        }
+
+        _timeGreetingReactionToken = null;
+        _bodyReactionMotion.Cancel();
+        if (restoreContinuousAnimation && !_isClosing)
+        {
+            PlayResolvedContinuousAnimation();
+        }
+
+        _logger.Info("time.greeting_interrupted", reason);
+    }
+
+    private void StartSystemResumeMonitoring()
+    {
+        if (_systemResumeSource is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _systemResumeSource.Resumed += OnSystemResumed;
+            _systemResumeSource.Suspended += OnSystemSuspended;
+            _systemResumeSource.Start();
+            _logger.Info("time.resume_monitor_started", "Windows session and power resume monitoring started.");
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ExternalException)
+        {
+            _systemResumeSource.Resumed -= OnSystemResumed;
+            _systemResumeSource.Suspended -= OnSystemSuspended;
+            _logger.Error("time.resume_monitor_unavailable", exception);
+        }
+    }
+
+    private void OnSystemResumed(object? sender, SystemResumeEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() => HandleSystemResume(e));
+    }
+
+    private void HandleSystemResume(SystemResumeEventArgs e)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        _systemSessionUnavailable = false;
+        PetContinuousState continuousState = _stateMachine.CurrentContinuousState;
+        if (continuousState is PetContinuousState.MediumIdleCountdown or
+            PetContinuousState.MediumIdle or
+            PetContinuousState.Sleeping)
+        {
+            _stateMachine.SetContinuousState(PetContinuousState.Idle);
+        }
+
+        if (!_systemResumeEventGate.TryAccept(e.OccurredAt))
+        {
+            return;
+        }
+
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            _logger.Info("time.resume_reaction_skipped", "Pet is intentionally hidden at a screen edge.");
+            return;
+        }
+
+        _logger.Info("time.resume_state_restored", e.Reason.ToString());
+        if (_stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync(
+                "time.resume_state_restored.transition_completed");
+        }
+    }
+
+    private void OnSystemSuspended(object? sender, SystemSuspendEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_isClosing)
+            {
+                return;
+            }
+
+            _systemSessionUnavailable = true;
+            _genshinCameoScheduler.Reset();
+            // Do not start or restore visual playback while Windows is locking or suspending.
+            // The normal resume path will resolve the correct continuous state safely.
+            CancelGenshinPresentations(restoreContinuousAnimation: false);
+            _messageNotificationCoordinator.ClearPending();
+            CancelMessageNotificationPresentation(restoreContinuousAnimation: false);
+            _logger.Info("genshin.suspended", e.Reason.ToString());
+        });
+    }
+
+    private async Task BeginSystemResumePreviewAsync()
+    {
+        await Task.Delay(700);
+        if (!_isClosing)
+        {
+            HandleSystemResume(new SystemResumeEventArgs(
+                SystemResumeReason.PowerResumed,
+                DateTimeOffset.Now));
+        }
+    }
+
+    private async Task BeginLongIdlePreviewAsync()
+    {
+        await Task.Delay(700);
+        if (_isClosing)
+        {
+            return;
+        }
+
+        CrystalLongIdleVariant? forcedVariant = _previewLongIdle switch
+        {
+            CrystalLongIdlePreviewMode.Sleep => CrystalLongIdleVariant.Sleep,
+            CrystalLongIdlePreviewMode.DuckSit => CrystalLongIdleVariant.DuckSit,
+            _ => null,
+        };
+        _stateMachine.SetContinuousState(PetContinuousState.Sleeping);
+        BeginCrystalLongIdle(forcedVariant);
+        _logger.Info(
+            "animation.crystal_long_idle_preview_started",
+            forcedVariant is CrystalLongIdleVariant variant
+                ? $"Variant={variant}; WakeMode=CharacterClick."
+                : "Variant=Random; WakeMode=AutomaticAfter20Seconds.");
+
+        if (forcedVariant is not null)
+        {
+            return;
+        }
+
+        await Task.Delay(20000);
+        if (!_isClosing)
+        {
+            if (IsCrystalLongIdleActive)
+            {
+                WakeCrystalLongIdle();
+            }
+            else
+            {
+                ApplyIdleScene(TimeSpan.Zero);
+            }
+        }
+    }
+
+    private void StartGenshinMonitoring()
+    {
+        if (_protectedGameMonitor is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _protectedGameMonitor.PresenceChanged += OnProtectedGamePresenceChanged;
+            _protectedGameMonitor.Start();
+            _genshinStatusTimer.Start();
+            _logger.Info(
+                "genshin.monitor_started",
+                _protectedGameMonitor.IsRunning
+                    ? "Protected game was already running; launch reaction was not replayed."
+                    : "Waiting for filtered low-frequency process enumeration.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            _protectedGameMonitor.PresenceChanged -= OnProtectedGamePresenceChanged;
+            _protectedGameMonitor.Dispose();
+            _logger.Error("genshin.monitor_unavailable", exception);
+        }
+    }
+
+    private void OnProtectedGamePresenceChanged(
+        object? sender,
+        ProtectedGamePresenceChangedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() => HandleProtectedGamePresenceChanged(e));
+    }
+
+    private void HandleProtectedGamePresenceChanged(ProtectedGamePresenceChangedEventArgs e)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        if (e.IsRunning)
+        {
+            _pendingGenshinLaunch = true;
+            _logger.Info("genshin.process_started", "Protected game became running.");
+            EvaluateGenshinIntegration();
+            return;
+        }
+
+        _pendingGenshinLaunch = false;
+        _genshinCameoScheduler.Reset();
+        CancelGenshinPresentations(restoreContinuousAnimation: true);
+        _logger.Info("genshin.process_stopped", "Protected game is no longer running.");
+    }
+
+    private void OnGenshinStatusTimerTick(object? sender, EventArgs e) =>
+        EvaluateGenshinIntegration();
+
+    private void EvaluateGenshinIntegration()
+    {
+        if (_isClosing || _protectedGameMonitor is null || _foregroundApplicationProbe is null)
+        {
+            return;
+        }
+
+        bool gameIsRunning = _protectedGameMonitor.IsRunning;
+        if (!gameIsRunning)
+        {
+            _pendingGenshinLaunch = false;
+            _genshinCameoScheduler.Reset();
+            return;
+        }
+
+        ForegroundApplicationSnapshot foreground = _foregroundApplicationProbe.Query();
+        bool gameIsForeground = foreground.Succeeded &&
+            _genshinProcessMatcher.IsTargetProcess(foreground.ProcessName);
+        bool unsafeForeground = !foreground.Succeeded || gameIsForeground || foreground.IsFullscreen;
+        if (unsafeForeground || _systemSessionUnavailable)
+        {
+            _genshinCameoScheduler.Update(DateTimeOffset.Now, gameIsRunning, canShow: false);
+            CancelGenshinPresentations(restoreContinuousAnimation: true);
+            return;
+        }
+
+        bool windowAvailable = _edgeDockSide == EdgeDockSide.None &&
+            !_isWindowDragging &&
+            _stateMachine.CurrentContinuousState is not
+                (PetContinuousState.Sleeping or PetContinuousState.HiddenForSafety);
+        if (_pendingGenshinLaunch && windowAvailable)
+        {
+            _pendingGenshinLaunch = false;
+            _ = BeginGenshinLaunchReactionAsync(retryOnFailure: true);
+            return;
+        }
+
+        bool cameoCanShow = windowAvailable &&
+            _genshinLaunchReactionToken is null &&
+            _genshinCameoReactionToken is null &&
+            _stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous;
+        if (_genshinCameoScheduler.Update(
+            DateTimeOffset.Now,
+            gameIsRunning,
+            cameoCanShow) == GenshinCameoScheduleDecision.Trigger)
+        {
+            _ = BeginGenshinCameoAsync();
+        }
+    }
+
+    private async Task BeginGenshinLaunchReactionAsync(bool retryOnFailure)
+    {
+        if (_isClosing || _genshinLaunchReactionToken is not null)
+        {
+            return;
+        }
+
+        DateTimeOffset startedAt = DateTimeOffset.Now;
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                GenshinLaunchAnimation,
+                ReactionPriority.Genshin,
+                startedAt.AddSeconds(10)),
+            startedAt);
+        if (outcome.Token is not Guid token)
+        {
+            if (retryOnFailure && _protectedGameMonitor?.IsRunning == true)
+            {
+                _pendingGenshinLaunch = true;
+            }
+            return;
+        }
+
+        if (outcome.Result == ReactionStartResult.Replaced)
+        {
+            CleanupReplacedGenshinPresentation();
+            CleanupReplacedMessageNotificationPresentation();
+        }
+
+        Guid topmostToken = AcquireTransientTopmost();
+        _genshinLaunchReactionToken = token;
+        _genshinLaunchTopmostToken = topmostToken;
+        UpdateBodyHitDebugOverlay();
+        bool transitioned = await _visualSwapTransition.PlayAsync(
+            () => PlayAnimation(
+                GenshinLaunchAnimation,
+                () => _ = CompleteGenshinLaunchAfterMinimumDurationAsync(token, startedAt),
+                preserveVisualTransition: true));
+        if (transitioned && !_isClosing &&
+            _animationPlayer?.CurrentAnimationId == GenshinLaunchAnimation)
+        {
+            _logger.Info(
+                "genshin.launch_reaction_started",
+                "One loop started; the final frame will be held for a five-second total without activation.");
+            return;
+        }
+
+        if (_stateMachine.ActiveReactionToken == token)
+        {
+            _stateMachine.CancelActiveReaction();
+        }
+        FinishGenshinPresentation(token);
+        if (retryOnFailure && _protectedGameMonitor?.IsRunning == true)
+        {
+            _pendingGenshinLaunch = true;
+        }
+    }
+
+    private async Task CompleteGenshinLaunchAfterMinimumDurationAsync(
+        Guid token,
+        DateTimeOffset startedAt)
+    {
+        TimeSpan remaining = GenshinLaunchPresentationDuration - (DateTimeOffset.Now - startedAt);
+        if (remaining > TimeSpan.Zero)
+        {
+            await Task.Delay(remaining);
+        }
+
+        if (_isClosing || _genshinLaunchReactionToken != token ||
+            _stateMachine.ActiveReactionToken != token)
+        {
+            return;
+        }
+
+        CompleteReaction(token, suppressBodyAfter: false);
+    }
+
+    private async Task BeginGenshinCameoAsync()
+    {
+        if (_isClosing || _genshinCameoReactionToken is not null || _edgeDockSide != EdgeDockSide.None)
+        {
+            return;
+        }
+
+        Point restorePosition = new(Left, Top);
+        try
+        {
+            AnimationAssetManifest manifest = _animationCatalog?.GetRequired(GenshinCameoAnimation)
+                ?? throw new InvalidOperationException("Genshin cameo animation is unavailable.");
+            DesktopRectangle workArea = GetCurrentWorkArea();
+            AnimationStageSizing stage = GetAnimationStageSizing();
+            double targetWidth = stage.Width;
+            double targetHeight = stage.Height;
+            PointerPoint position = _randomPetPositionSelector.Select(
+                workArea,
+                Math.Max(ActualWidth, targetWidth),
+                Math.Max(ActualHeight, targetHeight),
+                GenshinCameoSafeMargin);
+            Left = position.X;
+            Top = position.Y;
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or ArgumentOutOfRangeException or KeyNotFoundException)
+        {
+            _logger.Error("genshin.cameo_position_unavailable", exception);
+            return;
+        }
+
+        _genshinCameoRestorePosition = restorePosition;
+        Guid topmostToken = AcquireTransientTopmost();
+        Guid? reactionToken = await PlayReactionAsync(
+            GenshinCameoAnimation,
+            ReactionPriority.Genshin);
+        if (reactionToken is not Guid token)
+        {
+            ReleaseTransientTopmost(topmostToken);
+            RestoreWindowPosition(restorePosition);
+            _genshinCameoRestorePosition = null;
+            return;
+        }
+
+        _genshinCameoReactionToken = token;
+        _genshinCameoTopmostToken = topmostToken;
+        _logger.Info("genshin.cameo_started", "Background cameo started at a safe random work-area position.");
+    }
+
+    private async Task BeginGenshinLaunchPreviewAsync()
+    {
+        await Task.Delay(700);
+        if (!_isClosing)
+        {
+            await BeginGenshinLaunchReactionAsync(retryOnFailure: false);
+        }
+    }
+
+    private async Task BeginGenshinCameoPreviewAsync()
+    {
+        await Task.Delay(700);
+        if (!_isClosing)
+        {
+            await BeginGenshinCameoAsync();
+        }
+    }
+
+    private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || _isClosing)
+        {
+            return;
+        }
+
+        // Windows input resets before the gesture has crossed the drag threshold.
+        // Keep sleep through that interval; only a confirmed click wakes it.
+        if (_stateMachine.CurrentContinuousState == PetContinuousState.Sleeping)
+            _sleepHeldAfterDrag = true;
+        Point position = e.GetPosition(this);
+        _dragPressScreenPoint = GetPointerScreenPositionInDips(e);
+        _dragStartLeft = Left;
+        _dragStartTop = Top;
+        Mouse.Capture(this);
+        DateTimeOffset now = DateTimeOffset.Now;
+        PointerGestureAction action = _pointerGesture.Press(ToPointerPoint(position), e.ClickCount, now);
+        HandlePointerAction(action);
+        if (action.Type == PointerGestureActionType.None && e.ClickCount == 1)
+        {
+            TryBeginPettingGesture(ToPointerPoint(position), now);
+        }
+
+        SyncSingleClickTimer();
+        e.Handled = true;
+    }
+
+    private void OnMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        UpdatePetCursor(ToPointerPoint(e.GetPosition(this)));
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        PointerPoint position = ToPointerPoint(e.GetPosition(this));
+        if (_pettingGesture.IsTracking)
+        {
+            HandlePettingMove(position, now);
+        }
+        else if (!_pettingGestureConsumedPress)
+        {
+            HandlePointerAction(_pointerGesture.Move(position));
+        }
+
+        if (_isWindowDragging)
+        {
+            MoveWindowWithPointer(GetPointerScreenPositionInDips(e), now);
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || _isClosing)
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        if (_pettingGestureConsumedPress)
+        {
+            _pettingGestureConsumedPress = false;
+            _pettingGesture.Cancel();
+        }
+        else
+        {
+            _pettingGesture.Cancel();
+            HandlePointerAction(_pointerGesture.Release(
+                ToPointerPoint(e.GetPosition(this)),
+                now));
+        }
+
+        if (IsMouseCaptured)
+        {
+            ReleaseMouseCapture();
+        }
+
+        SyncSingleClickTimer();
+        e.Handled = true;
+    }
+
+    private void OnLostMouseCapture(object sender, MouseEventArgs e)
+    {
+        _pettingGesture.Cancel();
+        _pettingGestureConsumedPress = false;
+        if (_isClosing || !_isWindowDragging)
+        {
+            return;
+        }
+
+        _pointerGesture.Cancel();
+        _rapidDragTracker.Cancel();
+        EndWindowDrag();
+    }
+
+    private void TryBeginPettingGesture(PointerPoint windowPoint, DateTimeOffset now)
+    {
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            return;
+        }
+
+        if (!_stateMachine.Resolve(now).BodyRegionInteractionsEnabled)
+        {
+            return;
+        }
+
+        PointerPoint? normalizedPoint = NormalizeToPetImage(windowPoint);
+        if (normalizedPoint is null ||
+            !IsOpaquePetPixel(normalizedPoint.Value) ||
+            _bodyHitMap.HitTest(normalizedPoint.Value) != BodyRegionId.HeadAndHair)
+        {
+            return;
+        }
+
+        _pettingGesture.Begin(windowPoint, now);
+        _logger.Info("interaction.petting_candidate_started", "HeadAndHair");
+    }
+
+    private void HandlePettingMove(PointerPoint windowPoint, DateTimeOffset now)
+    {
+        PointerPoint? normalizedPoint = NormalizeToPetImage(windowPoint);
+        BodyHitRegion headRegion = _bodyHitMap.Regions.First(region => region.Id == BodyRegionId.HeadAndHair);
+        if (normalizedPoint is null ||
+            !headRegion.Contains(normalizedPoint.Value) ||
+            !IsOpaquePetPixel(normalizedPoint.Value))
+        {
+            _pettingGesture.Cancel();
+            HandlePointerAction(_pointerGesture.Move(windowPoint));
+            return;
+        }
+
+        PettingGestureAction action = _pettingGesture.Move(windowPoint, now);
+        if (action == PettingGestureAction.YieldToWindowDrag)
+        {
+            HandlePointerAction(_pointerGesture.Move(windowPoint));
+            return;
+        }
+
+        if (action != PettingGestureAction.Completed)
+        {
+            return;
+        }
+
+        _pettingGestureConsumedPress = true;
+        _pointerGesture.Cancel();
+        _singleClickTimer.Stop();
+        BodyInteractionDecision decision = ResolvePettingInteraction();
+        if (decision.AnimationId is string animationId)
+        {
+            _ = PlayBodyReactionAsync(animationId, blocksDisplayModeToggle: true);
+        }
+
+        _logger.Info("interaction.petting_completed", "Cute reaction requested.");
+    }
+
+    private void CycleFullBodyStyle()
+    {
+        if (_stateMachine.IsDisplayModeToggleBlocked(DateTimeOffset.Now))
+        {
+            _logger.Info(
+                "display.style_cycle_blocked",
+                "A body-part reaction is still playing.");
+            return;
+        }
+
+        if (!_settings.Appearance.EnableFullBodyStyleCycling)
+        {
+            _logger.Info(
+                "display.style_cycle_disabled",
+                $"CurrentStyle={_settings.Appearance.FullBodyStyle}.");
+            return;
+        }
+
+        string nextStyle = AppearanceOptionIds.GetNextFullBodyStyle(
+            _settings.Appearance.FullBodyStyle);
+        _stateMachine.SetDisplayMode(PetDisplayMode.FullBodyInteractive);
+        ApplyAppearancePreferences(_settings.Appearance with { FullBodyStyle = nextStyle });
+        _logger.Info(
+            "display.style_cycled",
+            $"FullBodyStyle={nextStyle}; BunEatingStyle={AppearanceOptionIds.ResolveDefaultBunEatingStyle(nextStyle)}.");
+    }
+
+    private void OnSingleClickTimerTick(object? sender, EventArgs e)
+    {
+        PointerGestureAction action = _pointerGesture.FlushPendingSingleClick(DateTimeOffset.Now);
+        if (action.Type == PointerGestureActionType.None)
+        {
+            SyncSingleClickTimer();
+            return;
+        }
+
+        _singleClickTimer.Stop();
+        HandlePointerAction(action);
+    }
+
+    private void HandlePointerAction(PointerGestureAction action)
+    {
+        switch (action.Type)
+        {
+            case PointerGestureActionType.None:
+                break;
+            case PointerGestureActionType.DispatchSingleClick:
+                if (action.Position is PointerPoint clickPosition)
+                {
+                    HandleSingleClick(clickPosition);
+                }
+                break;
+            case PointerGestureActionType.ToggleDisplayMode:
+                _singleClickTimer.Stop();
+                if (IsCrystalLongIdleActive)
+                {
+                    WakeCrystalLongIdle();
+                }
+                else
+                {
+                    CycleFullBodyStyle();
+                }
+                break;
+            case PointerGestureActionType.BeginDrag:
+                BeginWindowDrag();
+                break;
+            case PointerGestureActionType.EndDrag:
+                EndWindowDrag();
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(action));
+        }
+    }
+
+    private void BeginWindowDrag()
+    {
+        if (_settings.Window.LockPosition)
+        {
+            _pointerGesture.Cancel();
+            _singleClickTimer.Stop();
+            return;
+        }
+        _singleClickTimer.Stop();
+        if (!_stateMachine.BeginDrag()) { _rapidDragTracker.Cancel(); return; }
+        _sleepHeldAfterDrag = _stateMachine.CurrentContinuousState == PetContinuousState.Sleeping;
+        // A moved cameo must finish at its new position instead of jumping back.
+        _genshinCameoRestorePosition = null;
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            _edgeDockAnimationGeneration++;
+            _edgeDockSide = EdgeDockSide.None;
+            _edgeDockRevealed = false;
+            SetEdgeMirror(false);
+            EdgeDockHandle.Visibility = Visibility.Collapsed;
+            PetImage.Clip = null;
+            PetImage.IsHitTestVisible = true;
+        }
+
+        _dragEdgeCandidate = EdgeDockSide.None;
+        _classicDragExpansionStarted = false;
+
+        _isWindowDragging = true;
+        _dragPreservesAnimation = !CanUseOrdinaryDragVisual();
+        if (IsClassicCatEarsFullBodyMode() && CanUseOrdinaryDragVisual())
+        {
+            _rapidDragTracker.Begin(ToPointerPoint(_dragPressScreenPoint), DateTimeOffset.Now);
+        }
+        else
+        {
+            _rapidDragTracker.Cancel();
+        }
+        PlayCurrentDragVisual();
+
+        _dragStartLeft = Left;
+        _dragStartTop = Top;
+        _dragIntentPetBoundsInWindow = GetPetImageAlphaBoundsInWindow();
+
+        UpdateBodyHitDebugOverlay();
+        _logger.Info("interaction.drag_started", _stateMachine.VisualState.SelectedDisplayMode.ToString());
+    }
+
+    private void MoveWindowWithPointer(Point currentScreenPoint, DateTimeOffset observedAt)
+    {
+        if (!_classicSpinDanceActive && IsClassicCatEarsFullBodyMode() && CanUseOrdinaryDragVisual() &&
+            _rapidDragTracker.Add(ToPointerPoint(currentScreenPoint), observedAt))
+        {
+            StartClassicSpinDance();
+        }
+        double desiredLeft = _dragStartLeft + currentScreenPoint.X - _dragPressScreenPoint.X;
+        double desiredTop = _dragStartTop + currentScreenPoint.Y - _dragPressScreenPoint.Y;
+        double horizontalOverscan = Math.Max(
+            EdgeDockMinimumDragOverscan,
+            ActualWidth * 0.5);
+        double verticalOverscan = Math.Max(
+            EdgeDockMinimumDragOverscan,
+            ActualHeight * 0.5);
+        Left = Clamp(
+            desiredLeft,
+            SystemParameters.VirtualScreenLeft - horizontalOverscan,
+            SystemParameters.VirtualScreenLeft + SystemParameters.VirtualScreenWidth - ActualWidth +
+                horizontalOverscan);
+        Top = Clamp(
+            desiredTop,
+            GetCurrentWorkArea().Top - Math.Max(
+                0,
+                (_dragIntentPetBoundsInWindow ?? GetPetImageAlphaBoundsInWindow()).Top),
+            SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - ActualHeight +
+                verticalOverscan);
+        UpdateAccessoryLayoutForCurrentPosition();
+        if (_dragEdgeCandidate == EdgeDockSide.None)
+        {
+            _dragIntentPetBoundsInWindow = GetPetImageAlphaBoundsInWindow();
+        }
+        if (!_classicSpinDanceActive)
+        {
+            UpdateDragEdgePreview();
+        }
+    }
+
+    private void EndWindowDrag()
+    {
+        if (!_isWindowDragging)
+        {
+            return;
+        }
+
+        _rapidDragTracker.Cancel();
+        _isWindowDragging = false;
+        if (_stateMachine.EndDrag())
+        {
+            if (TryEnterEdgeDock())
+            {
+                _classicDragExpansionStarted = false;
+                _dragIntentPetBoundsInWindow = null;
+                _logger.Info("interaction.drag_ended", "Pet docked at a screen edge.");
+                return;
+            }
+
+            if (_classicSpinDanceActive)
+            {
+                ApplyDragReleasePlacement(GetPetImageDesktopBounds());
+                _classicDragExpansionStarted = false;
+                _dragIntentPetBoundsInWindow = null;
+                _dragEdgeCandidate = EdgeDockSide.None;
+                SetEdgeMirror(false);
+                UpdateAccessoryLayoutForCurrentPosition();
+                _logger.Info(
+                    "interaction.drag_ended",
+                    "Classic spin dance remains active until the next click.");
+                return;
+            }
+
+            // Keep the user's visible edge contact; transparent stage padding is
+            // allowed offscreen. Resolve placement only after the target art exists.
+            DesktopRectangle releaseBounds = GetPetImageDesktopBounds();
+            _classicDragExpansionStarted = false;
+            _dragIntentPetBoundsInWindow = null;
+            _dragEdgeCandidate = EdgeDockSide.None;
+            SetEdgeMirror(false);
+            if (_dragPreservesAnimation || !CanUseOrdinaryDragVisual() || _animationPlayer?.CurrentAnimationId == _stateMachine.Resolve(DateTimeOffset.Now).AnimationId)
+            {
+                ApplyDragReleasePlacement(releaseBounds);
+                UpdateBodyHitDebugOverlay();
+            }
+            else
+            {
+                _ = TransitionToResolvedContinuousAnimationAsync(
+                    "animation.drag_restored", dragReleaseBounds: releaseBounds);
+            }
+            _logger.Info("interaction.drag_ended", "Visible artwork placement retained without landing feedback.");
+        }
+        else
+        {
+            _classicDragExpansionStarted = false;
+        }
+    }
+
+    private void StartClassicSpinDance()
+    {
+        DateTimeOffset now = DateTimeOffset.Now;
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                ClassicSpinDanceAnimation,
+                ReactionPriority.UserInteraction,
+                DateTimeOffset.MaxValue),
+            now);
+        if (outcome.Token is not Guid token)
+        {
+            return;
+        }
+
+        _classicSpinDanceActive = true;
+        _classicSpinDanceReactionToken = token;
+        _dragEdgeCandidate = EdgeDockSide.None;
+        PlayAnimation(ClassicSpinDanceAnimation);
+        _logger.Info(
+            "interaction.classic_spin_dance_started",
+            "Fast back-and-forth drag detected; animation loops until the next click.");
+    }
+
+    private void StopClassicSpinDance(bool restoreContinuousAnimation, string eventName)
+    {
+        if (!_classicSpinDanceActive)
+        {
+            return;
+        }
+
+        if (_classicSpinDanceReactionToken is Guid token &&
+            _stateMachine.ActiveReactionToken == token)
+        {
+            _stateMachine.CancelActiveReaction();
+        }
+
+        _classicSpinDanceActive = false;
+        _classicSpinDanceReactionToken = null;
+        _rapidDragTracker.Cancel();
+        if (restoreContinuousAnimation && !_isClosing)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync(eventName);
+        }
+
+        _logger.Info(eventName, "Classic spin dance stopped.");
+    }
+
+    private void HandleSingleClick(PointerPoint windowPoint)
+    {
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            return;
+        }
+
+        if (_classicSpinDanceActive)
+        {
+            StopClassicSpinDance(restoreContinuousAnimation: true, "interaction.click_stopped_spin_dance");
+            return;
+        }
+        if (_timeGreetingPresentationInFlight)
+        {
+            _pendingTimeGreetingDecision = null;
+            _pendingTimeGreetingEligibleAt = null;
+            CancelTimeGreetingPresentation(true, "Interrupted by confirmed click.");
+        }
+        if (!IsCrystalLongIdleActive && _stateMachine.CurrentContinuousState is
+            PetContinuousState.MediumIdleCountdown or PetContinuousState.Sleeping)
+        {
+            _sleepHeldAfterDrag = false;
+            _stateMachine.SetContinuousState(PetContinuousState.Idle);
+            PlayResolvedContinuousAnimation();
+            return;
+        }
+        if (IsCrystalLongIdleActive)
+        {
+            WakeCrystalLongIdle();
+            return;
+        }
+
+        if (_stateMachine.CurrentContinuousState == PetContinuousState.MediumIdle)
+        {
+            _stateMachine.SetContinuousState(PetContinuousState.Idle);
+            PlayResolvedContinuousAnimation();
+            _logger.Info("idle.user_click_restored", PetContinuousState.MediumIdle.ToString());
+        }
+
+        PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
+        if (!plan.BodyRegionInteractionsEnabled)
+        {
+            return;
+        }
+
+        PointerPoint? normalizedPoint = NormalizeToPetImage(windowPoint);
+        if (normalizedPoint is null || !IsOpaquePetPixel(normalizedPoint.Value))
+        {
+            _lastDebugHitRegion = null;
+            UpdateBodyHitDebugOverlay();
+            return;
+        }
+
+        _lastDebugHitRegion = _bodyHitMap.HitTest(normalizedPoint.Value);
+        UpdateBodyHitDebugOverlay();
+        if (_lastDebugHitRegion is BodyRegionId region)
+        {
+            _logger.Info("interaction.body_hit", region.ToString());
+            BodyInteractionDecision decision = ResolveBodyInteraction(
+                region,
+                DateTimeOffset.Now,
+                normalizedPoint.Value.X);
+            if (decision.Kind == BodyInteractionDecisionKind.PlayAnimation &&
+                decision.AnimationId is string animationId)
+            {
+                _ = PlayBodyReactionAsync(
+                    animationId,
+                    blocksDisplayModeToggle: true,
+                    mirrorHorizontally: decision.MirrorHorizontally);
+            }
+            else if (decision.Kind == BodyInteractionDecisionKind.PettingGestureRequired &&
+                ResolvePettingInteraction().AnimationId is string headPatAnimation)
+            {
+                _ = PlayBodyReactionAsync(headPatAnimation, blocksDisplayModeToggle: true);
+            }
+            else
+            {
+                _logger.Info("interaction.body_hit_deferred", decision.Kind.ToString());
+            }
+        }
+    }
+
+    private Task<Guid?> PlayBodyReactionAsync(
+        string animationId,
+        bool blocksDisplayModeToggle = false,
+        bool mirrorHorizontally = false) =>
+        PlayReactionAsync(
+            animationId,
+            ReactionPriority.UserInteraction,
+            suppressBodyAfter: true,
+            blocksDisplayModeToggle: blocksDisplayModeToggle,
+            mirrorHorizontally: mirrorHorizontally);
+
+    private async Task<Guid?> PlayReactionAsync(
+        string animationId,
+        ReactionPriority priority,
+        bool suppressBodyAfter = false,
+        bool blocksDisplayModeToggle = false,
+        bool mirrorHorizontally = false,
+        TimeSpan? minimumDisplayDuration = null)
+    {
+        double playbackRate = BodyInteractionResolver.ResolvePlaybackRate(animationId);
+        DateTimeOffset now = DateTimeOffset.Now;
+        TimeSpan reactionLifetime = minimumDisplayDuration is TimeSpan minimumDuration
+            ? TimeSpan.FromSeconds(Math.Max(20, minimumDuration.TotalSeconds + 5))
+            : TimeSpan.FromSeconds(20);
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                animationId,
+                priority,
+                now.Add(reactionLifetime),
+                BlocksDisplayModeToggle: blocksDisplayModeToggle),
+            now);
+        if (outcome.Token is not Guid token)
+        {
+            _logger.Info("animation.reaction_skipped", outcome.Result.ToString());
+            return null;
+        }
+
+        if (outcome.Result == ReactionStartResult.Replaced)
+        {
+            CleanupReplacedGenshinPresentation();
+            CleanupReplacedMessageNotificationPresentation();
+        }
+
+        UpdateBodyHitDebugOverlay();
+        bool playInPlace = CrystalBodyInteractionResolver.IsInPlaceAnimation(animationId);
+        bool transitioned;
+        Action completeReaction = minimumDisplayDuration is TimeSpan holdDuration
+            ? () => _ = CompleteReactionAfterMinimumDurationAsync(
+                token,
+                now,
+                holdDuration,
+                suppressBodyAfter,
+                playInPlace)
+            : () => CompleteReaction(token, suppressBodyAfter, playInPlace);
+        if (playInPlace)
+        {
+            ApplyBodyReactionMirror(mirrorHorizontally);
+            PlayAnimation(
+                animationId,
+                completeReaction,
+                playbackRate: playbackRate);
+            transitioned = _animationPlayer?.CurrentAnimationId == animationId;
+        }
+        else
+        {
+            transitioned = await _visualSwapTransition.PlayAsync(
+                () =>
+                {
+                    ApplyBodyReactionMirror(mirrorHorizontally);
+                    PlayAnimation(
+                        animationId,
+                        completeReaction,
+                        preserveVisualTransition: true,
+                        playbackRate: playbackRate);
+                });
+        }
+        if (transitioned && !_isClosing &&
+            _animationPlayer?.CurrentAnimationId == animationId)
+        {
+            _bodyReactionMotion.PlayFor(animationId, playbackRate, mirrorHorizontally);
+            _logger.Info(
+                playInPlace
+                    ? "animation.in_place_reaction_started"
+                    : "animation.reaction_started",
+                animationId);
+            return token;
+        }
+
+        if (_stateMachine.ActiveReactionToken == token)
+        {
+            _stateMachine.CancelActiveReaction();
+        }
+        ResetBodyReactionMirror();
+        return null;
+    }
+
+    private async Task CompleteReactionAfterMinimumDurationAsync(
+        Guid token,
+        DateTimeOffset startedAt,
+        TimeSpan minimumDuration,
+        bool suppressBodyAfter,
+        bool restoreInPlace)
+    {
+        TimeSpan remaining = minimumDuration - (DateTimeOffset.Now - startedAt);
+        if (remaining > TimeSpan.Zero)
+        {
+            await Task.Delay(remaining);
+        }
+
+        if (!_isClosing)
+        {
+            CompleteReaction(token, suppressBodyAfter, restoreInPlace);
+        }
+    }
+
+    private void ApplyBodyReactionMirror(bool mirrorHorizontally)
+    {
+        _bodyReactionMirrorActive = mirrorHorizontally;
+        PetDirectionTransform.ScaleX = mirrorHorizontally ? -1 : 1;
+    }
+
+    private void ResetBodyReactionMirror()
+    {
+        if (!_bodyReactionMirrorActive)
+        {
+            return;
+        }
+
+        _bodyReactionMirrorActive = false;
+        PetDirectionTransform.ScaleX = 1;
+    }
+
+    private void CompleteReaction(
+        Guid token,
+        bool suppressBodyAfter,
+        bool restoreInPlace = false)
+    {
+        DateTimeOffset now = DateTimeOffset.Now;
+        if (!_stateMachine.CompleteReaction(token, now))
+        {
+            return;
+        }
+
+        if (suppressBodyAfter)
+        {
+            _stateMachine.SuppressBodyInteractions(now, BodyInteractionRecoveryDelay);
+        }
+        Point? restorePosition = FinishGenshinPresentation(token);
+        FinishMessageNotificationPresentation(token);
+        _bodyReactionMotion.Cancel();
+        if (restoreInPlace)
+        {
+            PlayResolvedContinuousAnimation();
+            if (restorePosition is Point inPlacePosition)
+            {
+                RestoreWindowPosition(inPlacePosition);
+            }
+            _logger.Info(
+                "animation.body_reaction_in_place_completed",
+                "The crystal-dress body animation returned directly to its idle artwork.");
+            return;
+        }
+
+        if (suppressBodyAfter)
+        {
+            _ = RestoreClassicBodyReactionWithFadeAsync(restorePosition);
+            return;
+        }
+
+        _ = TransitionToResolvedContinuousAnimationAsync(
+            "animation.body_reaction_transition_completed",
+            restorePosition is Point point
+                ? () => RestoreWindowPosition(point)
+                : null);
+    }
+
+    private async Task RestoreClassicBodyReactionWithFadeAsync(Point? restorePosition)
+    {
+        bool completed = await _visualSwapTransition.PlayFadeAsync(
+            () =>
+            {
+                PlayResolvedContinuousAnimation(preserveVisualTransition: true);
+                if (restorePosition is Point bodyReactionPosition)
+                {
+                    RestoreWindowPosition(bodyReactionPosition);
+                }
+            });
+        if (completed && !_isClosing)
+        {
+            StartResolvedContinuousMotion();
+            _logger.Info(
+                "animation.body_reaction_fade_restore_completed",
+                "Classic body reaction returned through a neutral opacity fade.");
+        }
+    }
+
+    private PointerPoint? NormalizeToPetImage(PointerPoint windowPoint)
+    {
+        if (PetImage.ActualWidth <= 0 || PetImage.ActualHeight <= 0)
+        {
+            return null;
+        }
+
+        Point imageOrigin = PetImage.TranslatePoint(new Point(0, 0), this);
+        double x = (windowPoint.X - imageOrigin.X) / PetImage.ActualWidth;
+        double y = (windowPoint.Y - imageOrigin.Y) / PetImage.ActualHeight;
+        return x is >= 0 and <= 1 && y is >= 0 and <= 1
+            ? new PointerPoint(x, y)
+            : null;
+    }
+
+    private bool IsOpaquePetPixel(PointerPoint normalizedPoint)
+    {
+        if (PetImage.Source is not BitmapSource source)
+        {
+            return false;
+        }
+
+        if (source.Format != PixelFormats.Bgra32 && source.Format != PixelFormats.Pbgra32)
+        {
+            return true;
+        }
+
+        int x = Numeric.Clamp((int)(normalizedPoint.X * source.PixelWidth), 0, source.PixelWidth - 1);
+        int y = Numeric.Clamp((int)(normalizedPoint.Y * source.PixelHeight), 0, source.PixelHeight - 1);
+        byte[] pixel = new byte[4];
+        source.CopyPixels(new Int32Rect(x, y, 1, 1), pixel, 4, 0);
+        return pixel[3] >= 24;
+    }
+
+    private void OnPetImageSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateBodyHitDebugOverlay();
+        UpdateCrystalLongIdleDecorationLayout();
+    }
+
+    private void UpdateBodyHitDebugOverlay()
+    {
+        bool isEnabled = _previewBodyHitDebug &&
+            _stateMachine.Resolve(DateTimeOffset.Now).BodyRegionInteractionsEnabled &&
+            PetImage.ActualWidth > 0 &&
+            PetImage.ActualHeight > 0;
+        BodyHitDebugOverlay.Visibility = isEnabled ? Visibility.Visible : Visibility.Collapsed;
+        BodyHitDebugOverlay.Children.Clear();
+        if (!isEnabled)
+        {
+            return;
+        }
+
+        foreach (BodyHitRegion region in _bodyHitMap.Regions.Reverse())
+        {
+            NormalizedRectangle bounds = region.Bounds;
+            bool selected = region.Id == _lastDebugHitRegion;
+            foreach (NormalizedPolygon normalizedPolygon in region.Polygons)
+            {
+                System.Windows.Shapes.Polygon polygon = new()
+                {
+                    Points = new PointCollection(
+                        normalizedPolygon.Vertices.Select(vertex => new Point(
+                            vertex.X * PetImage.ActualWidth,
+                            vertex.Y * PetImage.ActualHeight))),
+                    Fill = new SolidColorBrush(
+                        Color.FromArgb(selected ? (byte)105 : (byte)42, 43, 220, 235)),
+                    Stroke = selected ? Brushes.Yellow : Brushes.White,
+                    StrokeThickness = selected ? 3 : 1,
+                };
+                BodyHitDebugOverlay.Children.Add(polygon);
+            }
+
+            TextBlock label = new()
+            {
+                Text = GetBodyRegionLabel(region.Id),
+                Foreground = selected ? Brushes.Yellow : Brushes.White,
+                Background = new SolidColorBrush(Color.FromArgb(150, 0, 55, 65)),
+                FontSize = 8,
+                Padding = new Thickness(2, 0, 2, 0),
+            };
+            Canvas.SetLeft(label, bounds.X * PetImage.ActualWidth + 2);
+            Canvas.SetTop(label, bounds.Y * PetImage.ActualHeight + 2);
+            BodyHitDebugOverlay.Children.Add(label);
+        }
+    }
+
+    private void SyncSingleClickTimer()
+    {
+        _singleClickTimer.Stop();
+        TimeSpan? remaining = _pointerGesture.TimeUntilPendingSingleClick(DateTimeOffset.Now);
+        if (remaining is TimeSpan delay)
+        {
+            _singleClickTimer.Interval = delay < TimeSpan.FromMilliseconds(1)
+                ? TimeSpan.FromMilliseconds(1)
+                : delay;
+            _singleClickTimer.Start();
+        }
+    }
+
+    private Point GetPointerScreenPositionInDips(MouseEventArgs e)
+    {
+        Point physicalPoint = PointToScreen(e.GetPosition(this));
+        PresentationSource? source = PresentationSource.FromVisual(this);
+        return source?.CompositionTarget is null
+            ? physicalPoint
+            : source.CompositionTarget.TransformFromDevice.Transform(physicalPoint);
+    }
+
+    private static PointerPoint ToPointerPoint(Point point) => new(point.X, point.Y);
+
+    private static string GetBodyRegionLabel(BodyRegionId region) => region switch
+    {
+        BodyRegionId.LeftEye => "左眼",
+        BodyRegionId.RightEye => "右眼",
+        BodyRegionId.Mouth => "嘴巴",
+        BodyRegionId.Face => "脸部",
+        BodyRegionId.LeftHand => "左手",
+        BodyRegionId.RightHand => "右手",
+        BodyRegionId.Chest => "胸部",
+        BodyRegionId.LowerBodySensitiveArea => "下体",
+        BodyRegionId.LeftFoot => "左脚",
+        BodyRegionId.RightFoot => "右脚",
+        BodyRegionId.HeadAndHair => "头发",
+        BodyRegionId.OtherBody => "普通部位",
+        _ => throw new ArgumentOutOfRangeException(nameof(region)),
+    };
+
+    private void StartMusicPlayback(string source, string? artistOverride = null)
+    {
+        CancelCrystalLongIdle();
+        _userPauseFastConfirmationUntil = null;
+        if (_timeGreetingPresentationInFlight)
+        {
+            _pendingTimeGreetingDecision = null;
+            _pendingTimeGreetingEligibleAt = null;
+            CancelTimeGreetingPresentation(
+                restoreContinuousAnimation: false,
+                "Music playback took priority.");
+        }
+        if (_pendingTimeGreetingDecision is not null)
+        {
+            _pendingTimeGreetingEligibleAt = null;
+        }
+        StopClassicSpinDance(
+            restoreContinuousAnimation: false,
+            "media.music_stopped_spin_dance");
+        DateTimeOffset now = DateTimeOffset.Now;
+        string artist = artistOverride ?? _lastTrackSnapshot.Artist;
+        string selectedAnimation = _musicAnimationSelector.Select(
+            _settings.Media.MusicAnimationSelection,
+            artist,
+            _settings.Media.EnableLuoTianyiSingingEasterEgg);
+        _musicAnimationTrackIdentity = artistOverride is null
+            ? _lastTrackIdentity
+            : "preview-luo-tianyi";
+        _stateMachine.SetMusicAnimation(selectedAnimation);
+        _stateMachine.SetContinuousState(PetContinuousState.MusicPlaying);
+        _musicPlaybackIndicator.SetPlaying(true);
+        bool completedApplicationLaunchWait = _cloudMusicLaunchWaiting;
+        if (completedApplicationLaunchWait)
+        {
+            FinishCloudMusicLaunchWait(restoreContinuousAnimation: false);
+        }
+
+        UpdatePlayPauseGlyph();
+        PetPlaybackPlan plan = _stateMachine.Resolve(now);
+        if (plan.Source == PlaybackPlanSource.Continuous)
+        {
+            if (completedApplicationLaunchWait)
+            {
+                _ = PlayReactionAsync("resonance-ok", ReactionPriority.MediaOrVolume);
+            }
+            else
+            {
+                _ = TransitionToResolvedContinuousAnimationAsync(
+                    "animation.music_selection_transition_completed");
+            }
+        }
+
+        _logger.Info(
+            "media.playback_started",
+            $"Source={source}; Animation={selectedAnimation}; ArtistClass={GetArtistClass(artist)}.");
+    }
+
+    private void StopMusicPlayback(string source)
+    {
+        _musicAnimationTrackIdentity = string.Empty;
+        _stateMachine.SetContinuousState(PetContinuousState.Idle);
+        _musicPlaybackIndicator.SetPlaying(false);
+        _userPauseFastConfirmationUntil = null;
+        if (_pendingTimeGreetingDecision is not null)
+        {
+            _pendingTimeGreetingEligibleAt =
+                DateTimeOffset.Now + StartupTimeSceneResolver.MusicStopDeferral;
+            _logger.Info(
+                "time.greeting_waiting_after_music",
+                $"DelaySeconds={StartupTimeSceneResolver.MusicStopDeferral.TotalSeconds:0}.");
+        }
+        UpdatePlayPauseGlyph();
+        if (_stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync("animation.music_stopped_transition_completed");
+        }
+
+        _logger.Info(
+            "media.playback_paused",
+            $"Source={source}; Restored selected idle appearance immediately.");
+    }
+
+    private bool _audioProbeInFlight;
+    private async void OnMusicDetectionTimerTick(object? sender, EventArgs e)
+    {
+        if (_audioSessionProbe is null || _musicPreviewOverride || _isClosing || _audioProbeInFlight)
+        {
+            return;
+        }
+
+        AudioSessionSnapshot snapshot;
+        _audioProbeInFlight=true;
+        try
+        {
+            // Core Audio may wait on an unavailable audio service. A single worker
+            // isolates that wait; timer ticks never queue additional reads behind it.
+            snapshot = await Task.Run(()=>_audioSessionProbe.ReadForProcess(_musicTargetProcessName));
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or
+            InvalidOperationException or
+            System.Runtime.InteropServices.COMException or
+            UnauthorizedAccessException)
+        {
+            if (!_audioProbeFailureLogged)
+            {
+                _audioProbeFailureLogged = true;
+                _logger.Error("media.detection_probe_failed", exception);
+            }
+
+            return;
+        }
+        finally { _audioProbeInFlight=false; }
+        if(_isClosing)return;
+
+        if (!snapshot.ProbeSucceeded)
+        {
+            if (!_audioProbeFailureLogged)
+            {
+                _audioProbeFailureLogged = true;
+                _logger.Info("media.detection_temporarily_unavailable", "Core Audio probe will retry.");
+            }
+
+            return;
+        }
+
+        if (_audioProbeFailureLogged)
+        {
+            _audioProbeFailureLogged = false;
+            _logger.Info("media.detection_recovered", "Core Audio probe resumed.");
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        if (!_trackSwitchPlaybackHoldActive &&
+            _musicPlaybackIndicator.Observe(snapshot, now))
+        {
+            UpdatePlayPauseGlyph();
+        }
+
+        MusicActivityTransition transition = _musicActivityDetector.Update(snapshot, now);
+        if (transition == MusicActivityTransition.None &&
+            _userPauseFastConfirmationUntil is DateTimeOffset confirmationUntil)
+        {
+            if (now <= confirmationUntil)
+            {
+                transition = _musicActivityDetector.ConfirmStoppedAfterUserPause(snapshot);
+                if (transition == MusicActivityTransition.Stopped)
+                {
+                    _logger.Info(
+                        "media.user_pause_confirmed_fast",
+                        "The first silent Core Audio sample confirmed the user's pause command.");
+                }
+            }
+            else
+            {
+                _userPauseFastConfirmationUntil = null;
+            }
+        }
+
+        if (transition == MusicActivityTransition.Started)
+        {
+            bool resumedPendingTrackSwitch =
+                _trackSwitchPlaybackHoldActive && _trackSwitchSawAudioGap;
+            if (resumedPendingTrackSwitch)
+            {
+                _trackSwitchPlaybackHoldActive = false;
+            }
+
+            StartMusicPlayback("core-audio");
+            if (_showNextTrackChange && _trackSwitchSawAudioGap)
+            {
+                ConfirmTrackSwitch("core-audio-resumed");
+            }
+            else if (resumedPendingTrackSwitch)
+            {
+                _trackSwitchCancellation?.Cancel();
+                _logger.Info(
+                    "media.track_switch_audio_resumed",
+                    "Audio resumed after the track identity had already changed.");
+            }
+        }
+        else if (transition == MusicActivityTransition.Stopped)
+        {
+            _userPauseFastConfirmationUntil = null;
+            if (_trackSwitchPlaybackHoldActive)
+            {
+                _trackSwitchSawAudioGap = true;
+                _logger.Info(
+                    "media.track_switch_audio_gap_held",
+                    "Keeping the current music animation while the requested track loads.");
+                return;
+            }
+
+            StopMusicPlayback("core-audio");
+        }
+    }
+
+    private bool CanUseOrdinaryDragVisual() =>
+        _stateMachine.CurrentContinuousState == PetContinuousState.Idle &&
+        _stateMachine.ActiveReactionToken is null && !IsCrystalLongIdleActive;
+
+    private void PlayCurrentDragVisual()
+    {
+        if (!CanUseOrdinaryDragVisual()) return;
+        string? dragAnimation = _stateMachine.Resolve(DateTimeOffset.Now).AnimationId;
+        bool preservesContinuousAnimation =
+            !string.Equals(
+                dragAnimation,
+                _stateMachine.VisualState.FullBodyAnimationId,
+                StringComparison.Ordinal);
+        bool usesExpansion =
+            CanUseOrdinaryDragVisual() && !preservesContinuousAnimation &&
+            AppearanceOptionIds.UsesExpansionDragAnimation(
+                _settings.Appearance.FullBodyStyle);
+        if (usesExpansion && _animationCatalog is not null)
+        {
+            AnimationAssetManifest manifest = _animationCatalog.GetRequired(
+                PetVisualState.CompactDraggingAnimation);
+            int lastFrameIndex = manifest.FrameDurationsMilliseconds.Count - 1;
+            if (_classicDragExpansionStarted)
+            {
+                ShowAnimationFrame(PetVisualState.CompactDraggingAnimation, lastFrameIndex);
+            }
+            else
+            {
+                _classicDragExpansionStarted = true;
+                _logger.Info(
+                    "interaction.drag_visual_selected",
+                    $"Style={_settings.Appearance.FullBodyStyle}; " +
+                    $"Animation={PetVisualState.CompactDraggingAnimation}; Mode=OneShotHold.");
+                PlayAnimationRange(
+                    PetVisualState.CompactDraggingAnimation,
+                    startFrameIndex: 0,
+                    endFrameIndex: lastFrameIndex);
+            }
+            return;
+        }
+
+        if (_animationPlayer?.CurrentAnimationId != dragAnimation)
+        {
+            PlayResolvedContinuousAnimation();
+        }
+    }
+
+    private void UpdateDragEdgePreview()
+    {
+        EdgeDockSide candidate = ResolveCurrentEdgeDockSide();
+        if (candidate == _dragEdgeCandidate)
+        {
+            return;
+        }
+
+        _dragEdgeCandidate = candidate;
+        if (!CanUseOrdinaryDragVisual()) return;
+        if (candidate == EdgeDockSide.None || _stateMachine.IsDraggingHehe)
+        {
+            SetEdgeMirror(false);
+            PlayCurrentDragVisual();
+            return;
+        }
+
+        SetEdgeMirror(candidate == EdgeDockSide.Left);
+        ShowEdgeDockHideStartFrame(candidate);
+        _logger.Info("interaction.drag_edge_preview", candidate.ToString());
+    }
+
+    private EdgeDockSide ResolveCurrentEdgeDockSide()
+    {
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle stablePet = GetDragIntentPetDesktopBounds();
+        return EdgeDockResolver.ResolveHideIntentByFractionWithHysteresis(
+            stablePet,
+            workArea,
+            EdgeDockActivationFraction,
+            EdgeDockReleaseFraction,
+            _dragEdgeCandidate);
+    }
+
+    private void OnIdleSceneTimerTick(object? sender, EventArgs e)
+    {
+        if (_isClosing || _edgeDockSide != EdgeDockSide.None)
+        {
+            return;
+        }
+
+        TimeSpan? idleDuration = _userIdleTimeSource.GetIdleDuration();
+        if (idleDuration is null)
+        {
+            return;
+        }
+
+        ApplyIdleScene(idleDuration.Value);
+        UpdateCrystalLongIdleDecoration(now: DateTimeOffset.Now);
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        PetPlaybackPlan plan = _stateMachine.Resolve(now);
+        bool crystalYawnEligible = IsCrystalDressFullBodyMode() &&
+            plan.Source == PlaybackPlanSource.Continuous &&
+            _stateMachine.CurrentContinuousState == PetContinuousState.Idle;
+        if (_crystalYawnScheduler.ShouldTrigger(idleDuration.Value, crystalYawnEligible))
+        {
+            _ = PlayReactionAsync(
+                CrystalBodyInteractionResolver.YawnAnimation,
+                ReactionPriority.TimeGreeting,
+                blocksDisplayModeToggle: true);
+            _logger.Info(
+                "animation.crystal_yawn_started",
+                $"IdleMilliseconds={idleDuration.Value.TotalMilliseconds:0}.");
+            plan = _stateMachine.Resolve(now);
+        }
+
+        bool birthdayEligible = plan.Source == PlaybackPlanSource.Continuous &&
+            _stateMachine.CurrentContinuousState is
+                PetContinuousState.Idle or
+                PetContinuousState.MediumIdle;
+        if (_birthdayEasterEggScheduler.ShouldTrigger(now, birthdayEligible))
+        {
+            _ = PlayReactionAsync(
+                "twelfth-anniversary-happy-birthday",
+                ReactionPriority.TimeGreeting);
+            _logger.Info("animation.birthday_easter_egg", "Birthday idle easter egg requested.");
+        }
+    }
+
+    private void ApplyIdleScene(TimeSpan idleDuration)
+    {
+        PetContinuousState previousState = _stateMachine.CurrentContinuousState;
+        if (previousState != PetContinuousState.Sleeping) _sleepHeldAfterDrag = false;
+        if ((IsCrystalLongIdleActive || _sleepHeldAfterDrag) && previousState == PetContinuousState.Sleeping)
+        {
+            // A crystal long-idle scene remains posed until the user clicks the
+            // character. Unrelated desktop input must not wake it implicitly.
+            return;
+        }
+        IdleSceneDecision decision = IdleSceneResolver.Resolve(
+            idleDuration,
+            previousState,
+            ResolveIdleSceneProfile(),
+            FishingCountdownElapsed);
+        if (!decision.ChangesStateFrom(previousState))
+        {
+            return;
+        }
+
+        _fishingCountdownStartedTimestamp = null;
+        _stateMachine.SetContinuousState(decision.TargetState);
+        if (decision.TargetState == PetContinuousState.Sleeping &&
+            IsCrystalDressFullBodyMode())
+        {
+            BeginCrystalLongIdle();
+            return;
+        }
+        if (decision.RestoredFromSleep)
+        {
+            _logger.Info("animation.long_idle_wake", $"Restored={decision.TargetState}.");
+            if (_stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+            {
+                _ = TransitionToResolvedContinuousAnimationAsync(
+                    "animation.long_idle_wake.transition_completed");
+            }
+            return;
+        }
+
+        string eventName = decision.TargetState switch
+        {
+            PetContinuousState.MediumIdleCountdown =>
+                "animation.medium_idle_countdown_started",
+            PetContinuousState.MediumIdle => "animation.medium_idle_started",
+            PetContinuousState.Sleeping => "animation.long_idle_sleep_started",
+            _ => "animation.idle_restored",
+        };
+        _logger.Info(eventName, $"IdleMilliseconds={idleDuration.TotalMilliseconds:0}.");
+        if (_stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync(eventName + ".transition_completed");
+        }
+    }
+
+    private bool IsCrystalLongIdleActive => _crystalLongIdleVariant is not null;
+
+    private void BeginCrystalLongIdle(CrystalLongIdleVariant? forcedVariant = null)
+    {
+        if (_isClosing || _animationPlayer is null || _animationCatalog is null ||
+            IsCrystalLongIdleActive)
+        {
+            return;
+        }
+
+        ResetBodyReactionMirror();
+        _crystalLongIdleVariant = forcedVariant ?? _crystalLongIdleSelector.ChooseVariant();
+        _crystalLongIdleHolding = false;
+        _crystalLongIdleWaking = false;
+        _crystalLongIdleWakeRequested = false;
+        _crystalSleepDecoration = null;
+        _nextCrystalDecorationSelectionAt = null;
+        HideCrystalLongIdleDecoration();
+
+        string animationId = _crystalLongIdleVariant == CrystalLongIdleVariant.Sleep
+            ? CrystalLongIdleSleepAnimation
+            : CrystalLongIdleDuckSitAnimation;
+        int holdFrame = _crystalLongIdleVariant == CrystalLongIdleVariant.Sleep
+            ? CrystalSleepHoldFrame
+            : CrystalDuckSitHoldFrame;
+        CrystalLongIdleVariant expectedVariant = _crystalLongIdleVariant.Value;
+        PlayAnimationRange(
+            animationId,
+            0,
+            holdFrame,
+            () => HoldCrystalLongIdle(expectedVariant));
+        _logger.Info(
+            "animation.crystal_long_idle_started",
+            $"Variant={expectedVariant}; HoldFrame={holdFrame}.");
+    }
+
+    private void HoldCrystalLongIdle(CrystalLongIdleVariant expectedVariant)
+    {
+        if (_isClosing || _crystalLongIdleVariant != expectedVariant ||
+            _stateMachine.CurrentContinuousState != PetContinuousState.Sleeping)
+        {
+            return;
+        }
+
+        string animationId = expectedVariant == CrystalLongIdleVariant.Sleep
+            ? CrystalLongIdleSleepAnimation
+            : CrystalLongIdleDuckSitAnimation;
+        int holdFrame = expectedVariant == CrystalLongIdleVariant.Sleep
+            ? CrystalSleepHoldFrame
+            : CrystalDuckSitHoldFrame;
+        ShowAnimationFrame(animationId, holdFrame);
+        if (_previewLongIdleRightEdge)
+        {
+            DesktopRectangle frame = GetPetImageBoundsInWindow();
+            DesktopRectangle workArea = GetCurrentWorkArea();
+            double scale = _settings.Appearance.DisplayScalePercent / 100.0;
+            Left += workArea.Right - (Left + frame.Right) + 32 * scale;
+        }
+        _crystalLongIdleHolding = true;
+        _nextCrystalDecorationSelectionAt = DateTimeOffset.Now;
+        UpdateCrystalLongIdleDecoration(DateTimeOffset.Now);
+        _logger.Info(
+            "animation.crystal_long_idle_holding",
+            $"Variant={expectedVariant}; Frame={holdFrame}.");
+        if (_crystalLongIdleWakeRequested)
+        {
+            WakeCrystalLongIdle();
+        }
+    }
+
+    private void UpdateCrystalLongIdleDecoration(DateTimeOffset now)
+    {
+        if (!_crystalLongIdleHolding || _crystalLongIdleWaking ||
+            _nextCrystalDecorationSelectionAt is not DateTimeOffset next || now < next)
+        {
+            return;
+        }
+
+        _crystalSleepDecoration = _previewLongIdleDecoration ??
+            _crystalLongIdleSelector.ChooseDecoration();
+        _nextCrystalDecorationSelectionAt = now + CrystalDecorationSelectionInterval;
+        string animationId = _crystalSleepDecoration switch
+        {
+            CrystalSleepDecoration.Zzz => CrystalSleepZzzDecoration,
+            CrystalSleepDecoration.DreamBun => CrystalSleepBunDecoration,
+            CrystalSleepDecoration.DreamYuezhengLing => CrystalSleepYuezhengLingDecoration,
+            _ => throw new ArgumentOutOfRangeException(),
+        };
+        PlayCrystalLongIdleDecoration(animationId);
+        _logger.Info(
+            "animation.crystal_long_idle_decoration_selected",
+            $"Decoration={_crystalSleepDecoration}; NextMinutes=5.");
+    }
+
+    private void PlayCrystalLongIdleDecoration(string animationId, Action? completed = null)
+    {
+        if (_crystalLongIdleDecorationPlayer is null || _animationCatalog is null)
+        {
+            return;
+        }
+
+        try
+        {
+            AnimationAssetManifest manifest = _crystalLongIdleDecorationPlayer.Play(
+                animationId,
+                completed);
+            double scale = _settings.Appearance.DisplayScalePercent / 100.0;
+            CrystalLongIdleDecorationImage.Width = manifest.DisplayWidth * scale;
+            CrystalLongIdleDecorationImage.Height = manifest.DisplayHeight * scale;
+            CrystalLongIdleDecorationLayer.Visibility = Visibility.Visible;
+            UpdateCrystalLongIdleDecorationLayout();
+        }
+        catch (Exception exception) when (
+            exception is IOException or InvalidDataException or ArgumentException or
+            KeyNotFoundException or NotSupportedException)
+        {
+            _logger.Error("animation.crystal_long_idle_decoration_failed", exception);
+            HideCrystalLongIdleDecoration();
+        }
+    }
+
+    private void UpdateCrystalLongIdleDecorationLayout()
+    {
+        if (CrystalLongIdleDecorationLayer.Visibility != Visibility.Visible ||
+            _crystalLongIdleVariant is null)
+        {
+            return;
+        }
+
+        DesktopRectangle frameInWindow = GetPetImageBoundsInWindow();
+        double petWidth = frameInWindow.Width;
+        double petHeight = frameInWindow.Height;
+        double decorationWidth = CrystalLongIdleDecorationImage.Width;
+        double decorationHeight = CrystalLongIdleDecorationImage.Height;
+        double scale = _settings.Appearance.DisplayScalePercent / 100.0;
+        PointerPoint rightTarget = _crystalLongIdleVariant == CrystalLongIdleVariant.Sleep
+            ? new PointerPoint(110 * scale, 132 * scale)
+            : new PointerPoint(petWidth / 2 + 50 * scale, 76 * scale);
+        PointerPoint leftTarget = _crystalLongIdleVariant == CrystalLongIdleVariant.Sleep
+            ? new PointerPoint(58 * scale, 132 * scale)
+            : new PointerPoint(petWidth / 2 - 50 * scale, 76 * scale);
+        PointerPoint contentOrigin = _crystalSleepDecoration == CrystalSleepDecoration.Zzz
+            ? new PointerPoint(49.0 / 180.0, 121.0 / 180.0)
+            : new PointerPoint(19.0 / 240.0, 152.5 / 180.0);
+        LongIdleDecorationPlacement placement = LongIdleDecorationPlacementResolver.Resolve(
+            new DesktopRectangle(
+                Left + frameInWindow.Left,
+                Top + frameInWindow.Top,
+                frameInWindow.Width,
+                frameInWindow.Height),
+            GetCurrentWorkArea(),
+            decorationWidth,
+            decorationHeight,
+            rightTarget,
+            leftTarget,
+            contentOrigin);
+        CrystalLongIdleDecorationImage.RenderTransform = new ScaleTransform(
+            placement.MirrorHorizontally ? -1 : 1,
+            1);
+        Canvas.SetLeft(CrystalLongIdleDecorationImage, placement.Left);
+        Canvas.SetTop(CrystalLongIdleDecorationImage, placement.Top);
+    }
+
+    private void WakeCrystalLongIdle()
+    {
+        if (_crystalLongIdleVariant is not CrystalLongIdleVariant variant ||
+            _crystalLongIdleWaking)
+        {
+            return;
+        }
+
+        if (!_crystalLongIdleHolding)
+        {
+            _crystalLongIdleWakeRequested = true;
+            _logger.Info(
+                "animation.crystal_long_idle_wake_queued",
+                "Click occurred during the enter segment; wake will start from the hold frame.");
+            return;
+        }
+
+        _crystalLongIdleWaking = true;
+        _crystalLongIdleHolding = false;
+        _nextCrystalDecorationSelectionAt = null;
+        if (_crystalSleepDecoration is
+            CrystalSleepDecoration.DreamBun or CrystalSleepDecoration.DreamYuezhengLing)
+        {
+            PlayCrystalLongIdleDecoration(
+                CrystalSleepCloudDissolveDecoration,
+                HideCrystalLongIdleDecoration);
+        }
+        else
+        {
+            HideCrystalLongIdleDecoration();
+        }
+
+        string animationId = variant == CrystalLongIdleVariant.Sleep
+            ? CrystalLongIdleSleepAnimation
+            : CrystalLongIdleDuckSitAnimation;
+        int wakeStartFrame = variant == CrystalLongIdleVariant.Sleep
+            ? CrystalSleepHoldFrame + 1
+            : CrystalDuckSitHoldFrame + 1;
+        int wakeEndFrame = variant == CrystalLongIdleVariant.Sleep
+            ? CrystalSleepLastFrame
+            : CrystalDuckSitLastFrame;
+        PlayAnimationRange(
+            animationId,
+            wakeStartFrame,
+            wakeEndFrame,
+            CompleteCrystalLongIdleWake);
+        _logger.Info(
+            "animation.crystal_long_idle_wake_started",
+            $"Variant={variant}; Frames={wakeStartFrame}-{wakeEndFrame}.");
+    }
+
+    private void CompleteCrystalLongIdleWake()
+    {
+        CancelCrystalLongIdle();
+        _stateMachine.SetContinuousState(PetContinuousState.Idle);
+        PlayResolvedContinuousAnimation();
+        _logger.Info(
+            "animation.crystal_long_idle_wake_completed",
+            "Clicked wake sequence completed and the idle clock was reset by user input.");
+    }
+
+    private void HideCrystalLongIdleDecoration()
+    {
+        _crystalLongIdleDecorationPlayer?.Stop();
+        CrystalLongIdleDecorationLayer.Visibility = Visibility.Collapsed;
+        CrystalLongIdleDecorationImage.Source = null;
+        CrystalLongIdleDecorationImage.RenderTransform = Transform.Identity;
+    }
+
+    private void CancelCrystalLongIdle()
+    {
+        _crystalLongIdleVariant = null;
+        _crystalSleepDecoration = null;
+        _nextCrystalDecorationSelectionAt = null;
+        _crystalLongIdleHolding = false;
+        _crystalLongIdleWaking = false;
+        _crystalLongIdleWakeRequested = false;
+        HideCrystalLongIdleDecoration();
+    }
+
+    private bool IsClassicCatEarsFullBodyMode() =>
+        _stateMachine.VisualState.SelectedDisplayMode == PetDisplayMode.FullBodyInteractive &&
+        string.Equals(
+            _settings.Appearance.FullBodyStyle,
+            AppearanceOptionIds.FullBodyClassicCatEars,
+            StringComparison.Ordinal);
+
+    private bool IsCrystalDressFullBodyMode() =>
+        _stateMachine.VisualState.SelectedDisplayMode == PetDisplayMode.FullBodyInteractive &&
+        string.Equals(
+            _settings.Appearance.FullBodyStyle,
+            AppearanceOptionIds.FullBodyCrystalDress,
+            StringComparison.Ordinal);
+
+    private IdleSceneProfile ResolveIdleSceneProfile() =>
+        IsClassicCatEarsFullBodyMode()
+            ? IdleSceneProfile.ClassicCatEars
+            : IsCrystalDressFullBodyMode()
+                ? IdleSceneProfile.CrystalDress
+                : IdleSceneProfile.NoMediumIdle;
+
+    private void RestoreIdleWhenHeheIsNotEligible()
+    {
+        TimeSpan? idleDuration = _userIdleTimeSource.GetIdleDuration();
+        if (idleDuration is null)
+        {
+            return;
+        }
+
+        PetContinuousState currentState = _stateMachine.CurrentContinuousState;
+        IdleSceneDecision decision = IdleSceneResolver.Resolve(
+            idleDuration.Value,
+            currentState,
+            ResolveIdleSceneProfile(),
+            FishingCountdownElapsed);
+        if (decision.ChangesStateFrom(currentState))
+        {
+            _fishingCountdownStartedTimestamp = null;
+            _stateMachine.SetContinuousState(decision.TargetState);
+        }
+    }
+
+    private void PlayResolvedContinuousAnimation(bool preserveVisualTransition = false)
+    {
+        if (_stateMachine.CurrentContinuousState != PetContinuousState.Sleeping &&
+            IsCrystalLongIdleActive)
+        {
+            CancelCrystalLongIdle();
+        }
+        ResetBodyReactionMirror();
+        PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
+        if (!plan.IsVisible || plan.AnimationId is null)
+        {
+            _animationPlayer?.Stop();
+            PetImage.Visibility = Visibility.Collapsed;
+            FallbackSurface.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        PlayAnimation(plan.AnimationId, preserveVisualTransition: preserveVisualTransition);
+        if (!preserveVisualTransition)
+        {
+            _bodyReactionMotion.PlayFor(plan.AnimationId);
+        }
+    }
+
+    private async Task TransitionToResolvedContinuousAnimationAsync(
+        string completionEvent,
+        Action? afterTransition = null,
+        DesktopRectangle? dragReleaseBounds = null)
+    {
+        if (_animationPlayer is null || _animationCatalog is null || _isClosing)
+        {
+            PlayResolvedContinuousAnimation();
+            afterTransition?.Invoke();
+            return;
+        }
+
+        PetPlaybackPlan target = _stateMachine.Resolve(DateTimeOffset.Now);
+        if (!dragReleaseBounds.HasValue && !_visualSwapTransition.IsActive &&
+            !_bodyReactionMirrorActive && target.Source == PlaybackPlanSource.Continuous &&
+            target.AnimationId == _animationPlayer.CurrentAnimationId &&
+            PetImage.Visibility == Visibility.Visible)
+        {
+            // A media state/glyph update need not change the picture (music animation: off).
+            // Keep the frame, motion clock and opacity when the resolved picture is unchanged.
+            afterTransition?.Invoke();
+            return;
+        }
+
+        void SwapAnimation()
+        {
+            PlayResolvedContinuousAnimation(preserveVisualTransition: true);
+            if (dragReleaseBounds is DesktopRectangle releaseBounds)
+            {
+                // At the invisible midpoint the restored art defines the geometry.
+                // A fade keeps that geometry unscaled while preserving edge contact.
+                ApplyDragReleasePlacement(releaseBounds);
+            }
+        }
+
+        bool completed = dragReleaseBounds.HasValue
+            ? await _visualSwapTransition.PlayFadeAsync(SwapAnimation)
+            : await _visualSwapTransition.PlayAsync(SwapAnimation);
+        if (completed && !_isClosing)
+        {
+            StartResolvedContinuousMotion();
+            afterTransition?.Invoke();
+            _logger.Info(completionEvent, dragReleaseBounds.HasValue ? "Drag placement fade completed." : "Pulse swap completed.");
+        }
+        else if (!_isClosing)
+        {
+            afterTransition?.Invoke();
+        }
+    }
+
+    private void ApplyDragReleasePlacement(DesktopRectangle releaseBounds)
+    {
+        PointerPoint position = DragReleasePlacement.Resolve(
+            new PointerPoint(Left, Top), releaseBounds, GetPetImageAlphaBoundsInWindow(),
+            GetCurrentWorkArea(), EdgeAlignmentTolerance);
+        Left = position.X;
+        Top = position.Y;
+        UpdateAccessoryLayoutForCurrentPosition();
+    }
+
+    private void StartResolvedContinuousMotion()
+    {
+        PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
+        if (plan.Source == PlaybackPlanSource.Continuous &&
+            plan.AnimationId is string animationId &&
+            _animationPlayer?.CurrentAnimationId == animationId)
+        {
+            _bodyReactionMotion.PlayFor(animationId);
+        }
+    }
+
+    private bool TryEnterEdgeDock()
+    {
+        EdgeDockSide side = _dragEdgeCandidate != EdgeDockSide.None
+            ? _dragEdgeCandidate
+            : ResolveCurrentEdgeDockSide();
+        if (side == EdgeDockSide.None)
+        {
+            return false;
+        }
+
+        StopClassicSpinDance(false, "interaction.spin_docked");
+        if (IsCrystalLongIdleActive) CancelCrystalLongIdle();
+        if (_stateMachine.CurrentContinuousState == PetContinuousState.Sleeping)
+            _stateMachine.SetContinuousState(PetContinuousState.Idle);
+        _sleepHeldAfterDrag = false;
+        _dragEdgeCandidate = EdgeDockSide.None;
+        _edgeDockSide = side;
+        _edgeDockRevealed = false;
+        if (side == EdgeDockSide.Bottom)
+        {
+            ApplyAccessoryLayout(AccessoryLayout.AbovePet);
+        }
+
+        int generation = ++_edgeDockAnimationGeneration;
+        _stateMachine.CancelActiveReaction();
+        _mediaControlsMotion.Hide(animate: false);
+        _trackInfoMotion.Hide(animate: false);
+        SetEdgeMirror(side == EdgeDockSide.Left);
+        EdgeDockHandle.Visibility = Visibility.Collapsed;
+        PlayEdgeDockToward(
+            revealed: false,
+            () =>
+            {
+                if (generation == _edgeDockAnimationGeneration && !_edgeDockRevealed)
+                {
+                    PositionEdgeDock(hidden: true);
+                }
+            });
+        PositionEdgeDock(hidden: false);
+        _logger.Info("window.edge_dock_started", side.ToString());
+        return true;
+    }
+
+    private void RevealEdgeDock()
+    {
+        if (_edgeDockSide == EdgeDockSide.None || _edgeDockRevealed)
+        {
+            return;
+        }
+
+        _edgeDockRevealed = true;
+        ++_edgeDockAnimationGeneration;
+        EdgeDockHandle.Visibility = Visibility.Collapsed;
+        PetImage.IsHitTestVisible = true;
+        PlayEdgeDockToward(revealed: true);
+        PositionEdgeDock(hidden: false);
+        _logger.Info("window.edge_dock_revealed", _edgeDockSide.ToString());
+    }
+
+    private void HideEdgeDock()
+    {
+        if (_edgeDockSide == EdgeDockSide.None || !_edgeDockRevealed)
+        {
+            return;
+        }
+
+        _edgeDockRevealed = false;
+        int generation = ++_edgeDockAnimationGeneration;
+        EdgeDockHandle.Visibility = Visibility.Collapsed;
+        PlayEdgeDockToward(
+            revealed: false,
+            () =>
+            {
+                if (generation == _edgeDockAnimationGeneration && !_edgeDockRevealed)
+                {
+                    PositionEdgeDock(hidden: true);
+                }
+            });
+        PositionEdgeDock(hidden: false);
+        _logger.Info("window.edge_dock_hidden", _edgeDockSide.ToString());
+    }
+
+    private void PlayEdgeDockToward(bool revealed, Action? completed = null)
+    {
+        if (_edgeDockSide == EdgeDockSide.None)
+        {
+            return;
+        }
+
+        string animationId = GetEdgeDockAnimation(_edgeDockSide);
+        (int hiddenFrame, int hideStartFrame, int revealEndFrame) =
+            GetEdgeDockFrames(_edgeDockSide);
+        int? currentFrame = _animationPlayer?.CurrentAnimationId == animationId
+            ? _animationPlayer.CurrentFrameIndex
+            : null;
+        EdgeDockFrameRoute route = EdgeDockFrameRouteResolver.Resolve(
+            revealed,
+            currentFrame,
+            hiddenFrame,
+            hideStartFrame,
+            revealEndFrame);
+
+        PlayAnimationRange(
+            animationId,
+            route.StartFrameIndex,
+            route.EndFrameIndex,
+            completed,
+            GetEdgeDockPlaybackRate(_edgeDockSide, revealed));
+    }
+
+    private void ShowEdgeDockHideStartFrame(EdgeDockSide side)
+    {
+        (_, int hideStartFrame, _) = GetEdgeDockFrames(side);
+        ShowAnimationFrame(GetEdgeDockAnimation(side), hideStartFrame);
+    }
+
+    private void PositionEdgeDock(bool hidden)
+    {
+        if (_edgeDockSide == EdgeDockSide.None)
+        {
+            return;
+        }
+
+        ConfigureEdgeDockHandle(hidden);
+        UpdateLayout();
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle localPet = hidden
+            ? GetPetImageVisibleBoundsInWindow()
+            : GetPetImageBoundsInWindow();
+        switch (_edgeDockSide)
+        {
+            case EdgeDockSide.Left:
+                Left = workArea.Left - localPet.Left - EdgeDockAlphaInset;
+                Top = Clamp(Top, workArea.Top - localPet.Top, workArea.Bottom - localPet.Bottom);
+                break;
+            case EdgeDockSide.Right:
+                Left = workArea.Right - localPet.Right + EdgeDockAlphaInset;
+                Top = Clamp(Top, workArea.Top - localPet.Top, workArea.Bottom - localPet.Bottom);
+                break;
+            case EdgeDockSide.Bottom:
+                Left = Clamp(Left, workArea.Left - localPet.Left, workArea.Right - localPet.Right);
+                Top = workArea.Bottom - localPet.Bottom + EdgeDockAlphaInset;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    private void ConfigureEdgeDockHandle(bool hidden)
+    {
+        if (!hidden || _edgeDockSide == EdgeDockSide.None)
+        {
+            EdgeDockHandle.Visibility = Visibility.Collapsed;
+            PetImage.Clip = null;
+            PetImage.IsHitTestVisible = true;
+            return;
+        }
+
+        PetImage.IsHitTestVisible = false;
+        double petWidth = Math.Max(1, PetImage.ActualWidth);
+        double petHeight = Math.Max(1, PetImage.ActualHeight);
+        if (_edgeDockSide == EdgeDockSide.Bottom)
+        {
+            PetImage.Clip = new RectangleGeometry(new Rect(
+                petWidth * 0.20,
+                petHeight * 0.86,
+                petWidth * 0.60,
+                petHeight * 0.14));
+        }
+        else
+        {
+            PetImage.Clip = new RectangleGeometry(new Rect(
+                petWidth * SideDockWallClipLeftRatio,
+                0,
+                petWidth * SideDockWallClipWidthRatio,
+                petHeight));
+        }
+
+        UpdateLayout();
+        DesktopRectangle handleBounds = GetPetImageVisibleBoundsInWindow();
+        EdgeDockHandle.Width = handleBounds.Width;
+        EdgeDockHandle.Height = handleBounds.Height;
+        EdgeDockHandle.HorizontalAlignment = WpfHorizontalAlignment.Left;
+        EdgeDockHandle.VerticalAlignment = VerticalAlignment.Top;
+        EdgeDockHandle.Margin = new Thickness(
+            handleBounds.Left,
+            handleBounds.Top,
+            0,
+            0);
+        EdgeDockHandle.Visibility = Visibility.Visible;
+    }
+
+    private Guid AcquireTransientTopmost()
+    {
+        Guid token = Guid.NewGuid();
+        _transientTopmostRequests.Add(token);
+        ApplyEffectiveTopmost();
+        return token;
+    }
+
+    private void ReleaseTransientTopmost(Guid? token)
+    {
+        if (token is Guid value && _transientTopmostRequests.Remove(value))
+        {
+            ApplyEffectiveTopmost();
+        }
+    }
+
+    private void ApplyEffectiveTopmost()
+    {
+        bool permanentTopmost = _permanentTopmost;
+        bool effectiveTopmost = permanentTopmost || _transientTopmostRequests.Count > 0;
+        Topmost = effectiveTopmost;
+        nint handle = new WindowInteropHelper(this).Handle;
+        if (handle != 0 &&
+            !WindowsWindowZOrder.SetTopmostWithoutActivation(handle, effectiveTopmost) &&
+            !permanentTopmost &&
+            _transientTopmostRequests.Count > 0)
+        {
+            _transientTopmostRequests.Clear();
+            Topmost = false;
+            _logger.Info("window.transient_topmost_rejected", "No-activate z-order request failed closed.");
+        }
+    }
+
+    private void CleanupReplacedGenshinPresentation()
+    {
+        Point? restorePosition = null;
+        if (_genshinLaunchReactionToken is not null)
+        {
+            ReleaseTransientTopmost(_genshinLaunchTopmostToken);
+            _genshinLaunchReactionToken = null;
+            _genshinLaunchTopmostToken = null;
+        }
+        if (_genshinCameoReactionToken is not null)
+        {
+            ReleaseTransientTopmost(_genshinCameoTopmostToken);
+            restorePosition = _genshinCameoRestorePosition;
+            _genshinCameoReactionToken = null;
+            _genshinCameoTopmostToken = null;
+            _genshinCameoRestorePosition = null;
+        }
+
+        if (restorePosition is Point point)
+        {
+            RestoreWindowPosition(point);
+        }
+    }
+
+    private void CleanupReplacedMessageNotificationPresentation()
+    {
+        HideMessageNotification();
+        if (_messageNotificationReactionToken is null)
+        {
+            return;
+        }
+
+        ReleaseTransientTopmost(_messageNotificationTopmostToken);
+        _messageNotificationReactionToken = null;
+        _messageNotificationTopmostToken = null;
+        _activeMessageProvider = null;
+    }
+
+    private void FinishMessageNotificationPresentation(Guid reactionToken)
+    {
+        if (_messageNotificationReactionToken != reactionToken)
+        {
+            return;
+        }
+
+        ReleaseTransientTopmost(_messageNotificationTopmostToken);
+        _messageNotificationReactionToken = null;
+        _messageNotificationTopmostToken = null;
+        _activeMessageProvider = null;
+        HideMessageNotification();
+        _logger.Info("notification.reaction_completed", "Transient topmost was released.");
+    }
+
+    private void CancelMessageNotificationPresentation(bool restoreContinuousAnimation)
+    {
+        bool canceledActiveReaction =
+            _messageNotificationReactionToken is Guid token &&
+            _stateMachine.ActiveReactionToken == token;
+        if (canceledActiveReaction)
+        {
+            _stateMachine.CancelActiveReaction();
+        }
+
+        CleanupReplacedMessageNotificationPresentation();
+        if (canceledActiveReaction && restoreContinuousAnimation && !_isClosing)
+        {
+            _bodyReactionMotion.Cancel();
+            _ = TransitionToResolvedContinuousAnimationAsync(
+                "notification.presentation_cancelled");
+        }
+    }
+
+    private Point? FinishGenshinPresentation(Guid reactionToken)
+    {
+        if (_genshinLaunchReactionToken == reactionToken)
+        {
+            ReleaseTransientTopmost(_genshinLaunchTopmostToken);
+            _genshinLaunchReactionToken = null;
+            _genshinLaunchTopmostToken = null;
+            _logger.Info("genshin.launch_reaction_completed", "Transient topmost was released.");
+        }
+
+        if (_genshinCameoReactionToken != reactionToken)
+        {
+            return null;
+        }
+
+        ReleaseTransientTopmost(_genshinCameoTopmostToken);
+        Point? restorePosition = _genshinCameoRestorePosition;
+        _genshinCameoReactionToken = null;
+        _genshinCameoTopmostToken = null;
+        _genshinCameoRestorePosition = null;
+        _logger.Info("genshin.cameo_completed", "Original position and topmost preference will be restored.");
+        return restorePosition;
+    }
+
+    private void CancelGenshinPresentations(bool restoreContinuousAnimation)
+    {
+        bool canceledActiveReaction =
+            _stateMachine.ActiveReactionToken == _genshinLaunchReactionToken ||
+            _stateMachine.ActiveReactionToken == _genshinCameoReactionToken;
+        if (canceledActiveReaction)
+        {
+            _stateMachine.CancelActiveReaction();
+        }
+
+        ReleaseTransientTopmost(_genshinLaunchTopmostToken);
+        ReleaseTransientTopmost(_genshinCameoTopmostToken);
+        Point? restorePosition = _genshinCameoRestorePosition;
+        _genshinLaunchReactionToken = null;
+        _genshinLaunchTopmostToken = null;
+        _genshinCameoReactionToken = null;
+        _genshinCameoTopmostToken = null;
+        _genshinCameoRestorePosition = null;
+        if (restorePosition is Point point)
+        {
+            RestoreWindowPosition(point);
+        }
+
+        if (canceledActiveReaction && restoreContinuousAnimation && !_isClosing)
+        {
+            _bodyReactionMotion.Cancel();
+            _ = TransitionToResolvedContinuousAnimationAsync("genshin.presentation_cancelled");
+        }
+    }
+
+    private void RestoreWindowPosition(Point position)
+    {
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        Left = Clamp(position.X, workArea.Left, workArea.Right - ActualWidth);
+        double minimumTop = _accessoryLayout == AccessoryLayout.BelowPet
+            ? workArea.Top - Math.Max(0, GetPetImageAlphaBoundsInWindow().Top)
+            : workArea.Top;
+        Top = Clamp(position.Y, minimumTop, workArea.Bottom - ActualHeight);
+        UpdateAccessoryLayoutForCurrentPosition();
+    }
+
+    private void UpdateAccessoryLayoutForCurrentPosition(bool preservePetPosition = true)
+    {
+        if (!IsLoaded || PetImage.ActualHeight <= 0)
+        {
+            return;
+        }
+
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle petBounds = GetStableStageDesktopBounds();
+        bool useAbovePetLayout = _edgeDockSide == EdgeDockSide.Bottom ||
+            EdgeDockResolver.IsNearBottom(
+                petBounds,
+                workArea,
+                EdgeAccessoryLayoutDistance);
+        bool useBelowPetLayout = !useAbovePetLayout &&
+            EdgeDockResolver.IsNearTop(
+                petBounds,
+                workArea,
+                EdgeAccessoryLayoutDistance + _feedbackSlotHeight);
+        AccessoryLayout layout = useAbovePetLayout
+            ? AccessoryLayout.AbovePet
+            : useBelowPetLayout
+                ? AccessoryLayout.BelowPet
+                : AccessoryLayout.Split;
+        bool shouldPreservePetPosition = preservePetPosition || layout != AccessoryLayout.BelowPet;
+        ApplyAccessoryLayout(layout, shouldPreservePetPosition);
+    }
+
+    private void ApplyAccessoryLayout(
+        AccessoryLayout layout,
+        bool preservePetPosition = true,
+        bool force = false)
+    {
+        if (_accessoryLayout == layout && !force)
+        {
+            return;
+        }
+
+        UpdateLayout();
+        double petBottomBefore = Top + GetStableStageBoundsInWindow().Bottom;
+        _accessoryLayout = layout;
+        Height = GetAnimationStageSizing().Height;
+        switch (layout)
+        {
+            case AccessoryLayout.AbovePet:
+                PetVisual.Margin = new Thickness(8, 118 + _feedbackSlotHeight, 8, 8);
+                MusicTransitionFlash.Margin = PetVisual.Margin;
+                TrackInfoBubble.VerticalAlignment = VerticalAlignment.Top;
+                TrackInfoBubble.Margin = new Thickness(5, 7, 5, 0);
+                MediaControls.VerticalAlignment = VerticalAlignment.Top;
+                MediaControls.Margin = new Thickness(0, 60 + _feedbackSlotHeight, 0, 0);
+                FeedbackBubble.VerticalAlignment = VerticalAlignment.Top;
+                FeedbackBubble.Margin = new Thickness(5, 57, 5, 0);
+                break;
+            case AccessoryLayout.BelowPet:
+                PetVisual.Margin = new Thickness(8, 8, 8, 118 + _feedbackSlotHeight);
+                MusicTransitionFlash.Margin = PetVisual.Margin;
+                TrackInfoBubble.VerticalAlignment = VerticalAlignment.Bottom;
+                TrackInfoBubble.Margin = new Thickness(5, 0, 5, 60 + _feedbackSlotHeight);
+                MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
+                MediaControls.Margin = new Thickness(0, 0, 0, 7);
+                FeedbackBubble.VerticalAlignment = VerticalAlignment.Bottom;
+                FeedbackBubble.Margin = new Thickness(5, 0, 5, 60);
+                break;
+            case AccessoryLayout.Split:
+                PetVisual.Margin = new Thickness(8, 60 + _feedbackSlotHeight, 8, 66);
+                MusicTransitionFlash.Margin = PetVisual.Margin;
+                TrackInfoBubble.VerticalAlignment = VerticalAlignment.Top;
+                TrackInfoBubble.Margin = new Thickness(5, 6, 5, 0);
+                MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
+                MediaControls.Margin = new Thickness(0, 0, 0, 7);
+                FeedbackBubble.VerticalAlignment = VerticalAlignment.Top;
+                FeedbackBubble.Margin = new Thickness(5, 56, 5, 0);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(layout));
+        }
+
+        UpdateLayout();
+        if (preservePetPosition)
+        {
+            double petBottomAfter = Top + GetStableStageBoundsInWindow().Bottom;
+            double topAdjustment = petBottomBefore - petBottomAfter;
+            Top += topAdjustment;
+            if (_isWindowDragging)
+            {
+                _dragStartTop += topAdjustment;
+            }
+        }
+
+        _logger.Info(
+            "window.accessory_layout_changed",
+            layout.ToString());
+    }
+
+    private void SnapVisiblePetInsideWorkArea()
+    {
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle pet = GetStableStageDesktopBounds();
+        if (pet.Left < workArea.Left)
+        {
+            Left += workArea.Left - pet.Left;
+        }
+        else if (pet.Right > workArea.Right)
+        {
+            Left -= pet.Right - workArea.Right;
+        }
+
+        pet = GetStableStageDesktopBounds();
+        if (pet.Top < workArea.Top)
+        {
+            Top += workArea.Top - pet.Top;
+        }
+        else if (pet.Bottom > workArea.Bottom)
+        {
+            Top -= pet.Bottom - workArea.Bottom;
+        }
+    }
+
+    private DesktopRectangle GetDragIntentPetDesktopBounds()
+    {
+        if (_classicDragExpansionStarted &&
+            TryGetAnimationAlphaBoundsOnDesktop(
+                _stateMachine.VisualState.FullBodyAnimationId,
+                out DesktopRectangle fullBodyBounds))
+        {
+            return fullBodyBounds;
+        }
+
+        DesktopRectangle local =
+            _dragIntentPetBoundsInWindow ?? GetPetImageAlphaBoundsInWindow();
+        return new DesktopRectangle(
+            Left + local.Left,
+            Top + local.Top,
+            local.Width,
+            local.Height);
+    }
+
+    private DesktopRectangle GetPetImageDesktopBounds()
+    {
+        DesktopRectangle local = GetPetImageAlphaBoundsInWindow();
+        return new DesktopRectangle(
+            Left + local.Left,
+            Top + local.Top,
+            local.Width,
+            local.Height);
+    }
+
+    private (bool AlignLeft, bool AlignRight, bool AlignBottom, DesktopRectangle WorkArea)
+        CaptureStageEdgeAlignment()
+    {
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle pet = GetStableStageDesktopBounds();
+        return (
+            Math.Abs(pet.Left - workArea.Left) <= EdgeAlignmentTolerance,
+            Math.Abs(pet.Right - workArea.Right) <= EdgeAlignmentTolerance,
+            Math.Abs(pet.Bottom - workArea.Bottom) <= EdgeAlignmentTolerance,
+            workArea);
+    }
+
+    private void RestoreStageEdgeAlignment(
+        bool alignLeft,
+        bool alignRight,
+        bool alignBottom,
+        DesktopRectangle workArea)
+    {
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            return;
+        }
+
+        DesktopRectangle local = GetStableStageBoundsInWindow();
+        if (alignLeft)
+        {
+            Left = workArea.Left - local.Left;
+        }
+        else if (alignRight)
+        {
+            Left = workArea.Right - local.Right;
+        }
+
+        if (alignBottom)
+        {
+            Top = workArea.Bottom - local.Bottom;
+        }
+    }
+
+    private DesktopRectangle GetPetImageBoundsInWindow()
+    {
+        UpdateLayout();
+        double width = PetImage.ActualWidth > 0 ? PetImage.ActualWidth : PetImage.Width;
+        double height = PetImage.ActualHeight > 0 ? PetImage.ActualHeight : PetImage.Height;
+        Rect transformed = PetImage
+            .TransformToAncestor(this)
+            .TransformBounds(new Rect(0, 0, width, height));
+        return new DesktopRectangle(
+            transformed.Left,
+            transformed.Top,
+            transformed.Width,
+            transformed.Height);
+    }
+
+    private DesktopRectangle GetPetImageAlphaBoundsInWindow()
+    {
+        DesktopRectangle imageBounds = GetPetImageBoundsInWindow();
+        if (_animationCatalog is null ||
+            _animationPlayer?.CurrentAnimationId is not string animationId)
+        {
+            return imageBounds;
+        }
+
+        try
+        {
+            AnimationAssetManifest manifest = _animationCatalog.GetRequired(animationId);
+            if (!TryGetAlphaBounds(manifest, out Int32Rect alphaBounds))
+            {
+                return imageBounds;
+            }
+
+            double imageWidth = PetImage.ActualWidth > 0 ? PetImage.ActualWidth : PetImage.Width;
+            double imageHeight = PetImage.ActualHeight > 0 ? PetImage.ActualHeight : PetImage.Height;
+            Rect sourceBounds = new(
+                alphaBounds.X * imageWidth / manifest.FrameWidth,
+                alphaBounds.Y * imageHeight / manifest.FrameHeight,
+                alphaBounds.Width * imageWidth / manifest.FrameWidth,
+                alphaBounds.Height * imageHeight / manifest.FrameHeight);
+            Rect transformed = PetImage.TransformToAncestor(this).TransformBounds(sourceBounds);
+            return new DesktopRectangle(
+                transformed.Left,
+                transformed.Top,
+                transformed.Width,
+                transformed.Height);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or KeyNotFoundException)
+        {
+            return imageBounds;
+        }
+    }
+
+    private bool TryGetAnimationAlphaBoundsOnDesktop(
+        string animationId,
+        out DesktopRectangle bounds)
+    {
+        bounds = default;
+        if (_animationCatalog is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            AnimationAssetManifest manifest = _animationCatalog.GetRequired(animationId);
+            if (!TryGetAlphaBounds(manifest, out Int32Rect alphaBounds))
+            {
+                return false;
+            }
+
+            UpdateLayout();
+            double displayScale = _settings.Appearance.DisplayScalePercent / 100.0;
+            double displayWidth = manifest.DisplayWidth * displayScale;
+            double displayHeight = manifest.DisplayHeight * displayScale;
+            AnimationStageSizing stage = GetAnimationStageSizing();
+            double targetWindowWidth = stage.Width;
+            double targetWindowHeight = stage.Height;
+            double currentWidth = ActualWidth > 0 ? ActualWidth : Width;
+            double currentHeight = ActualHeight > 0 ? ActualHeight : Height;
+            double targetWindowLeft = Left + currentWidth / 2 - targetWindowWidth / 2;
+            double targetWindowTop = Top + currentHeight - targetWindowHeight;
+            double imageLeft = targetWindowLeft + (targetWindowWidth - displayWidth) / 2;
+            double imageTop = targetWindowTop + targetWindowHeight - PetVisual.Margin.Bottom - displayHeight;
+            bounds = new DesktopRectangle(
+                imageLeft + alphaBounds.X * displayWidth / manifest.FrameWidth,
+                imageTop + alphaBounds.Y * displayHeight / manifest.FrameHeight,
+                alphaBounds.Width * displayWidth / manifest.FrameWidth,
+                alphaBounds.Height * displayHeight / manifest.FrameHeight);
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is InvalidOperationException or KeyNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetAlphaBounds(
+        AnimationAssetManifest manifest,
+        out Int32Rect bounds)
+    {
+        bounds = default;
+        if (manifest.AlphaBounds.Count != 4 ||
+            manifest.FrameWidth <= 0 ||
+            manifest.FrameHeight <= 0 ||
+            manifest.AlphaBounds[2] <= manifest.AlphaBounds[0] ||
+            manifest.AlphaBounds[3] <= manifest.AlphaBounds[1])
+        {
+            return false;
+        }
+
+        int left = Numeric.Clamp(manifest.AlphaBounds[0], 0, manifest.FrameWidth - 1);
+        int top = Numeric.Clamp(manifest.AlphaBounds[1], 0, manifest.FrameHeight - 1);
+        int right = Numeric.Clamp(manifest.AlphaBounds[2], left + 1, manifest.FrameWidth);
+        int bottom = Numeric.Clamp(manifest.AlphaBounds[3], top + 1, manifest.FrameHeight);
+        bounds = new Int32Rect(left, top, right - left, bottom - top);
+        return true;
+    }
+
+    private DesktopRectangle GetPetImageVisibleBoundsInWindow()
+    {
+        UpdateLayout();
+        Rect sourceBounds = PetImage.Clip?.Bounds ?? new Rect(
+            0,
+            0,
+            PetImage.ActualWidth > 0 ? PetImage.ActualWidth : PetImage.Width,
+            PetImage.ActualHeight > 0 ? PetImage.ActualHeight : PetImage.Height);
+        Rect transformed = PetImage
+            .TransformToAncestor(this)
+            .TransformBounds(sourceBounds);
+        return new DesktopRectangle(
+            transformed.Left,
+            transformed.Top,
+            transformed.Width,
+            transformed.Height);
+    }
+
+    private DesktopRectangle GetCurrentWorkArea()
+    {
+        try
+        {
+            DesktopRectangle pixels = _windowWorkAreaProvider.GetForWindow(new WindowInteropHelper(this).Handle);
+            Point start = ConvertScreenPixelsToDips(new PointerPoint(pixels.Left, pixels.Top));
+            Point end = ConvertScreenPixelsToDips(new PointerPoint(pixels.Right, pixels.Bottom));
+            return new DesktopRectangle(start.X, start.Y, end.X - start.X, end.Y - start.Y);
+        }
+        catch (InvalidOperationException)
+        {
+            Rect fallback = SystemParameters.WorkArea;
+            return new DesktopRectangle(fallback.Left, fallback.Top, fallback.Width, fallback.Height);
+        }
+    }
+
+    private BodyHitMap LoadBodyHitMap(
+        string fileName,
+        string expectedAnimationId,
+        BodyHitMap fallback,
+        string styleName)
+    {
+        string path = RuntimeAssetLocator.BodyHitMap(fileName);
+        try
+        {
+            BodyHitMap map = BodyHitMapJsonParser.Parse(
+                File.ReadAllText(path),
+                expectedAnimationId);
+            _logger.Info(
+                "interaction.body_hit_map_loaded",
+                $"Style={styleName}; Regions={map.Regions.Count}; Geometry=Polygon.");
+            return map;
+        }
+        catch (Exception exception) when (
+            exception is IOException or
+            UnauthorizedAccessException or
+            System.Text.Json.JsonException or
+            InvalidOperationException or
+            FormatException or
+            OverflowException or
+            ArgumentException)
+        {
+            _logger.Error("interaction.body_hit_map_failed", exception);
+            return fallback;
+        }
+    }
+
+    private BodyHitMap ResolveBodyHitMap(string fullBodyAnimation) => fullBodyAnimation switch
+    {
+        AppearanceOptionIds.CrystalDressAnimation => _crystalBodyHitMap,
+        AppearanceOptionIds.ClassicCatEarsAnimation => _classicBodyHitMap,
+        _ => BodyHitMap.FullBodyDefault,
+    };
+
+    private BodyInteractionDecision ResolveBodyInteraction(
+        BodyRegionId region,
+        DateTimeOffset now,
+        double normalizedPointerX) =>
+        AppearanceOptionIds.ResolveFullBodyInteractionMode(
+            _settings.Appearance.FullBodyStyle) switch
+        {
+            FullBodyInteractionMode.SeamlessMotion =>
+                _crystalBodyInteractionResolver.Resolve(region),
+            FullBodyInteractionMode.ExpressionPack =>
+                _bodyInteractionResolver.Resolve(region, now, normalizedPointerX),
+            _ => new BodyInteractionDecision(BodyInteractionDecisionKind.NoAction),
+        };
+
+    private BodyInteractionDecision ResolvePettingInteraction() =>
+        AppearanceOptionIds.ResolveFullBodyInteractionMode(
+            _settings.Appearance.FullBodyStyle) switch
+        {
+            FullBodyInteractionMode.SeamlessMotion =>
+                _crystalBodyInteractionResolver.ResolvePetting(),
+            FullBodyInteractionMode.ExpressionPack =>
+                _bodyInteractionResolver.ResolvePetting(),
+            _ => new BodyInteractionDecision(BodyInteractionDecisionKind.NoAction),
+        };
+
+    private void ApplyAppearancePreferences(AppearancePreferences preferences, bool save = true)
+    {
+        AppearancePreferences normalized = AppearancePreferences.Normalize(preferences);
+        string previousFullBodyAnimation = _stateMachine.VisualState.FullBodyAnimationId;
+        int previousScale = _settings.Appearance.DisplayScalePercent;
+        _settings = _settings with { Appearance = normalized };
+
+        string fullBodyAnimation = AppearanceOptionIds.ResolveFullBodyAnimation(
+            normalized.FullBodyStyle);
+        _stateMachine.SetFullBodyAnimation(fullBodyAnimation);
+        _stateMachine.SetFullBodyInteractionsEnabled(
+            AppearanceOptionIds.HasFullBodyInteractions(normalized.FullBodyStyle));
+        _bodyHitMap = ResolveBodyHitMap(fullBodyAnimation);
+        RestoreIdleWhenHeheIsNotEligible();
+
+        bool appearanceChanged = !string.Equals(
+            previousFullBodyAnimation,
+            fullBodyAnimation,
+            StringComparison.Ordinal);
+        if (appearanceChanged)
+        {
+            if (IsCrystalLongIdleActive)
+            {
+                CancelCrystalLongIdle();
+                _stateMachine.SetContinuousState(PetContinuousState.Idle);
+            }
+            _bodyInteractionResolver.ResetConsecutivePairs();
+        }
+        bool scaleChanged = previousScale != normalized.DisplayScalePercent;
+        if (appearanceChanged &&
+            _stateMachine.VisualState.SelectedDisplayMode == PetDisplayMode.FullBodyInteractive &&
+            _stateMachine.CurrentContinuousState == PetContinuousState.Idle &&
+            _stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync("settings.appearance_changed");
+        }
+        else if (scaleChanged)
+        {
+            ApplyCurrentDisplayScale();
+        }
+
+        UpdateBodyHitDebugOverlay();
+        _trayIcon?.RefreshChecks();
+        _logger.Info(
+            "settings.appearance_applied",
+            $"FullBodyStyle={normalized.FullBodyStyle}; BunEatingStyle={normalized.BunEatingStyle}; ScalePercent={normalized.DisplayScalePercent}.");
+        if (_persistSettings && save)
+        {
+            _ = SaveSettingsAsync("settings.appearance_saved", "Appearance preferences saved.");
+        }
+    }
+
+    private void ApplyMediaPreferences(MediaPreferences preferences, bool save = true)
+    {
+        MediaPreferences normalized = MediaPreferences.Normalize(preferences);
+        bool musicAnimationChanged = !string.Equals(
+            _settings.Media.MusicAnimationSelection,
+            normalized.MusicAnimationSelection,
+            StringComparison.Ordinal) ||
+            _settings.Media.EnableLuoTianyiSingingEasterEgg !=
+                normalized.EnableLuoTianyiSingingEasterEgg;
+        _settings = _settings with { Media = normalized };
+        if (musicAnimationChanged &&
+            _stateMachine.CurrentContinuousState == PetContinuousState.MusicPlaying)
+        {
+            string selectedAnimation = _musicAnimationSelector.Select(
+                normalized.MusicAnimationSelection,
+                _lastTrackSnapshot.Artist,
+                normalized.EnableLuoTianyiSingingEasterEgg);
+            _stateMachine.SetMusicAnimation(selectedAnimation);
+            if (_stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+            {
+                _ = TransitionToResolvedContinuousAnimationAsync(
+                    "settings.music_animation_changed");
+            }
+        }
+
+        _logger.Info(
+            "settings.media_applied",
+            $"MusicAnimationSelection={normalized.MusicAnimationSelection}; " +
+            $"SingingEasterEgg={normalized.EnableLuoTianyiSingingEasterEgg}.");
+        if (_persistSettings && save)
+        {
+            _ = SaveSettingsAsync("settings.media_saved", "Media preferences saved.");
+        }
+    }
+
+    private void SetDisplayScalePercent(int percent, bool save)
+    {
+        int normalized = Numeric.Clamp(
+            percent,
+            AppearancePreferences.MinimumDisplayScalePercent,
+            AppearancePreferences.MaximumDisplayScalePercent);
+        if (_settings.Appearance.DisplayScalePercent == normalized)
+        {
+            if (save && _persistSettings)
+            {
+                _ = SaveSettingsAsync("settings.display_scale_saved", "Display scale preference saved.");
+            }
+            return;
+        }
+
+        _settings = _settings with
+        {
+            Appearance = _settings.Appearance with { DisplayScalePercent = normalized },
+        };
+        ApplyCurrentDisplayScale();
+        _logger.Info("window.display_scale_changed", $"ScalePercent={normalized}.");
+        if (save && _persistSettings)
+        {
+            _ = SaveSettingsAsync("settings.display_scale_saved", "Display scale preference saved.");
+        }
+    }
+
+    private void ApplyCurrentDisplayScale()
+    {
+        if (_animationCatalog is null || _animationPlayer?.CurrentAnimationId is not string animationId)
+        {
+            return;
+        }
+
+        try
+        {
+            (bool alignLeft, bool alignRight, bool alignBottom, DesktopRectangle workArea) =
+                CaptureStageEdgeAlignment();
+            ApplyAnimationManifest(_animationCatalog.GetRequired(animationId));
+            if (_edgeDockSide != EdgeDockSide.None)
+            {
+                PositionEdgeDock(hidden: !_edgeDockRevealed);
+            }
+            else
+            {
+                RestoreStageEdgeAlignment(
+                    alignLeft,
+                    alignRight,
+                    alignBottom,
+                    workArea);
+                SnapVisiblePetInsideWorkArea();
+                UpdateAccessoryLayoutForCurrentPosition();
+            }
+        }
+        catch (KeyNotFoundException)
+        {
+            // The frame player owns the normal missing-asset fallback path.
+        }
+    }
+
+    private void ApplyWindowPreferences(
+        WindowPreferences preferences,
+        bool startWithWindows, bool save = true)
+    {
+        SetPermanentTopmost(preferences.AlwaysOnTop, save: false);
+        SetStartupEnabled(startWithWindows, save: false);
+        _settings = _settings with
+        {
+            Window = _settings.Window with
+            {
+                AlwaysOnTop = _permanentTopmost,
+                StartWithWindows = _startupRegistrationService?.IsEnabled ?? false,
+                Left = Left,
+                Top = Top,
+            },
+        };
+        if (_persistSettings && save)
+        {
+            _ = SaveSettingsAsync("settings.window_saved", "Window preferences saved.");
+        }
+    }
+
+    private async Task SaveSettingsAsync(string eventName, string message)
+    {
+        try
+        {
+            await _settingsStore.SaveAsync(_settings);
+            _logger.Info(eventName, message);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.Error("settings.save_failed", exception);
+            ShowFeedbackBubble("设置暂时没有保存成功，请稍后再试");
+        }
+    }
+
+    private void OnRootMouseEnter(object sender, MouseEventArgs e)
+    {
+        if (!_isClosing)
+        {
+            UpdatePetCursor(ToPointerPoint(e.GetPosition(this)));
+        }
+
+        if (_bunChaseActive)
+        {
+            HideAccessorySurfacesForBunChase();
+            return;
+        }
+
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            RevealEdgeDock();
+            return;
+        }
+
+        if (!CanShowMusicIslands)
+        {
+            HideMusicIslands();
+            return;
+        }
+
+        if (_settings.Media.EnableCloudMusicShortcutControl)
+        {
+            _mediaControlsHideTimer.Stop();
+            _mediaControlsMotion.Show();
+        }
+
+        if (!_isClosing)
+        {
+            _trackInfoHideTimer.Stop();
+            if (_lastTrackSnapshot.HasTrack)
+            {
+                ShowTrackInfo(_lastTrackSnapshot, holdAfterLeave: false);
+            }
+
+            _ = RefreshTrackInfoAsync(showWhenFound: true);
+        }
+    }
+
+    private void OnEdgeDockHandleMouseEnter(object sender, MouseEventArgs e)
+    {
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            RevealEdgeDock();
+            e.Handled = true;
+        }
+    }
+
+    private void OnRootMouseLeave(object sender, MouseEventArgs e)
+    {
+        PetImage.Cursor = null;
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            if (!_isWindowDragging)
+            {
+                HideEdgeDock();
+            }
+
+            return;
+        }
+
+        if (!_previewMediaControls && !CloudMusicVolumePopup.IsOpen)
+        {
+            _mediaControlsHideTimer.Stop();
+            _mediaControlsHideTimer.Start();
+        }
+
+        if (!_previewTrackInfo)
+        {
+            _trackInfoHideTimer.Stop();
+            _trackInfoHideTimer.Interval = AccessoryMouseLeaveDelay;
+            _trackInfoHideTimer.Start();
+        }
+    }
+
+    private void OnMediaControlsHideTimerTick(object? sender, EventArgs e)
+    {
+        _mediaControlsHideTimer.Stop();
+        if (!_previewMediaControls && !IsMouseOver && !CloudMusicVolumePopup.IsOpen)
+        {
+            _mediaControlsMotion.Hide();
+        }
+    }
+
+    private void UpdatePlayPauseGlyph()
+    {
+        bool isPlaying = _musicPlaybackIndicator.IsPlaying;
+        PlayGlyph.Visibility = isPlaying ? Visibility.Collapsed : Visibility.Visible;
+        PauseGlyph.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void TrySendMediaCommand(MediaCommand command)
+    {
+        if (_cloudMusicLaunchWaiting)
+        {
+            ShowPersistentFeedbackBubble("网易云正在启动，等音乐响起后就会自动切换");
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        bool userRequestedPause = command == MediaCommand.TogglePlayPause &&
+            _musicPlaybackIndicator.IsPlaying;
+        MediaCommandSendResult result = _mediaCommandSender.TrySend(command, now);
+        _logger.Info(
+            "media.command_result",
+            $"Command={command}; Status={result.Status}; Delivery={result.DeliveryMethod}.");
+
+        if (!result.WasSent)
+        {
+            string message = result.Status switch
+            {
+                MediaCommandSendStatus.Disabled => "网易云快捷键控制尚未启用",
+                MediaCommandSendStatus.InvalidShortcut => "快捷键设置无效，请检查配置",
+                MediaCommandSendStatus.ProtectedApplicationForeground => "游戏安全模式：这次没有发送快捷键",
+                MediaCommandSendStatus.ForegroundCheckUnavailable => "暂时无法确认前台程序，请稍后再试",
+                MediaCommandSendStatus.KeyboardBusy => "键盘正在使用，请松开按键后再试",
+                MediaCommandSendStatus.RateLimited => "操作太快啦，请稍等一下",
+                MediaCommandSendStatus.SystemRejected => "系统没有接受快捷键，请再试一次",
+                _ => "没有发送快捷键",
+            };
+            ShowFeedbackBubble(message);
+        }
+
+        if (result.WasSent && command == MediaCommand.TogglePlayPause)
+        {
+            _musicPlaybackIndicator.Expect(
+                !userRequestedPause,
+                now,
+                PlaybackIndicatorCommandExpectationWindow);
+            UpdatePlayPauseGlyph();
+        }
+
+        if (result.WasSent && userRequestedPause)
+        {
+            _trackSwitchPlaybackHoldActive = false;
+            _showNextTrackChange = false;
+            _trackSwitchCancellation?.Cancel();
+            _userPauseFastConfirmationUntil = DateTimeOffset.Now + UserPauseFastConfirmationWindow;
+        }
+
+        if (result.WasSent && command is MediaCommand.PreviousTrack or MediaCommand.NextTrack)
+        {
+            _trackSwitchCancellation?.Cancel();
+            _trackSwitchCancellation?.Dispose();
+            _trackSwitchCancellation = new CancellationTokenSource();
+            _trackSwitchInitialIdentity = _lastTrackIdentity;
+            _trackSwitchSawAudioGap = false;
+            _trackSwitchPlaybackHoldActive = true;
+            _showNextTrackChange = true;
+            ShowTrackSwitchPending();
+            _ = MonitorTrackSwitchAsync(_trackSwitchCancellation.Token);
+        }
+
+        if (!result.WasSent && result.Status is not MediaCommandSendStatus.RateLimited)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync(
+                "media.command_failed_without_reaction");
+        }
+    }
+
+    private void UpdatePetCursor(PointerPoint windowPoint)
+    {
+        PointerPoint? normalizedPoint = NormalizeToPetImage(windowPoint);
+        bool isOpaquePixel = normalizedPoint is PointerPoint point && IsOpaquePetPixel(point);
+        PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
+        BodyRegionId? region = isOpaquePixel && plan.BodyRegionInteractionsEnabled
+            ? _bodyHitMap.HitTest(normalizedPoint!.Value)
+            : null;
+        PetImage.Cursor = PetCursorResolver.Resolve(
+            isOpaquePixel,
+            plan.BodyRegionInteractionsEnabled,
+            region) switch
+        {
+            PetCursorKind.HeadPat => _headPatCursor ?? System.Windows.Input.Cursors.Hand,
+            PetCursorKind.Interaction => _petPointerCursor ?? System.Windows.Input.Cursors.Hand,
+            _ => null,
+        };
+    }
+
+    private System.Windows.Input.Cursor? TryLoadCursorAsset(string fileName)
+    {
+        string path = RuntimeAssetLocator.Cursor(fileName);
+        try
+        {
+            return File.Exists(path) ? new System.Windows.Input.Cursor(path) : null;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or IOException or System.ComponentModel.Win32Exception or
+            System.Security.SecurityException)
+        {
+            _logger.Info("cursor.asset_unavailable", $"Asset={fileName}; Error={exception.GetType().Name}.");
+            return null;
+        }
+    }
+
+    private void ApplyMediaControlCursor()
+    {
+        System.Windows.Input.Cursor cursor =
+            _petPointerCursor ?? System.Windows.Input.Cursors.Hand;
+        PreviousTrackButton.Cursor = cursor;
+        TogglePlayPauseButton.Cursor = cursor;
+        NextTrackButton.Cursor = cursor;
+        CloudMusicVolumeButton.Cursor = cursor;
+        CloudMusicVolumeDragSurface.Cursor = cursor;
+    }
+
+    private void HandleTogglePlayPauseRequest()
+    {
+        if (_cloudMusicLaunchWaiting)
+        {
+            ShowPersistentFeedbackBubble("网易云正在启动，等音乐响起后就会自动切换");
+            return;
+        }
+
+        MediaApplicationLaunchResult launchResult =
+            _mediaApplicationLauncher.TryLaunch(_musicTargetProcessName);
+        _logger.Info("media.application_launch_result", $"Status={launchResult.Status}.");
+        if (launchResult.Status == MediaApplicationLaunchStatus.AlreadyRunning)
+        {
+            TrySendMediaCommand(MediaCommand.TogglePlayPause);
+            return;
+        }
+
+        if (launchResult.Status == MediaApplicationLaunchStatus.Started)
+        {
+            BeginCloudMusicLaunchWait();
+            return;
+        }
+
+        string message = launchResult.Status switch
+        {
+            MediaApplicationLaunchStatus.NotFound =>
+                "没有找到网易云音乐，请先确认已经安装",
+            MediaApplicationLaunchStatus.ProtectedApplicationForeground =>
+                "游戏安全模式：这次没有打开网易云",
+            MediaApplicationLaunchStatus.ForegroundCheckUnavailable =>
+                "暂时无法确认前台程序，没有打开网易云",
+            MediaApplicationLaunchStatus.SystemRejected =>
+                "Windows 没能打开网易云音乐，请稍后再试",
+            _ => "网易云音乐暂时无法启动",
+        };
+        ShowFeedbackBubble(message);
+        _ = TransitionToResolvedContinuousAnimationAsync(
+            "media.application_launch_failed_without_reaction");
+    }
+
+    private void BeginCloudMusicLaunchWait()
+    {
+        _cloudMusicLaunchCancellation?.Cancel();
+        _cloudMusicLaunchCancellation?.Dispose();
+        _cloudMusicLaunchCancellation = new CancellationTokenSource();
+        _cloudMusicLaunchWaiting = true;
+        DateTimeOffset now = DateTimeOffset.Now;
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                CloudMusicLaunchWaitingAnimation,
+                ReactionPriority.UserInteraction,
+                now + CloudMusicLaunchTimeout + TimeSpan.FromSeconds(2),
+                "media:cloudmusic-launch"),
+            now);
+        if (outcome.Token is Guid token)
+        {
+            if (outcome.Result == ReactionStartResult.Replaced)
+            {
+                CleanupReplacedGenshinPresentation();
+                CleanupReplacedMessageNotificationPresentation();
+            }
+
+            _cloudMusicLaunchReactionToken = token;
+            _ = _visualSwapTransition.PlayAsync(
+                () => PlayAnimation(
+                    CloudMusicLaunchWaitingAnimation,
+                    preserveVisualTransition: true));
+        }
+        else
+        {
+            _logger.Info("media.application_launch_animation_skipped", outcome.Result.ToString());
+        }
+
+        ShowPersistentFeedbackBubble("正在打开网易云音乐，请稍等…");
+        _ = MonitorCloudMusicLaunchAsync(_cloudMusicLaunchCancellation.Token);
+    }
+
+    private async Task MonitorCloudMusicLaunchAsync(CancellationToken cancellationToken)
+    {
+        DateTimeOffset startedAt = DateTimeOffset.Now;
+        DateTimeOffset lastLaunchAttemptAt = startedAt;
+        int launchAttemptCount = 1;
+        bool playCommandSent = false;
+        try
+        {
+            while (DateTimeOffset.Now - startedAt < CloudMusicLaunchTimeout)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+                if (!_cloudMusicLaunchWaiting ||
+                    _stateMachine.CurrentContinuousState == PetContinuousState.MusicPlaying)
+                {
+                    return;
+                }
+
+                DateTimeOffset now = DateTimeOffset.Now;
+                TimeSpan launchElapsed = now - startedAt;
+                bool playerRunning = _mediaApplicationLauncher.IsRunning(
+                    _musicTargetProcessName);
+                if (!playerRunning &&
+                    launchAttemptCount < CloudMusicLaunchMaximumAttempts &&
+                    now - lastLaunchAttemptAt >= CloudMusicLaunchRetryInterval)
+                {
+                    MediaApplicationLaunchResult retryResult =
+                        _mediaApplicationLauncher.TryLaunch(_musicTargetProcessName);
+                    launchAttemptCount++;
+                    lastLaunchAttemptAt = now;
+                    _logger.Info(
+                        "media.application_launch_retry_result",
+                        $"Attempt={launchAttemptCount}; Status={retryResult.Status}.");
+                    playerRunning = retryResult.Status ==
+                        MediaApplicationLaunchStatus.AlreadyRunning;
+                    ShowPersistentFeedbackBubble(retryResult.Status ==
+                        MediaApplicationLaunchStatus.Started
+                            ? "网易云第一次没有打开，正在自动重试…"
+                            : "正在等待网易云音乐窗口出现…");
+                }
+
+                bool playerContentReady = _lastTrackSnapshot.HasTrack ||
+                    launchElapsed >= CloudMusicLaunchFallbackCommandDelay;
+                if (!playCommandSent &&
+                    launchElapsed >= CloudMusicLaunchShortcutDelay &&
+                    playerContentReady &&
+                    playerRunning)
+                {
+                    MediaCommandSendResult playResult = _mediaCommandSender.TrySend(
+                        MediaCommand.TogglePlayPause,
+                        DateTimeOffset.Now);
+                    _logger.Info(
+                        "media.application_launch_play_result",
+                        $"Status={playResult.Status}; Delivery={playResult.DeliveryMethod}.");
+                    if (playResult.WasSent)
+                    {
+                        playCommandSent = true;
+                        if (_audioSessionProbe is null)
+                        {
+                            FinishCloudMusicLaunchWait(restoreContinuousAnimation: true);
+                            ShowFeedbackBubble(
+                                "网易云已打开并发送播放快捷键；音乐检测关闭，无法确认播放状态");
+                            return;
+                        }
+
+                        ShowPersistentFeedbackBubble("网易云已打开，正在等待音乐开始播放…");
+                    }
+                    else if (playResult.Status is
+                        (MediaCommandSendStatus.RateLimited or MediaCommandSendStatus.KeyboardBusy))
+                    {
+                        // Keep polling until the command cooldown or held keys clear.
+                    }
+                    else
+                    {
+                        FinishCloudMusicLaunchWait(restoreContinuousAnimation: true);
+                        ShowFeedbackBubble(GetMediaCommandFailureMessage(playResult.Status));
+                        return;
+                    }
+                }
+            }
+
+            if (_cloudMusicLaunchWaiting)
+            {
+                FinishCloudMusicLaunchWait(restoreContinuousAnimation: true);
+                ShowFeedbackBubble(playCommandSent
+                    ? "等待网易云播放超时，请打开网易云检查歌曲"
+                    : "网易云启动超时，请稍后再试");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Playback detection or window shutdown owns the final state.
+        }
+    }
+
+    private void FinishCloudMusicLaunchWait(bool restoreContinuousAnimation)
+    {
+        if (!_cloudMusicLaunchWaiting)
+        {
+            return;
+        }
+
+        _cloudMusicLaunchWaiting = false;
+        _cloudMusicLaunchCancellation?.Cancel();
+        _cloudMusicLaunchCancellation?.Dispose();
+        _cloudMusicLaunchCancellation = null;
+        HideFeedbackBubble(restoreTrackInfo: true);
+        Guid? token = _cloudMusicLaunchReactionToken;
+        _cloudMusicLaunchReactionToken = null;
+        bool completed = token is Guid reactionToken &&
+            _stateMachine.CompleteReaction(reactionToken, DateTimeOffset.Now);
+        if (completed && restoreContinuousAnimation && !_isClosing)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync(
+                "media.application_launch_wait_completed");
+        }
+    }
+
+    private static string GetMediaCommandFailureMessage(MediaCommandSendStatus status) => status switch
+    {
+        MediaCommandSendStatus.Disabled => "网易云快捷键控制尚未启用",
+        MediaCommandSendStatus.InvalidShortcut => "播放快捷键设置无效，请检查配置",
+        MediaCommandSendStatus.ProtectedApplicationForeground =>
+            "游戏安全模式：这次没有发送播放快捷键",
+        MediaCommandSendStatus.ForegroundCheckUnavailable =>
+            "暂时无法确认前台程序，没有发送播放快捷键",
+        MediaCommandSendStatus.KeyboardBusy => "键盘正在使用，请松开按键后再试",
+        MediaCommandSendStatus.RateLimited => "操作太快啦，请稍等一下",
+        MediaCommandSendStatus.SystemRejected => "系统没有接受播放快捷键，请再试一次",
+        _ => "没有发送播放快捷键",
+    };
+
+    private void ShowFeedbackBubble(string message)
+    {
+        if (_bunChaseActive)
+        {
+            return;
+        }
+
+        PrepareFeedbackBubble(message);
+        FeedbackBubble.Visibility = Visibility.Visible;
+        _feedbackBubbleTimer.Stop();
+        _feedbackBubbleTimer.Start();
+    }
+
+    private void ShowPersistentFeedbackBubble(string message)
+    {
+        if (_bunChaseActive)
+        {
+            return;
+        }
+
+        PrepareFeedbackBubble(message);
+        FeedbackBubble.Visibility = Visibility.Visible;
+        _feedbackBubbleTimer.Stop();
+    }
+
+    private void PrepareFeedbackBubble(string message)
+    {
+        FeedbackBubbleText.Text = message;
+        FeedbackBubble.Visibility = Visibility.Visible;
+        UpdateFeedbackLayout();
+    }
+
+    private void HideFeedbackBubble(bool restoreTrackInfo)
+    {
+        _feedbackBubbleTimer.Stop();
+        FeedbackBubble.Visibility = Visibility.Collapsed;
+        UpdateFeedbackLayout();
+    }
+
+    private void UpdateFeedbackLayout()
+    {
+        // Only reserve the measured row while needed. Keep the pet anchored as it expands.
+        double slot = 0;
+        if (FeedbackBubble.Visibility == Visibility.Visible)
+        {
+            FeedbackBubble.Width = Math.Max(80, Math.Min(250, Width - 10));
+            FeedbackBubble.Measure(new System.Windows.Size(Width, double.PositiveInfinity));
+            slot = Math.Ceiling(FeedbackBubble.DesiredSize.Height -
+                FeedbackBubble.Margin.Top - FeedbackBubble.Margin.Bottom) + 8;
+        }
+        if (Math.Abs(slot - _feedbackSlotHeight) < 0.1) return;
+        _feedbackSlotHeight = slot;
+        ApplyAccessoryLayout(_accessoryLayout, force: true);
+        UpdateAccessoryLayoutForCurrentPosition();
+    }
+
+    private Point ConvertScreenPixelsToDips(PointerPoint point)
+    {
+        PresentationSource? source = PresentationSource.FromVisual(this);
+        Matrix fromDevice = source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        return fromDevice.Transform(new Point(point.X, point.Y));
+    }
+
+    private void BeginBunChase()
+    {
+        if (_bunTargets.Count == 0 || _isClosing ||
+            (!_previewBunChase && !IsBunChaseEnvironmentSafe()))
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        (string runAnimation, _) = GetSelectedBunAnimations();
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                runAnimation,
+                ReactionPriority.UserInteraction,
+                now.AddMinutes(10),
+                InterruptibleByDrag: false),
+            now);
+        if (outcome.Token is not Guid token)
+        {
+            _ = RetryBunChaseAsync();
+            return;
+        }
+
+        _bunChaseReactionToken = token;
+        _bunChaseActive = true;
+        _bunReturning = false;
+        _bunEating = false;
+        _bunWaitingForManualFeed = false;
+        _bunRequestShown = false;
+        _bunRequestPresentationGeneration++;
+        HideAccessorySurfacesForBunChase();
+        _bunMotionSpeed = ResolveScaledBunSpeed(BunStartingSpeed);
+        _bunMotionStageElapsed = TimeSpan.Zero;
+        _bunReturnPosition ??= new Point(Left, Top);
+        SelectNearestBun();
+        PlayAnimation(runAnimation);
+        StartBunMotionLoop();
+    }
+
+    private async Task RetryBunChaseAsync()
+    {
+        await Task.Delay(900);
+        if (!_bunChaseActive && _bunTargets.Count > 0 && !_isClosing)
+        {
+            BeginBunChase();
+        }
+    }
+
+    private void SelectNearestBun()
+    {
+        Point petCentre = GetPetScreenCentre();
+        _activeBunTarget = _bunTargets
+            .OrderBy(target =>
+            {
+                Point centre = target.ScreenCenter;
+                double dx = centre.X - petCentre.X;
+                double dy = centre.Y - petCentre.Y;
+                return dx * dx + dy * dy;
+            })
+            .FirstOrDefault();
+    }
+
+    private void RedirectBunReturnToQueuedTreat()
+    {
+        if (!BunChasePlanner.ShouldInterruptReturnForQueuedTreat(
+                _bunChaseActive,
+                _bunReturning,
+                _bunEating,
+                _bunTargets.Count))
+        {
+            return;
+        }
+
+        _bunReturning = false;
+        SelectNearestBun();
+        _bunMotionSpeed = ResolveScaledBunSpeed(BunStartingSpeed);
+        _bunMotionStageElapsed = TimeSpan.Zero;
+        PlayAnimation(GetSelectedBunAnimations().RunAnimation);
+        StartBunMotionLoop();
+        _logger.Info(
+            "file_treat.return_interrupted_for_new_bun",
+            "A newly queued bun interrupted the return trip and resumed the chase.");
+    }
+
+    private void ResumeBunChaseFromManualFeedWait()
+    {
+        _bunWaitingForManualFeed = false;
+        _bunRequestPresentationGeneration++;
+        SelectNearestBun();
+        _bunMotionSpeed = ResolveScaledBunSpeed(BunStartingSpeed);
+        _bunMotionStageElapsed = TimeSpan.Zero;
+        PlayAnimation(GetSelectedBunAnimations().RunAnimation);
+        StartBunMotionLoop();
+        _logger.Info(
+            "file_treat.request_wait_interrupted_for_new_bun",
+            "A newly queued bun resumed ordinary chase after the one-time request pose.");
+    }
+
+    private void StartBunMotionLoop()
+    {
+        _bunSubpixelX = _bunSubpixelY = 0;
+        _bunLastMotionTimestamp = Stopwatch.GetTimestamp();
+        if (_bunMotionRenderingSubscribed)
+        {
+            return;
+        }
+
+        CompositionTarget.Rendering += OnBunChaseRendering;
+        _bunMotionRenderingSubscribed = true;
+    }
+
+    private void StopBunMotionLoop()
+    {
+        if (_bunMotionRenderingSubscribed)
+        {
+            CompositionTarget.Rendering -= OnBunChaseRendering;
+            _bunMotionRenderingSubscribed = false;
+        }
+
+        _bunLastMotionTimestamp = 0;
+    }
+
+    private void OnBunChaseRendering(object? sender, EventArgs e)
+    {
+        if (!_bunChaseActive || _bunEating)
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        if (!_previewBunChase && now - _bunLastSafetyCheckAt >= TimeSpan.FromMilliseconds(500))
+        {
+            _bunLastSafetyCheckAt = now;
+            if (!IsBunChaseEnvironmentSafe())
+            {
+                _logger.Info(
+                    "file_treat.cancelled_for_foreground_safety",
+                    "Bun chase cancelled because the foreground safety check failed.");
+                CancelBunChase(restorePosition: true, restoreContinuousAnimation: true);
+                return;
+            }
+        }
+
+        long currentTimestamp = Stopwatch.GetTimestamp();
+        if (_bunLastMotionTimestamp == 0)
+        {
+            _bunLastMotionTimestamp = currentTimestamp;
+            return;
+        }
+
+        TimeSpan elapsed = TimeSpan.FromSeconds(
+            (currentTimestamp - _bunLastMotionTimestamp) / (double)Stopwatch.Frequency);
+        _bunLastMotionTimestamp = currentTimestamp;
+        TimeSpan renderedElapsed = elapsed <= BunMaximumRenderedStep
+            ? elapsed
+            : BunMaximumRenderedStep;
+        _bunMotionStageElapsed += renderedElapsed;
+        if (_bunReturning)
+        {
+            if (_bunReturnPosition is not Point returnPosition)
+            {
+                FinishBunChase();
+                return;
+            }
+
+            PointerPoint current = new(Left, Top);
+            _bunMotionSpeed = ResolveScaledBunSpeed(BunReturnSpeed);
+            BunChaseStep step = BunChasePlanner.Advance(
+                current,
+                new PointerPoint(returnPosition.X, returnPosition.Y),
+                _bunMotionSpeed,
+                renderedElapsed,
+                3);
+            PetDirectionTransform.ScaleX = returnPosition.X < Left ? -1 : 1;
+            SetBunWindowPosition(step.Position.X, step.Position.Y);
+            if (step.Arrived)
+            {
+                FinishBunChase();
+            }
+            return;
+        }
+
+        if (_activeBunTarget is null)
+        {
+            SelectNearestBun();
+            if (_activeBunTarget is null)
+            {
+                BeginBunReturn();
+                return;
+            }
+        }
+
+        Point petCentre = GetPetScreenCentre();
+        Point targetCentre = _activeBunTarget.ScreenCenter;
+        double chaseSpeedScale = ResolveBunDesktopSpeedScale();
+        _bunMotionSpeed = BunChasePlanner.ResolveSpeedTowardMaximum(
+            BunStartingSpeed * chaseSpeedScale,
+            BunChaseMaximumSpeed * chaseSpeedScale,
+            _bunMotionStageElapsed,
+            BunAccelerationDuration);
+        if (BunChasePlanner.ShouldShowBunRequest(
+                _bunTargets.Count,
+                _bunMotionSpeed >= BunChaseMaximumSpeed * chaseSpeedScale - 0.5,
+                _activeBunTarget.IsBeingDragged,
+                _activeBunTarget.ContinuousDragDuration(now),
+                BunRequestDragDuration,
+                _bunRequestShown))
+        {
+            ShowBunRequestAndWait();
+            return;
+        }
+        BunChaseStep chase = BunChasePlanner.Advance(
+            new PointerPoint(petCentre.X, petCentre.Y),
+            new PointerPoint(targetCentre.X, targetCentre.Y),
+            _bunMotionSpeed,
+            renderedElapsed,
+            42);
+        double moveX = chase.Position.X - petCentre.X;
+        double moveY = chase.Position.Y - petCentre.Y;
+        PetDirectionTransform.ScaleX = targetCentre.X < petCentre.X ? -1 : 1;
+        SetBunWindowPosition(Left + moveX, Top + moveY);
+        UpdateAccessoryLayoutForCurrentPosition();
+        if (chase.Arrived && !_activeBunTarget.IsBeingDragged)
+        {
+            StopBunMotionLoop();
+            _ = EatActiveBunAsync(_activeBunTarget, manualFeed: false);
+        }
+    }
+
+    private void SetBunWindowPosition(double left, double top)
+    {
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        double preciseLeft = left + _bunSubpixelX, preciseTop = top + _bunSubpixelY;
+        Left = Math.Round(preciseLeft * dpi.DpiScaleX) / dpi.DpiScaleX;
+        Top = Math.Round(preciseTop * dpi.DpiScaleY) / dpi.DpiScaleY;
+        _bunSubpixelX = preciseLeft - Left;
+        _bunSubpixelY = preciseTop - Top;
+    }
+
+    private void ShowBunRequestAndWait()
+    {
+        StopBunMotionLoop();
+        _bunWaitingForManualFeed = true;
+        _bunRequestShown = true;
+        // The request animation contains readable text, so it must never inherit
+        // the horizontal chase mirror used while following a bun to the left.
+        PetDirectionTransform.ScaleX = 1;
+        int generation = ++_bunRequestPresentationGeneration;
+        PlayAnimation(
+            BunRequestAnimation,
+            () =>
+            {
+                if (!_bunWaitingForManualFeed || generation != _bunRequestPresentationGeneration ||
+                    _animationCatalog is null)
+                {
+                    return;
+                }
+
+                AnimationAssetManifest manifest = _animationCatalog.GetRequired(BunRequestAnimation);
+                ShowAnimationFrame(BunRequestAnimation, manifest.FrameDurationsMilliseconds.Count - 1);
+            });
+        _logger.Info(
+            "file_treat.bun_request_shown",
+            "The one-time bun request played after the sole target was dragged at maximum speed for three seconds.");
+    }
+
+    private Point GetPetScreenCentre()
+    {
+        DesktopRectangle bounds = GetPetImageBoundsInWindow();
+        return new Point(Left + bounds.Left + bounds.Width / 2, Top + bounds.Top + bounds.Height / 2);
+    }
+
+    private double ResolveBunDesktopSpeedScale()
+    {
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        return BunChasePlanner.ResolveDesktopSpeedScaleFromPixels(
+            workArea.Width,
+            workArea.Height,
+            dpi.DpiScaleX,
+            dpi.DpiScaleY);
+    }
+
+    private double ResolveScaledBunSpeed(double speed) =>
+        speed * ResolveBunDesktopSpeedScale();
+
+    private void OnBunDragReleased(object? sender, EventArgs e)
+    {
+        if (sender is not BunTargetWindow bun || !_bunChaseActive || _bunEating ||
+            !_bunTargets.Contains(bun) || !DoesBunOverlapOpaquePet(bun))
+        {
+            return;
+        }
+
+        StopBunMotionLoop();
+        _bunWaitingForManualFeed = false;
+        _bunRequestPresentationGeneration++;
+        _activeBunTarget = bun;
+        _ = EatActiveBunAsync(bun, manualFeed: true);
+    }
+
+    private bool DoesBunOverlapOpaquePet(BunTargetWindow bun)
+    {
+        if (PetImage.Source is not BitmapSource source)
+        {
+            return false;
+        }
+
+        FormatConvertedBitmap bgra = new(source, PixelFormats.Bgra32, null, 0);
+        int stride = bgra.PixelWidth * 4;
+        byte[] pixels = new byte[stride * bgra.PixelHeight];
+        bgra.CopyPixels(pixels, stride, 0);
+        byte[] alpha = new byte[bgra.PixelWidth * bgra.PixelHeight];
+        for (int sourceIndex = 3, alphaIndex = 0;
+             sourceIndex < pixels.Length;
+             sourceIndex += 4, alphaIndex++)
+        {
+            alpha[alphaIndex] = pixels[sourceIndex];
+        }
+
+        DesktopRectangle bounds = GetPetImageBoundsInWindow();
+        Rect treat = bun.ScreenBounds;
+        return BunFeedHitTester.HasOpaqueOverlap(
+            alpha,
+            bgra.PixelWidth,
+            bgra.PixelHeight,
+            new PointerPoint(Left + bounds.Left, Top + bounds.Top),
+            bounds.Width,
+            bounds.Height,
+            new PointerPoint(treat.Left, treat.Top),
+            treat.Width,
+            treat.Height);
+    }
+
+    private async Task EatActiveBunAsync(BunTargetWindow bun, bool manualFeed)
+    {
+        if (_isClosing || !_bunTargets.Contains(bun))
+        {
+            return;
+        }
+
+        _bunEating = true;
+        (string runAnimation, string eatAnimation) = GetSelectedBunAnimations();
+        PlayAnimation(eatAnimation);
+        await Task.Delay(manualFeed ? 150 : 420);
+        DesktopRectangle bounds = GetPetImageBoundsInWindow();
+        PointerPoint mouthTarget = ResolveSelectedBunMouthTarget(bounds);
+        Point mouth = new(mouthTarget.X, mouthTarget.Y);
+        await bun.FlyIntoAsync(
+            mouth,
+            TimeSpan.FromMilliseconds(manualFeed ? 400 : 680));
+        bun.DragReleased -= OnBunDragReleased;
+        bun.Close();
+        _bunTargets.Remove(bun);
+        _activeBunTarget = null;
+        int closingStartFrame = eatAnimation == "ai-bun-v2-eat"
+            ? BunEatNewClosingStartFrame
+            : BunEatOriginalClosingStartFrame;
+        PlayAnimationRange(
+            eatAnimation,
+            closingStartFrame,
+            BunEatLastFrame,
+            playbackRate: BunEatClosingPlaybackRate);
+        await Task.Delay(ResolveAnimationRangeDuration(
+            eatAnimation,
+            closingStartFrame,
+            BunEatLastFrame,
+            BunEatClosingPlaybackRate));
+        _bunEating = false;
+        if (_bunTargets.Count > 0)
+        {
+            if (manualFeed)
+            {
+                await Task.Delay(350);
+            }
+            SelectNearestBun();
+            PlayAnimation(runAnimation);
+            _bunMotionSpeed = ResolveScaledBunSpeed(BunStartingSpeed);
+            _bunMotionStageElapsed = TimeSpan.Zero;
+            StartBunMotionLoop();
+            return;
+        }
+
+        BeginBunReturn();
+    }
+
+    private void BeginBunReturn()
+    {
+        _bunReturning = true;
+        _bunWaitingForManualFeed = false;
+        _bunRequestPresentationGeneration++;
+        _activeBunTarget = null;
+        _bunMotionSpeed = ResolveScaledBunSpeed(BunStartingSpeed);
+        _bunMotionStageElapsed = TimeSpan.Zero;
+        PlayAnimation(GetSelectedBunAnimations().RunAnimation);
+        StartBunMotionLoop();
+    }
+
+    private TimeSpan ResolveAnimationRangeDuration(
+        string animationId,
+        int startFrameIndex,
+        int endFrameIndex,
+        double playbackRate)
+    {
+        if (_animationCatalog is null || playbackRate <= 0)
+        {
+            return TimeSpan.FromMilliseconds(900);
+        }
+
+        AnimationAssetManifest manifest = _animationCatalog.GetRequired(animationId);
+        int safeStart = Numeric.Clamp(startFrameIndex, 0, manifest.FrameDurationsMilliseconds.Count - 1);
+        int safeEnd = Numeric.Clamp(endFrameIndex, safeStart, manifest.FrameDurationsMilliseconds.Count - 1);
+        long durationMilliseconds = 0;
+        for (int index = safeStart; index <= safeEnd; index++)
+        {
+            durationMilliseconds += manifest.FrameDurationsMilliseconds[index];
+        }
+
+        return TimeSpan.FromMilliseconds(
+            Math.Ceiling(durationMilliseconds / playbackRate) + 20);
+    }
+
+    private (string RunAnimation, string EatAnimation) GetSelectedBunAnimations() =>
+        AppearanceOptionIds.ResolveBunAnimations(
+            AppearanceOptionIds.ResolveDefaultBunEatingStyle(
+                _settings.Appearance.FullBodyStyle));
+
+    private PointerPoint ResolveSelectedBunMouthTarget(DesktopRectangle imageBounds)
+    {
+        bool mirrored = PetDirectionTransform.ScaleX < 0;
+        if (AppearanceOptionIds.ResolveDefaultBunEatingStyle(
+                _settings.Appearance.FullBodyStyle) == AppearanceOptionIds.BunEatingNew)
+        {
+            return BunChasePlanner.ResolveMouthTarget(
+                new PointerPoint(Left + imageBounds.Left, Top + imageBounds.Top),
+                imageBounds.Width,
+                imageBounds.Height,
+                mirrored,
+                unmirroredXFraction: 0.625,
+                yFraction: 0.452);
+        }
+
+        return BunChasePlanner.ResolveMouthTarget(
+            new PointerPoint(Left + imageBounds.Left, Top + imageBounds.Top),
+            imageBounds.Width,
+            imageBounds.Height,
+            mirrored);
+    }
+
+    private void FinishBunChase()
+    {
+        StopBunMotionLoop();
+        _bunReturning = false;
+        _bunEating = false;
+        _bunWaitingForManualFeed = false;
+        _bunRequestShown = false;
+        _bunRequestPresentationGeneration++;
+        _bunChaseActive = false;
+        _activeBunTarget = null;
+        _bunReturnPosition = null;
+        PetDirectionTransform.ScaleX = 1;
+        if (_bunChaseReactionToken is Guid token)
+        {
+            _stateMachine.CompleteReaction(token, DateTimeOffset.Now);
+        }
+        _bunChaseReactionToken = null;
+        _ = TransitionToResolvedContinuousAnimationAsync("file_treat.completed");
+    }
+
+    private void CancelBunChase(bool restorePosition, bool restoreContinuousAnimation)
+    {
+        StopBunMotionLoop();
+        foreach (BunTargetWindow bun in _bunTargets.ToArray())
+        {
+            bun.DragReleased -= OnBunDragReleased;
+            bun.Close();
+        }
+        _bunTargets.Clear();
+        if (restorePosition && _bunReturnPosition is Point position)
+        {
+            Left = position.X;
+            Top = position.Y;
+        }
+        _bunChaseActive = false;
+        _bunReturning = false;
+        _bunEating = false;
+        _bunWaitingForManualFeed = false;
+        _bunRequestShown = false;
+        _bunRequestPresentationGeneration++;
+        _activeBunTarget = null;
+        _bunReturnPosition = null;
+        PetDirectionTransform.ScaleX = 1;
+        if (_bunChaseReactionToken is Guid token)
+        {
+            _stateMachine.CompleteReaction(token, DateTimeOffset.Now);
+        }
+        _bunChaseReactionToken = null;
+        if (restoreContinuousAnimation && !_isClosing)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync("file_treat.cancelled");
+        }
+    }
+
+    private void OnFileDragEnter(object sender, WpfDragEventArgs e) =>
+        UpdateFileDragTarget(e);
+
+    private void OnFileDragOver(object sender, WpfDragEventArgs e) =>
+        UpdateFileDragTarget(e);
+
+    private void OnFileDragLeave(object sender, WpfDragEventArgs e)
+    {
+        if (!_fileDropInProgress)
+        {
+            FinishFileDragPresentation(restoreContinuousAnimation: true);
+        }
+
+        e.Handled = true;
+    }
+
+    private async void OnFileDrop(object sender, WpfDragEventArgs e)
+    {
+        e.Handled = true;
+        if (_fileDropInProgress || !IsFileDropReady(e) ||
+            !TryGetDroppedPaths(e.Data, out string[] paths))
+        {
+            e.Effects = WpfDragDropEffects.None;
+            FinishFileDragPresentation(restoreContinuousAnimation: true);
+            return;
+        }
+
+        e.Effects = WpfDragDropEffects.Move;
+        if ((paths.Length > 10 || paths.Any(Directory.Exists)) &&
+            MessageBox.Show(
+                this,
+                paths.Any(Directory.Exists)
+                    ? $"将 {paths.Length} 个项目（其中包含文件夹）放入 Windows 回收站吗？"
+                    : $"一次将 {paths.Length} 个项目放入 Windows 回收站吗？",
+                "确认放入回收站",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No) != MessageBoxResult.Yes)
+        {
+            FinishFileDragPresentation(restoreContinuousAnimation: true);
+            _logger.Info("file_drop.cancelled", $"Count={paths.Length}; Confirmation declined.");
+            return;
+        }
+
+        _fileDropInProgress = true;
+        _suppressDesktopTreatUntil = DateTimeOffset.Now.AddSeconds(3);
+        RecycleBinOperationResult result;
+        try
+        {
+            nint ownerHandle = new WindowInteropHelper(this).Handle;
+            result = await _recycleBinService.MoveToRecycleBinAsync(paths, ownerHandle);
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or COMException)
+        {
+            result = new RecycleBinOperationResult(
+                RecycleBinOperationStatus.Failed,
+                paths.Length,
+                0,
+                exception.Message);
+        }
+        finally
+        {
+            _fileDropInProgress = false;
+        }
+
+        FinishFileDragPresentation(restoreContinuousAnimation: false);
+        if (result.Succeeded)
+        {
+            _suppressDesktopTreatUntil = DateTimeOffset.Now.AddSeconds(10);
+            _logger.Info(
+                "file_drop.recycled",
+                $"Requested={result.RequestedCount}; Recycled={result.RecycledCount}.");
+            _ = PlayReactionAsync(FileDropSuccessAnimation, ReactionPriority.UserInteraction);
+            return;
+        }
+
+        _suppressDesktopTreatUntil = DateTimeOffset.Now;
+
+        string failureMessage = result.Status switch
+        {
+            RecycleBinOperationStatus.Cancelled => "已取消，文件仍在原处",
+            RecycleBinOperationStatus.PartialFailure =>
+                $"只有 {result.RecycledCount} 个项目进入回收站，请检查其余文件",
+            RecycleBinOperationStatus.Rejected => result.Message,
+            _ => "没有放进回收站，文件仍在原处",
+        };
+        ShowFeedbackBubble(failureMessage);
+        _logger.Info(
+            "file_drop.failed",
+            $"Status={result.Status}; Requested={result.RequestedCount}; Recycled={result.RecycledCount}.");
+        PlayResolvedContinuousAnimation();
+    }
+
+    private void UpdateFileDragTarget(WpfDragEventArgs e)
+    {
+        bool supported = !_fileDropInProgress &&
+            IsSupportedFileDrop(e, requirePetHit: false) &&
+            IsFileDropEnvironmentSafe();
+        if (supported)
+        {
+            StartFileDragPresentation();
+        }
+
+        bool overPet = supported && IsSupportedFileDrop(e, requirePetHit: true);
+        _fileDropHoverStartedAt = overPet
+            ? _fileDropHoverStartedAt ?? DateTimeOffset.Now
+            : null;
+        bool accepted = overPet && IsFileDropReady(e);
+        e.Effects = accepted ? WpfDragDropEffects.Move : WpfDragDropEffects.None;
+        e.Handled = true;
+        if (accepted && !_fileDropTargetReady)
+        {
+            _fileDropTargetReady = true;
+            ShowFeedbackBubble("松手即可放入回收站");
+        }
+        else if (supported && !accepted && _fileDropTargetReady)
+        {
+            _fileDropTargetReady = false;
+        }
+        else if (!supported && !_fileDropInProgress)
+        {
+            FinishFileDragPresentation(restoreContinuousAnimation: true);
+        }
+    }
+
+    private bool IsFileDropReady(WpfDragEventArgs e) =>
+        IsSupportedFileDrop(e, requirePetHit: true) &&
+        IsFileDropEnvironmentSafe() &&
+        _fileDropHoverStartedAt is DateTimeOffset hoverStartedAt &&
+        DateTimeOffset.Now - hoverStartedAt >= FileDropDwellDuration;
+
+    private bool IsFileDropEnvironmentSafe()
+    {
+        if (_isClosing || _systemSessionUnavailable || _edgeDockSide != EdgeDockSide.None ||
+            _isWindowDragging || _foregroundApplicationProbe is null)
+        {
+            return false;
+        }
+
+        ForegroundApplicationSnapshot foreground = _foregroundApplicationProbe.Query();
+        return DesktopFileTreatSafety.AllowsForeground(
+            foreground,
+            _genshinProcessMatcher.IsTargetProcess(foreground.ProcessName));
+    }
+
+    private bool IsBunChaseEnvironmentSafe()
+    {
+        if (_isClosing || _hiddenByUser || _systemSessionUnavailable || _edgeDockSide != EdgeDockSide.None ||
+            _isWindowDragging || _foregroundApplicationProbe is null)
+        {
+            return false;
+        }
+
+        ForegroundApplicationSnapshot foreground = _foregroundApplicationProbe.Query();
+        return DesktopFileTreatSafety.AllowsForeground(
+            foreground,
+            _genshinProcessMatcher.IsTargetProcess(foreground.ProcessName));
+    }
+
+    private bool IsSupportedFileDrop(WpfDragEventArgs e, bool requirePetHit)
+    {
+        if (!e.Data.GetDataPresent(WpfDataFormats.FileDrop, autoConvert: false))
+        {
+            return false;
+        }
+
+        if (!requirePetHit)
+        {
+            return true;
+        }
+
+        Point position = e.GetPosition(this);
+        DesktopRectangle bounds = _edgeDockSide == EdgeDockSide.None
+            ? GetPetImageBoundsInWindow()
+            : GetPetImageVisibleBoundsInWindow();
+        return position.X >= bounds.Left && position.X <= bounds.Right &&
+            position.Y >= bounds.Top && position.Y <= bounds.Bottom;
+    }
+
+    private static bool TryGetDroppedPaths(WpfDataObject data, out string[] paths)
+    {
+        paths = [];
+        if (!data.GetDataPresent(WpfDataFormats.FileDrop, autoConvert: false) ||
+            data.GetData(WpfDataFormats.FileDrop, autoConvert: false) is not string[] rawPaths)
+        {
+            return false;
+        }
+
+        try
+        {
+            paths = rawPaths
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(System.IO.Path.GetFullPath)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return paths.Length > 0;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private void StartFileDragPresentation()
+    {
+        if (_isClosing)
+        {
+            return;
+        }
+
+        ApplyFileDragCursorOverride();
+        if (_fileDragPresentationActive || _bunChaseActive)
+        {
+            return;
+        }
+
+        DateTimeOffset now = DateTimeOffset.Now;
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                FileDropPromptAnimation,
+                ReactionPriority.UserInteraction,
+                now.AddMinutes(10),
+                InterruptibleByDrag: false),
+            now);
+        if (outcome.Token is not Guid token)
+        {
+            _logger.Info("file_drop.prompt_skipped", outcome.Result.ToString());
+            return;
+        }
+
+        if (outcome.Result == ReactionStartResult.Replaced)
+        {
+            CleanupReplacedGenshinPresentation();
+            CleanupReplacedMessageNotificationPresentation();
+        }
+
+        _fileDropReactionToken = token;
+        _fileDragPresentationActive = true;
+        PlayAnimation(
+            FileDropPromptAnimation,
+            () => _logger.Info(
+                "file_drop.prompt_held",
+                "Give-me animation completed and is holding its final frame."));
+        _logger.Info("file_drop.prompt_started", "A local file drag entered the pet target.");
+    }
+
+    private void FinishFileDragPresentation(bool restoreContinuousAnimation)
+    {
+        ReleaseFileDragCursorOverride();
+        _fileDropTargetReady = false;
+        _fileDropHoverStartedAt = null;
+        if (!_fileDragPresentationActive)
+        {
+            return;
+        }
+
+        _fileDragPresentationActive = false;
+        Guid? token = _fileDropReactionToken;
+        _fileDropReactionToken = null;
+        bool completed = token is Guid reactionToken &&
+            _stateMachine.CompleteReaction(reactionToken, DateTimeOffset.Now);
+        if (completed && restoreContinuousAnimation && !_isClosing)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync("file_drop.prompt_cancelled");
+        }
+    }
+
+    private void ApplyFileDragCursorOverride()
+    {
+        System.Windows.Input.Cursor cursor =
+            _petPointerCursor ?? System.Windows.Input.Cursors.Hand;
+        _fileDragCursorOverrideActive = true;
+        Mouse.OverrideCursor = cursor;
+        Cursor = cursor;
+        PetImage.Cursor = cursor;
+    }
+
+    private void ReleaseFileDragCursorOverride()
+    {
+        if (!_fileDragCursorOverrideActive)
+        {
+            return;
+        }
+
+        _fileDragCursorOverrideActive = false;
+        Mouse.OverrideCursor = null;
+        Cursor = null;
+        PetImage.Cursor = null;
+    }
+
+    private void HideAccessorySurfacesForBunChase()
+    {
+        _mediaControlsHideTimer.Stop();
+        _trackInfoHideTimer.Stop();
+        _feedbackBubbleTimer.Stop();
+        CloudMusicVolumePopup.IsOpen = false;
+        _mediaControlsMotion.Hide(animate: false);
+        _trackInfoMotion.Hide(animate: false);
+        HideFeedbackBubble(restoreTrackInfo: false);
+        HideMessageNotification();
+    }
+
+    private void ShowMessageNotification(MessageNotificationSummary notification)
+    {
+        if (_bunChaseActive)
+        {
+            return;
+        }
+
+        _messageBubble ??= new MessageNotificationWindow { Owner = this };
+        notification = notification.ForDisplay(_settings.Notifications.EnableQqDetailedReminders, _settings.Notifications.EnableWeChatDetailedReminders);
+        _displayedMessageSummary = notification;
+        string providerName = MessageProviderMatcher.GetDisplayName(notification.Provider);
+        ImageSource? applicationIcon = DecodeNotificationImage(notification.ApplicationIcon);
+        ImageSource? contactAvatar = DecodeNotificationImage(notification.ContactAvatar);
+        ImageSource? primaryIcon = contactAvatar ?? applicationIcon;
+
+        _messageBubble.MessageSourceText.Text = notification.NewNotificationCount is int newCount
+            ? notification.Provider == MessageProvider.WeChat ? $"{providerName} · 新增 {newCount} 次提醒" : $"{providerName} · 新增 {newCount} 条通知"
+            : notification.UnreadCount is int count ? $"{providerName} · {count} 条未读" : $"{providerName} · 新消息";
+        bool hasPreview = !string.IsNullOrWhiteSpace(notification.MessagePreview);
+        _messageBubble.Width = hasPreview ? 272 : 212;
+        _messageBubble.Height = hasPreview ? 126 : 82;
+        _messageBubble.MessageNotificationBubble.Width = hasPreview ? 248 : 188;
+        _messageBubble.MessageNotificationBubble.Height = hasPreview ? 102 : 58;
+        _messageBubble.MessagePreviewText.Text = notification.MessagePreview ?? string.Empty;
+        _messageBubble.MessagePreviewText.Visibility = hasPreview ? Visibility.Visible : Visibility.Collapsed;
+        _messageBubble.MessageConversationText.Text = string.IsNullOrWhiteSpace(notification.ConversationDisplayName)
+            ? "有新消息"
+            : notification.ConversationDisplayName;
+        _messageBubble.MessageProviderGlyph.Text = notification.Provider == MessageProvider.Qq ? "Q" : "微";
+        _messageBubble.MessagePrimaryIconSurface.Background = notification.Provider == MessageProvider.Qq
+            ? new SolidColorBrush(Color.FromRgb(0x39, 0xA9, 0xF2))
+            : new SolidColorBrush(Color.FromRgb(0x20, 0xC0, 0x5C));
+        _messageBubble.MessagePrimaryIcon.Source = primaryIcon;
+        _messageBubble.MessageProviderGlyph.Visibility = primaryIcon is null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        bool showApplicationBadge = contactAvatar is not null && applicationIcon is not null;
+        _messageBubble.MessageAppBadgeIcon.Source = showApplicationBadge ? applicationIcon : null;
+        _messageBubble.MessageAppBadge.Visibility = showApplicationBadge
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        AutomationProperties.SetName(
+            _messageBubble.MessageNotificationBubble,
+            string.IsNullOrWhiteSpace(notification.ConversationDisplayName)
+                ? $"{providerName} 有新消息"
+                : $"{providerName}，{notification.ConversationDisplayName} 有新消息");
+        _messageBubble.MessageNotificationBubble.Visibility = Visibility.Visible;
+        PositionMessageNotification();
+    }
+
+    private void HideMessageNotification()
+    {
+        _messageBubble?.Hide();
+        if (_messageBubble is not null)
+        {
+            _messageBubble.MessagePrimaryIcon.Source = null;
+            _messageBubble.MessageAppBadgeIcon.Source = null;
+            _messageBubble.MessageConversationText.Text = string.Empty;
+            _messageBubble.MessagePreviewText.Text = string.Empty;
+            _messageBubble.MessagePreviewText.Visibility = Visibility.Collapsed;
+            _messageBubble.MessageSourceText.Text = string.Empty;
+            AutomationProperties.SetName(_messageBubble.MessageNotificationBubble, "聊天消息提醒");
+        }
+        _displayedMessageSummary = null;
+    }
+
+    private static ImageSource? DecodeNotificationImage(ReadOnlyMemory<byte>? encodedImage)
+    {
+        if (encodedImage is not ReadOnlyMemory<byte> bytes || bytes.IsEmpty)
+        {
+            return null;
+        }
+
+        try
+        {
+            using MemoryStream stream = new(bytes.ToArray(), writable: false);
+            BitmapImage image = new();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception)
+        {
+            // Notification icons come from another app through Windows. Malformed or
+            // unsupported image data must fall back to the provider glyph.
+            return null;
+        }
+    }
+
+    private void OnFeedbackBubbleTimerTick(object? sender, EventArgs e)
+    {
+        HideFeedbackBubble(restoreTrackInfo: true);
+    }
+
+    private async void OnTrackInfoRefreshTimerTick(object? sender, EventArgs e)
+    {
+        await RefreshTrackInfoAsync(showWhenFound: false);
+    }
+
+    private async Task RefreshTrackInfoAsync(bool showWhenFound)
+    {
+        _trackInfoShowRequested |= showWhenFound;
+        if (_mediaTrackInfoSource is null || _trackInfoRefreshInFlight || _isClosing)
+        {
+            if (showWhenFound && _mediaTrackInfoSource is null)
+            {
+                ShowTrackInfoUnavailable();
+                _trackInfoShowRequested = false;
+            }
+
+            return;
+        }
+
+        _trackInfoRefreshInFlight = true;
+        try
+        {
+            MediaTrackSnapshot snapshot = MediaTrackText.Normalize(
+                await _mediaTrackInfoSource.ReadAsync(_musicTargetProcessName));
+            bool shouldShowWhenFound = showWhenFound || _trackInfoShowRequested;
+            if (!snapshot.ProbeSucceeded)
+            {
+                if (!_trackInfoProbeFailureLogged)
+                {
+                    _trackInfoProbeFailureLogged = true;
+                    _logger.Info(
+                        "media.track_detection_temporarily_unavailable",
+                        "System media track probe will retry.");
+                }
+
+                if (shouldShowWhenFound && !_lastTrackSnapshot.HasTrack)
+                {
+                    ShowTrackInfoUnavailable();
+                }
+
+                return;
+            }
+
+            if (_trackInfoProbeFailureLogged)
+            {
+                _trackInfoProbeFailureLogged = false;
+                _logger.Info("media.track_detection_recovered", "System media track probe resumed.");
+            }
+
+            string identity = snapshot.HasTrack
+                ? $"{snapshot.Title}\u001f{snapshot.Artist}"
+                : string.Empty;
+            bool trackChanged = _hasObservedTrackSnapshot &&
+                snapshot.HasTrack &&
+                !identity.Equals(_lastTrackIdentity, StringComparison.Ordinal);
+            _hasObservedTrackSnapshot = true;
+            _lastTrackSnapshot = snapshot;
+            _lastTrackIdentity = identity;
+
+            if (snapshot.HasTrack &&
+                _musicActivityDetector.IsPlaying &&
+                !identity.Equals(_musicAnimationTrackIdentity, StringComparison.Ordinal))
+            {
+                UpdateMusicAnimationForTrack(snapshot, identity);
+            }
+
+            if (snapshot.HasTrack)
+            {
+                bool confirmsPendingSwitch = _showNextTrackChange &&
+                    !identity.Equals(_trackSwitchInitialIdentity, StringComparison.Ordinal);
+                bool automaticDisplay = trackChanged || confirmsPendingSwitch;
+                if (shouldShowWhenFound || automaticDisplay)
+                {
+                    ShowTrackInfo(snapshot, holdAfterLeave: automaticDisplay);
+                }
+
+                if (confirmsPendingSwitch)
+                {
+                    ConfirmTrackSwitch("track-title");
+                }
+
+                if (trackChanged)
+                {
+                    _logger.Info("media.track_changed", "System media track metadata changed.");
+                }
+            }
+            else if (shouldShowWhenFound)
+            {
+                ShowTrackInfoUnavailable();
+            }
+        }
+        finally
+        {
+            _trackInfoRefreshInFlight = false;
+            _trackInfoShowRequested = false;
+        }
+    }
+
+    private async Task MonitorTrackSwitchAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            DateTimeOffset startedAt = DateTimeOffset.Now;
+            while (DateTimeOffset.Now - startedAt < TimeSpan.FromSeconds(15))
+            {
+                await Task.Delay(250, cancellationToken);
+                if (_isClosing || !_trackSwitchPlaybackHoldActive)
+                {
+                    return;
+                }
+
+                if (_showNextTrackChange)
+                {
+                    await RefreshTrackInfoAsync(showWhenFound: false);
+                }
+            }
+
+            if (_trackSwitchPlaybackHoldActive)
+            {
+                _trackSwitchPlaybackHoldActive = false;
+                _showNextTrackChange = false;
+                if (!_musicActivityDetector.IsPlaying &&
+                    _stateMachine.CurrentContinuousState == PetContinuousState.MusicPlaying)
+                {
+                    StopMusicPlayback("track-switch-timeout");
+                }
+                ShowFeedbackBubble("网易云没有响应，等太久了，再试一次吧");
+                await TransitionToResolvedContinuousAnimationAsync(
+                    "media.track_switch_failed_without_reaction");
+                _logger.Info("media.track_switch_timeout", "No public playback change was observed.");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void UpdateMusicAnimationForTrack(MediaTrackSnapshot snapshot, string identity)
+    {
+        _musicAnimationTrackIdentity = identity;
+        string selectedAnimation = _musicAnimationSelector.Select(
+            _settings.Media.MusicAnimationSelection,
+            snapshot.Artist,
+            _settings.Media.EnableLuoTianyiSingingEasterEgg);
+        bool animationChanged = !string.Equals(
+            selectedAnimation,
+            _stateMachine.VisualState.MusicAnimationId,
+            StringComparison.Ordinal);
+        _stateMachine.SetMusicAnimation(selectedAnimation);
+        _logger.Info(
+            "media.companion_animation_selected",
+            $"Animation={selectedAnimation}; ArtistClass={GetArtistClass(snapshot.Artist)}.");
+
+        if (animationChanged &&
+            _stateMachine.Resolve(DateTimeOffset.Now).Source == PlaybackPlanSource.Continuous)
+        {
+            _ = TransitionToResolvedContinuousAnimationAsync(
+                "animation.music_artist_transition_completed");
+        }
+    }
+
+    private static string GetArtistClass(string? artist) =>
+        MusicArtistMatcher.IsLuoTianyi(artist)
+            ? "LuoTianyi"
+            : MusicArtistMatcher.IsYuezhengLing(artist)
+                ? "YuezhengLing"
+                : "OtherOrUnknown";
+
+    private void ConfirmTrackSwitch(string source)
+    {
+        if (!_showNextTrackChange)
+        {
+            return;
+        }
+
+        _showNextTrackChange = false;
+        if (!_trackSwitchSawAudioGap || _musicActivityDetector.IsPlaying)
+        {
+            _trackSwitchPlaybackHoldActive = false;
+            _trackSwitchCancellation?.Cancel();
+        }
+        _ = PlayReactionAsync("resonance-ok", ReactionPriority.MediaOrVolume);
+        _logger.Info("media.track_switch_confirmed", $"Source={source}.");
+    }
+
+    private void ShowTrackSwitchPending()
+    {
+        TrackTitleText.Text = "正在切换歌曲…";
+        TrackArtistText.Text = "等待网易云更新歌曲信息";
+        TrackArtistText.Visibility = Visibility.Visible;
+        System.Windows.Automation.AutomationProperties.SetName(
+            TrackInfoBubble,
+            "正在切换歌曲，等待网易云更新歌曲信息");
+        ShowTrackInfoSurface(holdAfterLeave: true);
+    }
+
+    private void ShowTrackInfo(MediaTrackSnapshot snapshot, bool holdAfterLeave)
+    {
+        TrackTitleText.Text = snapshot.Title;
+        TrackArtistText.Text = snapshot.Artist;
+        TrackArtistText.Visibility = string.IsNullOrWhiteSpace(snapshot.Artist)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        System.Windows.Automation.AutomationProperties.SetName(
+            TrackInfoBubble,
+            MediaTrackText.BuildAccessibleLabel(snapshot));
+        ShowTrackInfoSurface(holdAfterLeave);
+    }
+
+    private void ShowTrackInfoUnavailable()
+    {
+        TrackTitleText.Text = "未在播放";
+        TrackArtistText.Text = string.Empty;
+        TrackArtistText.Visibility = Visibility.Collapsed;
+        System.Windows.Automation.AutomationProperties.SetName(
+            TrackInfoBubble,
+            "未在播放");
+        ShowTrackInfoSurface(holdAfterLeave: false);
+    }
+
+    private void ShowTrackInfoSurface(bool holdAfterLeave)
+    {
+        if (!CanShowMusicIslands)
+        {
+            _trackInfoMotion.Hide(animate: false);
+            return;
+        }
+
+        _trackInfoMotion.Show();
+        _trackInfoHideTimer.Stop();
+        if (holdAfterLeave && !_previewTrackInfo)
+        {
+            _trackInfoHideTimer.Start();
+        }
+    }
+
+    private void OnTrackInfoHideTimerTick(object? sender, EventArgs e)
+    {
+        _trackInfoHideTimer.Stop();
+        if (!_previewTrackInfo && !IsMouseOver)
+        {
+            _trackInfoMotion.Hide();
+        }
+    }
+
+    private async Task BeginPreviewExitAsync()
+    {
+        await Task.Delay(250);
+        await BeginUserRequestedExitAsync();
+    }
+
+    private async Task BeginPreviewMusicTransitionAsync()
+    {
+        await Task.Delay(500);
+        if (!_isClosing)
+        {
+            _musicPreviewOverride = true;
+            _musicActivityDetector.Reset();
+            StartMusicPlayback("automatic-preview", "洛天依");
+        }
+    }
+
+    private async Task BeginPreviewDragCycleAsync()
+    {
+        await Task.Delay(500);
+        if (_isClosing)
+        {
+            return;
+        }
+
+        BeginWindowDrag();
+        await Task.Delay(1600);
+        if (!_isClosing)
+        {
+            EndWindowDrag();
+        }
+    }
+
+    private async Task BeginPreviewBodyReactionAsync(string animationId)
+    {
+        await Task.Delay(500);
+        if (!_isClosing)
+        {
+            const string mirroredPrefix = "mirror:";
+            bool mirrorHorizontally = animationId.StartsWith(
+                mirroredPrefix,
+                StringComparison.OrdinalIgnoreCase);
+            string resolvedAnimationId = mirrorHorizontally
+                ? animationId.Substring(mirroredPrefix.Length)
+                : animationId;
+            await PlayBodyReactionAsync(
+                resolvedAnimationId,
+                blocksDisplayModeToggle: true,
+                mirrorHorizontally: mirrorHorizontally);
+        }
+    }
+
+    private async Task BeginMediaControlsPreviewAsync()
+    {
+        await Task.Delay(500);
+        if (_isClosing)
+        {
+            return;
+        }
+
+        Rect workArea = SystemParameters.WorkArea;
+        Top = Clamp(Top + 300, workArea.Top, workArea.Bottom - ActualHeight);
+        Topmost = true;
+        if (CanShowMusicIslands)
+        {
+            _mediaControlsMotion.Show();
+        }
+    }
+
+    private async Task BeginLiveCloudMusicControlPreviewAsync()
+    {
+        await Task.Delay(900);
+        if (!_isClosing)
+        {
+            HandleTogglePlayPauseRequest();
+        }
+    }
+
+    private async Task BeginBunChasePreviewAsync()
+    {
+        await Task.Delay(700);
+        if (_isClosing)
+        {
+            return;
+        }
+
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        QueueBunTreat(new Point(
+            Math.Max(workArea.Left + 90, Left - 320),
+            Math.Max(workArea.Top + 90, Top - 90)));
+    }
+
+    private async Task BeginLiveTrackInfoPreviewAsync()
+    {
+        await Task.Delay(700);
+        if (!_isClosing)
+        {
+            await RefreshTrackInfoAsync(showWhenFound: true);
+        }
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        ClosePlanner();
+        _inboxWindow?.Close();
+        _messageBubble?.Close();
+        if (_desktopToolWindowBehavior is not null)
+        {
+            _desktopToolWindowBehavior.WindowAttentionRequested -=
+                OnShellWindowAttentionRequested;
+        }
+        _desktopToolWindowBehavior?.Dispose();
+        _desktopToolWindowBehavior = null;
+        _isClosing = true;
+        _petQuickPanel?.Close();
+        _trayIcon?.Dispose();
+        _trayIcon = null;
+        _trackSwitchCancellation?.Cancel();
+        _trackSwitchCancellation?.Dispose();
+        _cloudMusicLaunchCancellation?.Cancel();
+        _cloudMusicLaunchCancellation?.Dispose();
+        _cloudMusicLaunchCancellation = null;
+        _musicDetectionTimer.Stop();
+        _musicDetectionTimer.Tick -= OnMusicDetectionTimerTick;
+        _feedbackBubbleTimer.Stop();
+        _feedbackBubbleTimer.Tick -= OnFeedbackBubbleTimerTick;
+        _mediaControlsHideTimer.Stop();
+        _mediaControlsHideTimer.Tick -= OnMediaControlsHideTimerTick;
+        _trackInfoRefreshTimer.Stop();
+        _trackInfoRefreshTimer.Tick -= OnTrackInfoRefreshTimerTick;
+        _trackInfoHideTimer.Stop();
+        _trackInfoHideTimer.Tick -= OnTrackInfoHideTimerTick;
+        _idleSceneTimer.Stop();
+        _idleSceneTimer.Tick -= OnIdleSceneTimerTick;
+        _timeSceneTimer.Stop();
+        _timeSceneTimer.Tick -= OnTimeSceneTimerTick;
+        CancelTimeGreetingPresentation(
+            restoreContinuousAnimation: false,
+            "Application is closing.");
+        StopClassicSpinDance(
+            restoreContinuousAnimation: false,
+            "application.closing_spin_dance");
+        _genshinStatusTimer.Stop();
+        _genshinStatusTimer.Tick -= OnGenshinStatusTimerTick;
+        _messageNotificationStatusTimer.Stop();
+        _messageNotificationStatusTimer.Tick -= OnMessageNotificationStatusTimerTick;
+        _weChatSessionSource?.Dispose();
+        StopBunMotionLoop();
+        _singleClickTimer.Stop();
+        _singleClickTimer.Tick -= OnSingleClickTimerTick;
+        _pointerGesture.Cancel();
+        _pettingGesture.Cancel();
+        ReleaseFileDragCursorOverride();
+        _bodyReactionMotion.Cancel();
+        _mediaControlsMotion.Cancel();
+        _trackInfoMotion.Cancel();
+        CancelGenshinPresentations(restoreContinuousAnimation: false);
+        CancelMessageNotificationPresentation(restoreContinuousAnimation: false);
+        CancelBunChase(restorePosition: false, restoreContinuousAnimation: false);
+        CancelCrystalLongIdle();
+        CancelVisualTransition();
+        _animationPlayer?.Dispose();
+        _crystalLongIdleDecorationPlayer?.Dispose();
+        _petPointerCursor?.Dispose();
+        _headPatCursor?.Dispose();
+        if (_systemResumeSource is not null)
+        {
+            _systemResumeSource.Resumed -= OnSystemResumed;
+            _systemResumeSource.Suspended -= OnSystemSuspended;
+            _systemResumeSource.Dispose();
+        }
+        if (_protectedGameMonitor is not null)
+        {
+            _protectedGameMonitor.PresenceChanged -= OnProtectedGamePresenceChanged;
+            _protectedGameMonitor.Dispose();
+        }
+        if (_messageNotificationSource is not null)
+        {
+            if (_messageNotificationSubscribed)
+            {
+                _messageNotificationSource.NotificationReceived -= OnMessageNotificationReceived;
+                _messageNotificationSubscribed = false;
+            }
+            _messageNotificationSource.Dispose();
+        }
+        if (_desktopItemDisappearanceSource is not null)
+        {
+            _desktopItemDisappearanceSource.ItemDisappeared -= OnDesktopItemDisappeared;
+            _desktopItemDisappearanceSource.Dispose();
+        }
+        _applicationVolumeService?.Dispose();
+        if (!_persistSettings)
+        {
+            return;
+        }
+
+        if (_edgeDockSide != EdgeDockSide.None)
+        {
+            PositionEdgeDock(hidden: false);
+        }
+
+        _settings = _settings with
+        {
+            Window = _settings.Window with
+            {
+                AlwaysOnTop = _permanentTopmost,
+                StartWithWindows = _startupRegistrationService?.IsEnabled ?? false,
+                Left = Left,
+                Top = Top,
+            },
+        };
+
+        try
+        {
+            _settingsStore.SaveAsync(_settings).GetAwaiter().GetResult();
+            _logger.Info("window.state_saved", "Window preferences saved.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.Error("window.state_save_failed", exception);
+        }
+    }
+
+    private async Task BeginEdgeDockPreviewAsync(EdgeDockSide side)
+    {
+        await Task.Delay(500);
+        if (_isClosing)
+        {
+            return;
+        }
+
+        BeginWindowDrag();
+        DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle initialPet = GetDragIntentPetDesktopBounds();
+        double initialLeft = Left;
+        double initialTop = Top;
+        double activationOvershoot = side == EdgeDockSide.Bottom
+            ? initialPet.Height * EdgeDockActivationFraction
+            : initialPet.Width * EdgeDockActivationFraction;
+        double qaOvershoot = activationOvershoot + 4;
+        switch (side)
+        {
+            case EdgeDockSide.Left:
+                Left = initialLeft + workArea.Left - initialPet.Left - qaOvershoot;
+                break;
+            case EdgeDockSide.Right:
+                Left = initialLeft + workArea.Right - initialPet.Right + qaOvershoot;
+                break;
+            case EdgeDockSide.Bottom:
+                Top = initialTop + workArea.Bottom - initialPet.Bottom + qaOvershoot;
+                break;
+            default:
+                return;
+        }
+
+        UpdateDragEdgePreview();
+        double[] boundaryOffsets = [1, -1, 2, -2, 1, -1];
+        foreach (double offset in boundaryOffsets)
+        {
+            await Task.Delay(90);
+            switch (side)
+            {
+                case EdgeDockSide.Left:
+                    Left = initialLeft + workArea.Left - initialPet.Left -
+                        activationOvershoot - offset;
+                    break;
+                case EdgeDockSide.Right:
+                    Left = initialLeft + workArea.Right - initialPet.Right +
+                        activationOvershoot + offset;
+                    break;
+                case EdgeDockSide.Bottom:
+                    Top = initialTop + workArea.Bottom - initialPet.Bottom +
+                        activationOvershoot + offset;
+                    break;
+            }
+
+            UpdateDragEdgePreview();
+        }
+
+        await Task.Delay(500);
+        if (!_isClosing)
+        {
+            EndWindowDrag();
+        }
+
+        await Task.Delay(1200);
+        if (!_isClosing && _edgeDockSide == side)
+        {
+            RevealEdgeDock();
+        }
+    }
+
+    private static string[] ParseGenshinProcessNames(string? value)
+    {
+        string[] names = TextParsing.SplitAndTrim(value ?? string.Empty, ';');
+        return names.Length > 0
+            ? names
+            : ["YuanShen.exe", "GenshinImpact.exe"];
+    }
+
+    private static double Clamp(double value, double minimum, double maximum) =>
+        Numeric.Clamp(value, minimum, Math.Max(minimum, maximum));
+
+    private enum AccessoryLayout
+    {
+        Split,
+        AbovePet,
+        BelowPet,
+    }
+
+    private void CancelVisualTransition()
+    {
+        _visualSwapTransition.Cancel();
+    }
+}

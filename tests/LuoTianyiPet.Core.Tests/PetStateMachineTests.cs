@@ -1,0 +1,290 @@
+using LuoTianyiPet.Core;
+
+namespace LuoTianyiPet.Core.Tests;
+
+public sealed class PetStateMachineTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 8, 30, 12, 0, 0, TimeSpan.FromHours(8));
+
+    [Fact]
+    public void CompletingReactionReResolvesCurrentMusicState()
+    {
+        PetStateMachine machine = new(new PetVisualState(PetDisplayMode.FullBodyInteractive));
+        machine.SetMusicAnimation(PetVisualState.EnjoyMusicAnimation);
+        machine.SetContinuousState(PetContinuousState.MusicPlaying);
+        ReactionStartOutcome outcome = machine.TryStartReaction(Request("notification"), Now);
+
+        Assert.Equal("notification", machine.Resolve(Now).AnimationId);
+        Assert.True(machine.CompleteReaction(outcome.Token!.Value, Now.AddSeconds(2)));
+        Assert.Equal(PetVisualState.EnjoyMusicAnimation, machine.Resolve(Now.AddSeconds(2)).AnimationId);
+        Assert.Equal(PetDisplayMode.FullBodyInteractive, machine.VisualState.SelectedDisplayMode);
+    }
+
+    [Fact]
+    public void MusicSelectionChangedDuringDragIsUsedAfterDrop()
+    {
+        PetStateMachine machine = new();
+        Assert.True(machine.BeginDrag());
+
+        machine.SetMusicAnimation(PetVisualState.EnjoyMusicAnimation);
+        machine.SetContinuousState(PetContinuousState.MusicPlaying);
+
+        Assert.True(machine.EndDrag());
+        Assert.Equal(PetVisualState.EnjoyMusicAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Theory]
+    [InlineData(PetDisplayMode.Compact)]
+    [InlineData(PetDisplayMode.FullBodyInteractive)]
+    public void MusicAnimationRemainsVisibleThroughoutDrag(PetDisplayMode displayMode)
+    {
+        PetStateMachine machine = new(new PetVisualState(
+            displayMode,
+            PetContinuousState.MusicPlaying,
+            PetVisualState.EnjoyMusicAnimation));
+
+        Assert.True(machine.BeginDrag());
+        PetPlaybackPlan draggingPlan = machine.Resolve(Now);
+
+        Assert.Equal(PetVisualState.EnjoyMusicAnimation, draggingPlan.AnimationId);
+        Assert.False(draggingPlan.BodyRegionInteractionsEnabled);
+        Assert.True(machine.EndDrag());
+        Assert.Equal(PetVisualState.EnjoyMusicAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void HigherPriorityReplacesAndStaleCompletionCannotEndReplacement()
+    {
+        PetStateMachine machine = new();
+        ReactionStartOutcome notification = machine.TryStartReaction(
+            Request("notification", ReactionPriority.Notification), Now);
+        ReactionStartOutcome genshin = machine.TryStartReaction(
+            Request("genshin", ReactionPriority.Genshin), Now);
+
+        Assert.Equal(ReactionStartResult.Replaced, genshin.Result);
+        Assert.False(machine.CompleteReaction(notification.Token!.Value, Now));
+        Assert.Equal("genshin", machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void LowerPriorityReactionIsRejected()
+    {
+        PetStateMachine machine = new();
+        machine.TryStartReaction(Request("notification", ReactionPriority.Notification), Now);
+
+        ReactionStartOutcome result = machine.TryStartReaction(
+            Request("media", ReactionPriority.MediaOrVolume), Now);
+
+        Assert.Equal(ReactionStartResult.RejectedByPriority, result.Result);
+        Assert.Equal("notification", machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void SameMergeKeyMergesAndCooldownSuppressesLaterReaction()
+    {
+        PetStateMachine machine = new();
+        ReactionRequest first = Request("message", mergeKey: "im-message", cooldown: TimeSpan.FromMinutes(1));
+        ReactionStartOutcome started = machine.TryStartReaction(first, Now);
+        ReactionStartOutcome merged = machine.TryStartReaction(
+            first with { ExpiresAt = Now.AddSeconds(20) }, Now.AddSeconds(1));
+
+        Assert.Equal(ReactionStartResult.Merged, merged.Result);
+        Assert.Equal(started.Token, merged.Token);
+        Assert.True(machine.CompleteReaction(started.Token!.Value, Now.AddSeconds(2)));
+        Assert.Equal(
+            ReactionStartResult.SuppressedByCooldown,
+            machine.TryStartReaction(first with { ExpiresAt = Now.AddMinutes(2) }, Now.AddSeconds(30)).Result);
+        Assert.Equal(
+            ReactionStartResult.Started,
+            machine.TryStartReaction(first with { ExpiresAt = Now.AddMinutes(2) }, Now.AddMinutes(1).AddSeconds(3)).Result);
+    }
+
+    [Fact]
+    public void ExpiredReactionIsDropped()
+    {
+        PetStateMachine machine = new();
+
+        ReactionStartOutcome result = machine.TryStartReaction(
+            Request("stale") with { ExpiresAt = Now }, Now);
+
+        Assert.Equal(ReactionStartResult.Expired, result.Result);
+        Assert.Equal(PetVisualState.CompactIdleAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void DragPreservesReactionAndResolvesUpdatedStateAfterItsCompletion()
+    {
+        PetStateMachine machine = new();
+        var reaction = machine.TryStartReaction(Request("ordinary"), Now);
+
+        Assert.True(machine.BeginDrag());
+        Assert.Equal("ordinary", machine.Resolve(Now).AnimationId);
+        machine.SetContinuousState(PetContinuousState.MusicPlaying);
+        Assert.True(machine.EndDrag());
+        Assert.Equal("ordinary", machine.Resolve(Now).AnimationId);
+        Assert.True(machine.CompleteReaction(reaction.Token!.Value, Now));
+        Assert.Equal(PetVisualState.MusicSwayAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void FullBodyDragKeepsFullBodyIdleVisualAndDisablesBodyRegions()
+    {
+        PetStateMachine machine = new(new PetVisualState(PetDisplayMode.FullBodyInteractive));
+
+        Assert.True(machine.Resolve(Now).BodyRegionInteractionsEnabled);
+        Assert.True(machine.BeginDrag());
+        PetPlaybackPlan plan = machine.Resolve(Now);
+
+        Assert.Equal(PetVisualState.FullBodyIdleAnimation, plan.AnimationId);
+        Assert.False(plan.BodyRegionInteractionsEnabled);
+    }
+
+    [Theory]
+    [InlineData(PetDisplayMode.Compact)]
+    [InlineData(PetDisplayMode.FullBodyInteractive)]
+    public void DragFromHeheKeepsHeheThroughoutDragAndAfterDrop(PetDisplayMode mode)
+    {
+        PetStateMachine machine = new(new PetVisualState(
+            mode,
+            PetContinuousState.MediumIdle));
+
+        Assert.True(machine.BeginDrag());
+        Assert.Equal(PetVisualState.MediumIdleAnimation, machine.Resolve(Now).AnimationId);
+        Assert.False(machine.Resolve(Now).BodyRegionInteractionsEnabled);
+        Assert.True(machine.IsDraggingHehe);
+        Assert.True(machine.EndDrag());
+
+        Assert.False(machine.IsDraggingHehe);
+        Assert.Equal(PetContinuousState.MediumIdle, machine.VisualState.ContinuousState);
+        Assert.Equal(PetVisualState.MediumIdleAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void MusicStartingDuringHeheDragRetainsPriority()
+    {
+        PetStateMachine machine = new(new PetVisualState(ContinuousState: PetContinuousState.MediumIdle));
+        Assert.True(machine.BeginDrag());
+        machine.SetContinuousState(PetContinuousState.MusicPlaying);
+        Assert.False(machine.IsDraggingHehe);
+        Assert.Equal(PetVisualState.MusicSwayAnimation, machine.Resolve(Now).AnimationId);
+        Assert.True(machine.EndDrag());
+        Assert.Equal(PetContinuousState.MusicPlaying, machine.VisualState.ContinuousState);
+    }
+
+    [Theory]
+    [InlineData(PetDisplayMode.Compact, PetVisualState.CompactIdleAnimation)]
+    [InlineData(PetDisplayMode.FullBodyInteractive, PetVisualState.FullBodyIdleAnimation)]
+    public void DisabledMusicVisualKeepsIdleAppearanceThroughoutDrag(
+        PetDisplayMode displayMode,
+        string expectedAnimation)
+    {
+        PetStateMachine machine = new(new PetVisualState(
+            displayMode,
+            PetContinuousState.MusicPlaying,
+            PetVisualState.NoMusicAnimation));
+
+        Assert.True(machine.BeginDrag());
+        Assert.Equal(expectedAnimation, machine.Resolve(Now).AnimationId);
+        Assert.True(machine.EndDrag());
+        Assert.Equal(expectedAnimation, machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void DisplayOnlyFullBodyAppearanceNeverEnablesBodyRegions()
+    {
+        PetStateMachine machine = new(new PetVisualState(
+            PetDisplayMode.FullBodyInteractive,
+            FullBodyInteractionsEnabled: false));
+
+        Assert.False(machine.Resolve(Now).BodyRegionInteractionsEnabled);
+        machine.SetFullBodyInteractionsEnabled(true);
+        Assert.True(machine.Resolve(Now).BodyRegionInteractionsEnabled);
+    }
+
+    [Fact]
+    public void BodyInteractionRecoveryDelayDoesNotBlockDoubleClickStateChangeOrDrag()
+    {
+        PetStateMachine machine = new(new PetVisualState(PetDisplayMode.FullBodyInteractive));
+        machine.SuppressBodyInteractions(Now, TimeSpan.FromMilliseconds(800));
+
+        Assert.False(machine.Resolve(Now.AddMilliseconds(799)).BodyRegionInteractionsEnabled);
+        machine.SetDisplayMode(PetDisplayMode.Compact);
+        Assert.Equal(PetDisplayMode.Compact, machine.VisualState.SelectedDisplayMode);
+        machine.SetDisplayMode(PetDisplayMode.FullBodyInteractive);
+        Assert.True(machine.BeginDrag());
+        Assert.True(machine.EndDrag());
+        Assert.True(machine.Resolve(Now.AddMilliseconds(800)).BodyRegionInteractionsEnabled);
+    }
+
+    [Fact]
+    public void BodyPartReactionBlocksDisplayModeToggleOnlyUntilAnimationCompletes()
+    {
+        PetStateMachine machine = new(new PetVisualState(PetDisplayMode.FullBodyInteractive));
+        ReactionStartOutcome reaction = machine.TryStartReaction(
+            Request("body-part-action") with { BlocksDisplayModeToggle = true },
+            Now);
+
+        Assert.True(machine.IsDisplayModeToggleBlocked(Now.AddMilliseconds(500)));
+        Assert.True(machine.CompleteReaction(reaction.Token!.Value, Now.AddSeconds(2)));
+        Assert.False(machine.IsDisplayModeToggleBlocked(Now.AddSeconds(2)));
+    }
+
+    [Fact]
+    public void LaterBodyInteractionSuppressionExtendsExistingRecoveryDelay()
+    {
+        PetStateMachine machine = new(new PetVisualState(PetDisplayMode.FullBodyInteractive));
+        machine.SuppressBodyInteractions(Now, TimeSpan.FromMilliseconds(800));
+
+        machine.SuppressBodyInteractions(Now.AddMilliseconds(400), TimeSpan.FromMilliseconds(800));
+
+        Assert.False(machine.Resolve(Now.AddMilliseconds(1199)).BodyRegionInteractionsEnabled);
+        Assert.True(machine.Resolve(Now.AddMilliseconds(1200)).BodyRegionInteractionsEnabled);
+    }
+
+    [Fact]
+    public void NonInterruptibleReactionBlocksDrag()
+    {
+        PetStateMachine machine = new();
+        machine.TryStartReaction(
+            Request("exit", ReactionPriority.Exit) with { InterruptibleByDrag = false }, Now);
+
+        Assert.False(machine.BeginDrag());
+        Assert.Equal("exit", machine.Resolve(Now).AnimationId);
+    }
+
+    [Fact]
+    public void HiddenForSafetyProducesInvisiblePlan()
+    {
+        PetStateMachine machine = new();
+        machine.SetContinuousState(PetContinuousState.HiddenForSafety);
+
+        PetPlaybackPlan plan = machine.Resolve(Now);
+
+        Assert.False(plan.IsVisible);
+        Assert.Null(plan.AnimationId);
+        Assert.False(machine.BeginDrag());
+    }
+
+    [Fact]
+    public void HiddenForSafetyImmediatelyEndsAnActiveDrag()
+    {
+        PetStateMachine machine = new();
+        Assert.True(machine.BeginDrag());
+
+        machine.SetContinuousState(PetContinuousState.HiddenForSafety);
+
+        Assert.False(machine.Resolve(Now).IsVisible);
+        Assert.False(machine.EndDrag());
+    }
+
+    private static ReactionRequest Request(
+        string animationId,
+        ReactionPriority priority = ReactionPriority.UserInteraction,
+        string? mergeKey = null,
+        TimeSpan cooldown = default) => new(
+            animationId,
+            priority,
+            Now.AddMinutes(1),
+            mergeKey,
+            cooldown);
+}

@@ -1,0 +1,64 @@
+# Visual Studio / .NET
+.vs/
+bin/
+obj/
+publish/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Editors
+.vscode/
+.idea/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+~$*
+__pycache__/
+*.py[cod]
+
+# Local heavyweight authoring tools (portable, reproducible setup only)
+.local-tools/
+
+# Original source materials are local build inputs and are never committed.
+/原素材/
+
+# Deprecated source copy was removed after migration; ignore accidental recreation.
+/assets/source/
+
+# Unselected source archive remains outside the repository.
+/候选素材_官方/
+
+# Local maintenance instructions are not part of the public repository.
+/AGENTS.md
+
+# The previous repository metadata is kept as a local rollback backup and must
+# never be included in the rebuilt repository.
+/.git_backup_20260914/
+
+# Local video frame exports; runtime atlases and previews are committed instead.
+/候选素材_官方/11_新添加_AI生成文件吞食动画/新版/*/新版_*.png
+
+# Local 720p interaction frame exports for the crystal-dress model. The
+# normalized atlases, animated previews and provenance metadata are committed.
+/候选素材_官方/区域标注/第二模型/动作动画png/**/*.png
+
+# Local 720p source sequences added for the crystal-dress model. Keep the
+# original authoring frames in place; commit only previews, atlases and hashes.
+/候选素材_官方/模式二新添加动作/**/*.png
+
+# Local long-idle decoration frame exports. Deterministic cleaned animated
+# WebP overlays and hashes are committed by prepare_crystal_interactions.py.
+/候选素材_官方/睡觉小装饰/**/*.png
+
+# Windows metadata
+Thumbs.db
+Desktop.ini
+
+# Crash dumps and local diagnostic output.
+*.dmp
+*.stackdump

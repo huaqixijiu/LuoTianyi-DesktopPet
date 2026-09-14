@@ -1,0 +1,221 @@
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Threading;
+using LuoTianyiPet.Platform.Windows;
+
+namespace LuoTianyiPet.App;
+
+/// <summary>
+/// Keeps a desktop companion out of task switchers while allowing it to remain
+/// visible when Windows invokes "Show desktop".
+/// </summary>
+internal sealed class DesktopToolWindowBehavior : IDisposable
+{
+    private const int GwlExStyle = -20;
+    private const long WsExToolWindow = 0x00000080L;
+    private const long WsExAppWindow = 0x00040000L;
+    private const int WmSysCommand = 0x0112;
+    private const long ScCommandMask = 0xFFF0L;
+    private const long ScMinimize = 0xF020L;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoMove = 0x0002;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpFrameChanged = 0x0020;
+
+    private readonly Window _window;
+    private readonly bool _keepVisibleOnShowDesktop;
+    private HwndSource? _source;
+    private IntPtr _windowHandle;
+    private int _shellHookMessage;
+    private bool _shellHookRegistered;
+    private bool _restoreScheduled;
+    private bool _disposed;
+
+    public DesktopToolWindowBehavior(Window window, bool keepVisibleOnShowDesktop)
+    {
+        _window = window ?? throw new ArgumentNullException(nameof(window));
+        _keepVisibleOnShowDesktop = keepVisibleOnShowDesktop;
+        _window.ShowInTaskbar = false;
+        _window.ShowActivated = false;
+        _window.SourceInitialized += OnSourceInitialized;
+        _window.StateChanged += OnWindowStateChanged;
+    }
+
+    public bool IsToolWindowStyleApplied { get; private set; }
+
+    public bool IsShellAttentionMonitoringAvailable => _shellHookRegistered;
+
+    public event EventHandler<ShellWindowAttentionEventArgs>? WindowAttentionRequested;
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        IntPtr handle = new WindowInteropHelper(_window).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        IntPtr currentStyle = GetWindowLongPtr(handle, GwlExStyle);
+        long desiredStyleValue =
+            (currentStyle.ToInt64() | WsExToolWindow) & ~WsExAppWindow;
+        IntPtr desiredStyle = new(desiredStyleValue);
+        if (desiredStyle != currentStyle)
+        {
+            _ = SetWindowLongPtr(handle, GwlExStyle, desiredStyle);
+            _ = SetWindowPos(
+                handle,
+                IntPtr.Zero,
+                0,
+                0,
+                0,
+                0,
+                SwpNoSize | SwpNoMove | SwpNoZOrder | SwpNoActivate | SwpFrameChanged);
+        }
+
+        IntPtr verifiedStyle = GetWindowLongPtr(handle, GwlExStyle);
+        IsToolWindowStyleApplied =
+            (verifiedStyle.ToInt64() & WsExToolWindow) != 0 &&
+            (verifiedStyle.ToInt64() & WsExAppWindow) == 0;
+        _source = HwndSource.FromHwnd(handle);
+        _source?.AddHook(WindowMessageHook);
+        _windowHandle = handle;
+        uint shellHookMessage = RegisterWindowMessage("SHELLHOOK");
+        if (shellHookMessage != 0)
+        {
+            _shellHookMessage = unchecked((int)shellHookMessage);
+            _shellHookRegistered = RegisterShellHookWindow(handle);
+        }
+    }
+
+    private IntPtr WindowMessageHook(
+        IntPtr hwnd,
+        int message,
+        IntPtr wParam,
+        IntPtr lParam,
+        ref bool handled)
+    {
+        if (_keepVisibleOnShowDesktop &&
+            message == WmSysCommand &&
+            (wParam.ToInt64() & ScCommandMask) == ScMinimize)
+        {
+            handled = true;
+        }
+
+        if (_shellHookRegistered &&
+            message == _shellHookMessage &&
+            ShellAttentionMessageClassifier.TryGetFlashingWindow(
+                wParam,
+                lParam,
+                out nint flashingWindow))
+        {
+            WindowAttentionRequested?.Invoke(
+                this,
+                new ShellWindowAttentionEventArgs(flashingWindow));
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        if (!_keepVisibleOnShowDesktop ||
+            _disposed ||
+            _restoreScheduled ||
+            _window.WindowState != WindowState.Minimized)
+        {
+            return;
+        }
+
+        _restoreScheduled = true;
+        _window.Dispatcher.BeginInvoke(
+            DispatcherPriority.Send,
+            () =>
+            {
+                try
+                {
+                    if (!_disposed && _window.WindowState == WindowState.Minimized)
+                    {
+                        _window.WindowState = WindowState.Normal;
+                    }
+                }
+                finally
+                {
+                    _restoreScheduled = false;
+                }
+            });
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _window.SourceInitialized -= OnSourceInitialized;
+        _window.StateChanged -= OnWindowStateChanged;
+        if (_shellHookRegistered && _windowHandle != IntPtr.Zero)
+        {
+            _ = DeregisterShellHookWindow(_windowHandle);
+        }
+        _shellHookRegistered = false;
+        _windowHandle = IntPtr.Zero;
+        if (_source is { IsDisposed: false })
+        {
+            _source.RemoveHook(WindowMessageHook);
+        }
+        _source = null;
+    }
+
+    private static IntPtr GetWindowLongPtr(IntPtr windowHandle, int index) =>
+        IntPtr.Size == 8
+            ? GetWindowLongPtr64(windowHandle, index)
+            : new IntPtr(GetWindowLong32(windowHandle, index));
+
+    private static IntPtr SetWindowLongPtr(IntPtr windowHandle, int index, IntPtr value) =>
+        IntPtr.Size == 8
+            ? SetWindowLongPtr64(windowHandle, index, value)
+            : new IntPtr(SetWindowLong32(windowHandle, index, value.ToInt32()));
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLong32(IntPtr windowHandle, int index);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr GetWindowLongPtr64(IntPtr windowHandle, int index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong32(IntPtr windowHandle, int index, int value);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr64(IntPtr windowHandle, int index, IntPtr value);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        IntPtr windowHandle,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint RegisterWindowMessage(string message);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool RegisterShellHookWindow(IntPtr windowHandle);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeregisterShellHookWindow(IntPtr windowHandle);
+}
+
+internal sealed class ShellWindowAttentionEventArgs(nint windowHandle) : EventArgs
+{
+    public nint WindowHandle { get; } = windowHandle;
+}

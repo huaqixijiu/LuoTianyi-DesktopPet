@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "settingsSidebarArtwork": [
+    {
+      "page": "general",
+      "expression": "我推",
+      "source": "候选素材_官方/03_官方表情包/5582-心律共鸣动态表情包/心律共鸣动态表情包_我推.png",
+      "sourceSha256": "41debfd543e63b6e7037b2116b9f73fb1a89eb35d0e46da874e17949d78e9924",
+      "sourceAlphaBounds": [
+        0,
+        0,
+        162,
+        162
+      ],
+      "output": "assets/ui/settings-sidebar-general.png",
+      "outputSize": [
+        144,
+        124
+      ],
+      "outputSha256": "adeccabb1cf5f39d9accfec206b1d11dafeab1e7526df94d08c39b0f8623fd71",
+      "transformation": "crop-visible-alpha-bounds-and-fit-without-redrawing"
+    },
+    {
+      "page": "music",
+      "expression": "真好",
+      "source": "候选素材_官方/03_官方表情包/5582-心律共鸣动态表情包/心律共鸣动态表情包_真好.png",
+      "sourceSha256": "0a9ceebae3f3f970b4a68b76992fb1ca42464218ef199de47cb8d4f230646e01",
+      "sourceAlphaBounds": [
+        0,
+        3,
+        162,
+        162
+      ],
+      "output": "assets/ui/settings-sidebar-music.png",
+      "outputSize": [
+        144,
+        124
+      ],
+      "outputSha256": "b733fbab2ad87a41c2a46018d1d75f4e63d780c7931a48a51693aa40a01f5da4",
+      "transformation": "crop-visible-alpha-bounds-and-fit-without-redrawing"
+    },
+    {
+      "page": "notification",
+      "expression": "天哪",
+      "source": "候选素材_官方/03_官方表情包/5582-心律共鸣动态表情包/心律共鸣动态表情包_天哪.png",
+      "sourceSha256": "e56445e4a644cca94e4cd5ea95ba2c360382b6cddd10b5fdf47e7ae467edc6a0",
+      "sourceAlphaBounds": [
+        9,
+        0,
+        162,
+        162
+      ],
+      "output": "assets/ui/settings-sidebar-notification.png",
+      "outputSize": [
+        144,
+        124
+      ],
+      "outputSha256": "64ff7c8137b7d919858c04968a5c308abf30fc5ff7143a439ec1b5a70466c008",
+      "transformation": "crop-visible-alpha-bounds-and-fit-without-redrawing"
+    },
+    {
+      "page": "about",
+      "expression": "加入我们",
+      "source": "候选素材_官方/03_官方表情包/5582-心律共鸣动态表情包/心律共鸣动态表情包_加入我们.png",
+      "sourceSha256": "67a5b53bcc2c2244f130fb4da02a29c3d3a0f333edf675cbe5a23436644e13b3",
+      "sourceAlphaBounds": [
+        1,
+        0,
+        162,
+        162
+      ],
+      "output": "assets/ui/settings-sidebar-about.png",
+      "outputSize": [
+        144,
+        124
+      ],
+      "outputSha256": "94e5b2671c49d7696db48bb0c1de7dab36ae819e58692077369b7b947d8f8909",
+      "transformation": "crop-visible-alpha-bounds-and-fit-without-redrawing"
+    }
+  ],
+  "applicationIcon": {
+    "source": "assets/animations/runtime/user-chibi-crystal-full-body-idle.atlas.png",
+    "sourceSha256": "4072b603dfdbf97ae1f09f5fea4f12da6400847c2d9ab43d9311768238240aa0",
+    "crop": [
+      60,
+      0,
+      420,
+      260
+    ],
+    "outputPng": "assets/app/luotianyi-pet.png",
+    "outputPngSha256": "3ccc735cceddf1bb7fe3c5617e73bec396a35aad1baa6fe06e6debda0dc230dd",
+    "outputIco": "assets/app/luotianyi-pet.ico",
+    "outputIcoSha256": "e76dfa3b138ac2e206c5267c89ccc5ce7b310784ea932cebf7f5b41b4f3c87b5",
+    "transformation": "head-above-neck-crop-on-transparent-canvas"
+  },
+  "musicAnimationPreviews": [
+    {
+      "id": "automatic-by-artist",
+      "sources": [
+        "assets/ui/music-preview-enjoy.png",
+        "assets/ui/music-preview-sway.png",
+        "assets/ui/music-preview-sing.png",
+        "assets/ui/music-preview-call.png"
+      ],
+      "output": "assets/ui/music-preview-auto.png",
+      "outputSha256": "aa76e9ec62de37d1aa17c405d95de4f3ac2297c29592843a0826e43add3f74da",
+      "transformation": "four-preview-grid-collage"
+    },
+    {
+      "id": "resonance-enjoy-music",
+      "source": "assets/animations/runtime/resonance-enjoy-music.atlas.png",
+      "sourceSha256": "aafed47582ec66647c4c496bd99d2e4152225fb3db678ea3455375a9084060de",
+      "frameIndex": 3,
+      "output": "assets/ui/music-preview-enjoy.png",
+      "outputSha256": "d36423e2e1f8d6c0dc85cbe9146e63addcc28c8075da22aef195f6727e3068b0",
+      "transformation": "extract-frame-and-fit-visible-alpha-bounds"
+    },
+    {
+      "id": "ninth-anniversary-music-sway",
+      "source": "assets/animations/runtime/ninth-anniversary-music-sway.atlas.png",
+      "sourceSha256": "cda55b28818d5abc1e76e1e6ad9a042e83b2554534d841dbaa94cda486d3fec1",
+      "frameIndex": 14,
+      "output": "assets/ui/music-preview-sway.png",
+      "outputSha256": "8d3dbf807a05bf2db6339a70eef88feee4601fa06581b3bf9ee5e66dae74cd52",
+      "transformation": "extract-frame-and-fit-visible-alpha-bounds"
+    },
+    {
+      "id": "newyear-one-click-singing",
+      "source": "assets/animations/runtime/newyear-one-click-singing.atlas.png",
+      "sourceSha256": "8185c0beec61a35a1fa79d215b5b0b371ae75c948e25c1b83d5fa4e42c09274a",
+      "frameIndex": 4,
+      "output": "assets/ui/music-preview-sing.png",
+      "outputSha256": "9b05964c2e7866eb7a837cbc4456e9c14fba889955e56f6dac061aeca940efec",
+      "transformation": "extract-frame-and-fit-visible-alpha-bounds"
+    },
+    {
+      "id": "twelfth-anniversary-call",
+      "source": "assets/animations/runtime/twelfth-anniversary-call.frames.webp",
+      "sourceSha256": "a79d8554ab030855c31fc30956fbca2fd195bb35e30680c50c6d0f46f4d4c234",
+      "frameIndex": 7,
+      "output": "assets/ui/music-preview-call.png",
+      "outputSha256": "777db86651a041f2580112f54d529fd4b602159970ac18b1a8a9cdcc462cfd11",
+      "transformation": "extract-frame-and-fit-visible-alpha-bounds"
+    }
+  ]
+}

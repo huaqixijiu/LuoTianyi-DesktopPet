@@ -1,0 +1,69 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <Content Include="..\..\assets\audio\*.mp3" Link="assets\audio\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\LuoTianyiPet.Core\LuoTianyiPet.Core.csproj" />
+    <ProjectReference Include="..\LuoTianyiPet.Animation\LuoTianyiPet.Animation.csproj" />
+    <ProjectReference Include="..\LuoTianyiPet.Platform.Windows\LuoTianyiPet.Platform.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.26100.7705" Condition="'$(TargetFramework)' == 'net48'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\assets\animations\runtime\**\*"
+             Link="assets\animations\runtime\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\manifests\animations.json"
+             Link="assets\manifests\animations.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\objects\**\*"
+             Link="assets\objects\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\cursors\**\*"
+             Link="assets\cursors\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Resource Include="..\..\assets\app\luotianyi-pet.ico"
+              Link="assets\app\luotianyi-pet.ico" />
+    <Resource Include="..\..\assets\app\luotianyi-pet.png"
+              Link="assets\app\luotianyi-pet.png" />
+    <Resource Include="..\..\assets\ui\*.png"
+              Link="assets\ui\%(Filename)%(Extension)" />
+    <Content Include="..\..\assets\body-hit-maps\full-body-classic.json"
+             Link="assets\body-hit-maps\full-body-classic.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\assets\body-hit-maps\full-body-crystal.json"
+             Link="assets\body-hit-maps\full-body-crystal.json"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Include="Bootstrap\App.xaml" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>Bootstrap\app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\..\assets\app\luotianyi-pet.ico</ApplicationIcon>
+    <AssemblyName>LuoTianyiPet</AssemblyName>
+    <RootNamespace>LuoTianyiPet.App</RootNamespace>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <Target Name="RemoveUnneededThirdPartyPublishFiles" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'libSkiaSharp.pdb'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'$(TargetFramework)' == 'net48' and '%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'libSkiaSharp.dylib'" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'$(TargetFramework)' == 'net48' and '%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'libSkiaSharp.dll' and '%(ResolvedFileToPublish.RelativePath)' != 'libSkiaSharp.dll'" />
+    </ItemGroup>
+  </Target>
+
+</Project>
