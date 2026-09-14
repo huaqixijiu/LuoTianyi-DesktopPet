@@ -9,16 +9,18 @@ QQ / 微信来源提醒使用 Windows `UserNotificationListener`。微软要求�
 因此便携 ZIP 和直接运行的普通 EXE 可以使用动画、音乐和文件功能，但永远不能开启通知监听。
 这不是 QQ / 微信安装路径差异，也不能通过扫描进程、聊天数据库或窗口内容安全补救。
 
-正式安装包默认使用 Windows 自带的 .NET Framework 4.8 运行 WPF，本体、动画和全部功能仍装进同一个
-MSIX，不拆资源包，也不要求使用者另行下载 .NET。支持范围相应收敛为 Windows 10 22H2（19045）及
-Windows 11。源码仍保留 .NET 10 自包含构建作为兼容回退，但它不再是默认交付方式。
+正式交付统一使用 Windows 自带的 .NET Framework 4.8 运行 WPF，不要求使用者另行下载 .NET。
+当前支持范围为 Windows 10 22H2（19045）及 Windows 11。
 
-## 两种交付方式
+## 交付方式
 
-- **完整安装版**：使用 MSIX 包身份，支持 QQ/微信系统通知监听。安装脚本会创建桌面快捷方式并显示
-  明确的完成提示；安装位置由 Windows 管理，不能选择任意文件夹。
+- **任意目录安装版**：使用传统安装脚本注册外部位置身份包（sparse package），程序文件保留在用户选择的
+  目录中，同时支持 QQ/微信系统通知监听。卸载前询问是否保留 `%LOCALAPPDATA%\LuoTianyiPet`。
 - **便携版**：ZIP 解压后直接双击 `LuoTianyiPet.exe`，可以放在任意可写目录。程序通过同目录标记自动
   使用 `UserData`，无需命令行参数；不安装证书、不写注册表，但没有包身份，因此不支持 QQ/微信通知监听。
+
+仓库仍保留完整 MSIX 构建脚本，用于包身份回归和对照测试。完整 MSIX 的安装目录由 Windows 管理，
+不作为“任意目录安装版”的用户界面。
 
 构建便携版：
 
@@ -29,12 +31,25 @@ powershell -ExecutionPolicy Bypass -File tools\packaging\build_portable_test.ps1
 输出位于 `artifacts/portable/release/`。当前发布目标固定为 .NET Framework 4.8 x64，.NET 10 SDK
 仅作为构建工具使用。
 
-微软还支持“传统 EXE/MSI 安装器 + 外部位置身份包（sparse package）”，可在自选目录保留包身份；它
-最低要求 Windows 10 2004，并仍需注册签名身份包，不是纯便携。公开分发还需要可信代码签名，因此当前
-不伪装成免安装方案。参考：[Windows 打包方式](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/packaging/)
-和[外部位置包身份](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/grant-identity-to-nonpackaged-apps-overview)。
+任意目录安装版的构建入口：
 
-## 给其他 Windows 11 电脑测试
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\packaging\build_external_location_bundle.ps1
+```
+
+所有正式打包脚本默认读取 `config/version.props` 中的统一版本；当前正式版本为 `0.1.0.94`。如需重建历史验证包，仍可显式传入 `-Version`，但正式发布不得使用覆盖值。输出位于
+`artifacts/external-location/release/`。开发包只把公开 CER 放入安装包，首次安装可能通过一次 UAC
+把测试证书加入机器的 `LocalMachine\TrustedPeople`；生产包应使用受信任的代码签名证书，不需要该步骤。
+
+外部位置身份包最低要求 Windows 10 2004（19041）；它不是纯便携方案，安装时仍需注册签名身份包。
+参考：[Windows 打包方式](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/packaging/)
+和[外部位置包身份](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/grant-identity-to-nonpackaged-apps)。
+
+当前验证状态：验证版本 `0.0.0.1` 已完成离线构建、清单检查、payload 检查、签名检查和 Windows PowerShell
+5.1 语法检查；使用隔离身份 `LuoTianyiPet.ExternalUacTest` 已在 Windows PowerShell 5.1 中实际完成开发证书 UAC 信任、
+`Add-AppxPackage -ExternalLocation` 注册、用户选择目录启动、`0.0.0.2` 到 `0.0.0.3` 覆盖升级和旧快捷方式参数清理。卸载保留数据、自启动清理和卸载删除数据沙箱路径均已验证。使用受信任测试证书的隔离身份 `LuoTianyiPet.NotificationTest` 已完成用户授权，应用日志记录 `notification.monitor_status Allowed`；真实 QQ/微信消息读取仍未验证，因此该版本仍不称为正式发布版。PowerShell 7 的 Appx 模块不支持当前平台，验证命令应使用 Windows PowerShell 5.1。
+
+## 完整 MSIX 对照测试
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\packaging\build_sideload_bundle.ps1
@@ -45,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File tools\packaging\build_sideload_bundle.p
 - `LuoTianyiPet-Installer-<version>-win-x64.zip`；
 - 对应的 SHA-256 文件。
 
-测试者完整解压后双击“安装洛天依桌宠.cmd”。脚本先校验 MSIX、公钥 CER 的 SHA-256 和
+测试者完整解压后双击“安装洛天依桌宠.cmd”。该对照路径先校验 MSIX、公钥 CER 的 SHA-256 和
 签名者指纹；首次电脑会显示一次 UAC，只把公开开发证书加入
 `LocalMachine\TrustedPeople`，随后回到当前登录用户安装 MSIX。桌宠本体不会以管理员权限运行。
 安装完成后仍要由使用者在设置页点击“授权访问”。
@@ -59,17 +74,30 @@ powershell -ExecutionPolicy Bypass -File tools\packaging\build_sideload_bundle.p
 
 ## 面向公众正式分发
 
-所有普通 Windows 11 电脑都能直接安装且不导入测试证书，需要以下二选一：
+面向公众的任意目录安装版需要使用受信任的生产代码签名证书；开发证书只适合受控测试。
+正式签名仍有以下路径可选：
 
 1. 提交 Microsoft Store，由商店使用与 Partner Center 身份一致的证书签名；
-2. 使用 Windows 已信任的生产代码签名证书签署 MSIX。当前脚本支持受信任 CA 签发且可由
+2. 使用 Windows 已信任的生产代码签名证书签署身份包和外部位置 EXE。当前脚本支持受信任 CA 签发且可由
    PFX 提供的代码签名证书；Azure Artifact Signing/Trusted Signing 需要另接其远程签名客户端。
 
-仓库已支持第二条路径，证书和密码文件必须位于仓库外：
+外部位置正式安装版的生产构建：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\packaging\build_external_location_bundle.ps1 `
+  -Version 0.1.0.94 `
+  -SigningMode Production `
+  -ProductionCertificatePath D:\secrets\luotianyi-production.pfx `
+  -ProductionCertificatePasswordPath D:\secrets\luotianyi-production-password.txt `
+  -ProductionIdentityName LuoTianyiPet `
+  -ProductionPublisherDisplayName 洛天依桌宠
+```
+
+完整 MSIX 对照包的生产签名仍可使用原脚本，证书和密码文件必须位于仓库外：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\packaging\build_msix.ps1 `
-  -Version 1.0.0.0 `
+  -Version 0.1.0.94 `
   -SigningMode Production `
   -ProductionCertificatePath D:\secrets\luotianyi-production.pfx `
   -ProductionCertificatePasswordPath D:\secrets\luotianyi-production-password.txt `

@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+\.\d+$')]
-    [string]$Version = '0.1.0.89',
+    [string]$Version,
     [ValidateSet('win-x64')]
     [string]$Runtime = 'win-x64',
     [ValidateSet('Development', 'Production')]
@@ -19,6 +19,18 @@ $ErrorActionPreference = 'Stop'
 $env:WINAPP_CLI_TELEMETRY_OPTOUT = '1'
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$versionPropsPath = Join-Path $repoRoot 'config\version.props'
+if (!(Test-Path -LiteralPath $versionPropsPath -PathType Leaf)) {
+    throw "Version source was not found: $versionPropsPath"
+}
+[xml]$versionProps = Get-Content -LiteralPath $versionPropsPath -Raw
+$configuredVersion = [string]$versionProps.Project.PropertyGroup.VersionPrefix
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = $configuredVersion
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+    throw "Invalid four-part version: $Version"
+}
 $artifactRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'artifacts\msix'))
 $stagingRoot = Join-Path $artifactRoot 'staging'
 $publishRoot = Join-Path $stagingRoot 'publish'
@@ -319,6 +331,13 @@ if ($SigningMode -eq 'Development') {
     $hashLines += "$certificateHash  LuoTianyiPet.Dev.cer"
 }
 [System.IO.File]::WriteAllLines($hashFile, $hashLines, [Text.UTF8Encoding]::new($false))
+
+# Keep the normal solution build assets on the repository's development graph
+# after this x64 packaging publish completes.
+& $dotnet restore (Join-Path $repoRoot 'LuoTianyiPet.sln') -p:RuntimeIdentifier=win-x86
+if ($LASTEXITCODE -ne 0) {
+    throw 'Failed to restore the repository development build assets after MSIX packaging.'
+}
 
 Write-Host "Built signed MSIX: $packagePath"
 if ($SigningMode -eq 'Development') {

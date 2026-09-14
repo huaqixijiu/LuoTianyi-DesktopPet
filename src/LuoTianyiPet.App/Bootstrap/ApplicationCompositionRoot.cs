@@ -45,7 +45,7 @@ internal sealed class ApplicationCompositionRoot
                 ? new WindowsStartupRegistrationService(
                     executablePath,
                     _isPortable,
-                    TryGetPackageFamilyName())
+                    GetStartupPackageFamilyName())
                 : null;
         IMediaTrackInfoSource? mediaTrackInfoSource =
             !_options.IsPreviewOrQaRun || _options.PreviewLiveTrackInfo || _options.PreviewLiveCloudMusicControl
@@ -169,5 +169,19 @@ internal sealed class ApplicationCompositionRoot
         {
             return null;
         }
+    }
+
+    private static string? GetStartupPackageFamilyName()
+    {
+        string? packageFamilyName = TryGetPackageFamilyName();
+        if (packageFamilyName is not null &&
+            File.Exists(Path.Combine(AppContext.BaseDirectory, "LUOTIANYI_PET_INSTALLED.marker")))
+        {
+            // External-location installs keep the executable in the user-selected
+            // directory. Start the real path instead of an AppsFolder alias.
+            return null;
+        }
+
+        return packageFamilyName;
     }
 }

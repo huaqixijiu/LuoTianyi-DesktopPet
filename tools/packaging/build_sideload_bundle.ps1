@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [ValidatePattern('^\d+\.\d+\.\d+\.\d+$')]
-    [string]$Version = '0.1.0.89',
+    [string]$Version,
     [ValidateSet('NetFramework48')]
     [string]$Framework = 'NetFramework48'
 )
@@ -10,6 +10,18 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+$versionPropsPath = Join-Path $repoRoot 'config\version.props'
+if (!(Test-Path -LiteralPath $versionPropsPath -PathType Leaf)) {
+    throw "Version source was not found: $versionPropsPath"
+}
+[xml]$versionProps = Get-Content -LiteralPath $versionPropsPath -Raw
+$configuredVersion = [string]$versionProps.Project.PropertyGroup.VersionPrefix
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = $configuredVersion
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+    throw "Invalid four-part version: $Version"
+}
 $artifactRoot = [System.IO.Path]::GetFullPath((Join-Path $repoRoot 'artifacts\sideload'))
 $stagingRoot = Join-Path $artifactRoot 'staging'
 $releaseRoot = Join-Path $artifactRoot 'release'
