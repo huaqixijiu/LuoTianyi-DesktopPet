@@ -32,6 +32,22 @@ public class PlannerDesignTests
         ReminderSchedule.SetRestWeekdays(book,[DayOfWeek.Wednesday],now); Assert.True(book.IsRest(now.AddDays(2)));
     }
     [Fact]
+    public void WeeklyRestChangesPreserveDateOverrides()
+    {
+        DateTime now = new(2026, 9, 14, 13, 40, 0), thisWednesday = new(2026, 9, 16), nextWednesday = new(2026, 9, 23), otherWednesday = new(2026, 10, 7);
+        ReminderBook book = new() { RestWeekdays = [] };
+        ReminderSchedule.SetRestOverride(book, thisWednesday, false, now);
+        ReminderSchedule.SetRestOverride(book, nextWednesday, true, now);
+        ReminderSchedule.SetRestWeekdays(book, [DayOfWeek.Wednesday], now);
+        Assert.False(book.IsRest(thisWednesday));
+        Assert.True(book.IsRest(nextWednesday));
+        Assert.True(book.IsRest(otherWednesday));
+        ReminderSchedule.SetRestWeekdays(book, [], now);
+        Assert.False(book.IsRest(thisWednesday));
+        Assert.True(book.IsRest(nextWednesday));
+        Assert.False(book.IsRest(otherWednesday));
+    }
+    [Fact]
     public void LunarAndLegacyContentsArePreserved()
     {
         Assert.Equal("十五",CalendarLabels.LunarDay(new(2026,9,25)));
