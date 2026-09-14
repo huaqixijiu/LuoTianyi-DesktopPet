@@ -41,6 +41,29 @@ public sealed class SystemMediaTrackInfoSourceTests
             TimeSpan.FromSeconds(endSeconds)));
     }
 
+    [Fact]
+    public void IsStaleArtworkCandidate_RejectsPreviousTrackImageDuringValidationWindow()
+    {
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+        byte[] previous = [1, 2, 3];
+
+        Assert.True(SystemMediaTrackInfoSource.IsStaleArtworkCandidate(
+            previous,
+            [1, 2, 3],
+            startedAt,
+            startedAt.AddSeconds(1)));
+        Assert.False(SystemMediaTrackInfoSource.IsStaleArtworkCandidate(
+            previous,
+            [1, 2, 4],
+            startedAt,
+            startedAt.AddSeconds(1)));
+        Assert.False(SystemMediaTrackInfoSource.IsStaleArtworkCandidate(
+            previous,
+            [1, 2, 3],
+            startedAt,
+            startedAt.AddSeconds(7)));
+    }
+
     [Theory]
     [InlineData(0, PetVisualState.MusicSwayAnimation)]
     [InlineData(1, PetVisualState.OneClickSingingAnimation)]

@@ -8,9 +8,13 @@ namespace LuoTianyiPet.Platform.Windows;
 public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
 {
     private const ulong MaximumArtworkBytes = 1024 * 1024;
+    private static readonly TimeSpan ArtworkStaleCandidateGracePeriod =
+        TimeSpan.FromSeconds(6);
     private GlobalSystemMediaTransportControlsSessionManager? _sessionManager;
     private string _artworkIdentity = string.Empty;
     private byte[]? _cachedArtworkBytes;
+    private byte[]? _previousTrackArtworkBytes;
+    private DateTimeOffset _artworkValidationStartedAt;
     private bool _artworkRead;
 
     public async ValueTask<MediaTrackSnapshot> ReadAsync(string targetProcessName)
@@ -105,6 +109,18 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
         return new MediaTrackTimeline(relativePosition, duration);
     }
 
+    internal static bool IsStaleArtworkCandidate(
+        byte[]? previousTrackArtwork,
+        byte[]? candidateArtwork,
+        DateTimeOffset validationStartedAt,
+        DateTimeOffset observedAt)
+    {
+        return previousTrackArtwork is not null &&
+            candidateArtwork is not null &&
+            observedAt - validationStartedAt < ArtworkStaleCandidateGracePeriod &&
+            previousTrackArtwork.SequenceEqual(candidateArtwork);
+    }
+
     private static MediaTrackTimeline? TryReadTimeline(
         GlobalSystemMediaTransportControlsSession session)
     {
@@ -131,14 +147,46 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
             return null;
         }
 
-        if (_artworkRead && string.Equals(_artworkIdentity, identity, StringComparison.Ordinal))
+        bool identityChanged = !_artworkRead ||
+            !string.Equals(_artworkIdentity, identity, StringComparison.Ordinal);
+        if (identityChanged)
         {
+            _previousTrackArtworkBytes = _cachedArtworkBytes;
+            _cachedArtworkBytes = null;
+            _artworkIdentity = identity;
+            _artworkRead = true;
+            _artworkValidationStartedAt = DateTimeOffset.UtcNow;
+        }
+
+        byte[]? candidateArtwork = await TryReadArtworkAsync(properties.Thumbnail);
+        if (candidateArtwork is null)
+        {
+            // Keep a verified image during a transient stream failure, but never
+            // carry the previous track's image into a newly observed track.
             return _cachedArtworkBytes;
         }
 
-        _artworkIdentity = identity;
-        _artworkRead = true;
-        _cachedArtworkBytes = await TryReadArtworkAsync(properties.Thumbnail);
+        if (IsStaleArtworkCandidate(
+            _previousTrackArtworkBytes,
+            candidateArtwork,
+            _artworkValidationStartedAt,
+            DateTimeOffset.UtcNow))
+        {
+            // During CloudMusic's track transition the new SMTC metadata can
+            // briefly expose the old thumbnail. Keep the UI on its placeholder
+            // and retry on the next metadata poll instead of caching that image.
+            return null;
+        }
+
+        if (_cachedArtworkBytes is not null &&
+            _cachedArtworkBytes.SequenceEqual(candidateArtwork))
+        {
+            _previousTrackArtworkBytes = null;
+            return _cachedArtworkBytes;
+        }
+
+        _cachedArtworkBytes = candidateArtwork;
+        _previousTrackArtworkBytes = null;
         return _cachedArtworkBytes;
     }
 
@@ -188,6 +236,8 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
     {
         _artworkIdentity = string.Empty;
         _cachedArtworkBytes = null;
+        _previousTrackArtworkBytes = null;
+        _artworkValidationStartedAt = default;
         _artworkRead = false;
     }
 
