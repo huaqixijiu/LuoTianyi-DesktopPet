@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using LuoTianyiPet.Core;
 
 namespace LuoTianyiPet.App;
@@ -55,9 +57,18 @@ public partial class PetQuickPanel : Window
         }
         Left = Numeric.Clamp(preferredLeft, workArea.Left, Math.Max(workArea.Left, workArea.Right - ActualWidth));
         Top = Numeric.Clamp(pet.Top, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - ActualHeight));
-        Opacity = 1;
         Activate();
-        LockPositionCheckBox.Focus();
+        if (Environment.GetCommandLineArgs().Contains("--qa-quick-actions"))
+        {
+            // QA snapshots must capture the settled panel, not a mid-fade frame.
+            Opacity = 1;
+            return;
+        }
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)) { EasingFunction = ease });
+        DoubleAnimation grow = new(0.97, 1, TimeSpan.FromMilliseconds(120)) { EasingFunction = ease };
+        PanelEntranceScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        PanelEntranceScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
     }
 
     private void OnLockClick(object sender, RoutedEventArgs e)

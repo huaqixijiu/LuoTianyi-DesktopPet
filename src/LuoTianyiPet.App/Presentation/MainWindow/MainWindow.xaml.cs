@@ -3973,6 +3973,8 @@ public partial class MainWindow : Window
         bool isPlaying = _musicPlaybackIndicator.IsPlaying;
         PlayGlyph.Visibility = isPlaying ? Visibility.Collapsed : Visibility.Visible;
         PauseGlyph.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+        TrackEqBadge.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
+        PlayStateHalo.Visibility = isPlaying ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void TrySendMediaCommand(MediaCommand command)
@@ -5570,6 +5572,8 @@ public partial class MainWindow : Window
             TrackProgressRingTrack.Visibility = Visibility.Collapsed;
             TrackProgressRing.Visibility = Visibility.Collapsed;
             TrackProgressRing.Data = null;
+            TrackTimelineText.Visibility = Visibility.Collapsed;
+            TrackTimelineText.Text = string.Empty;
             TogglePlayPauseButton.ToolTip =
                 $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}）";
             return;
@@ -5578,6 +5582,9 @@ public partial class MainWindow : Window
         TrackProgressRingTrack.Visibility = Visibility.Visible;
         TrackProgressRing.Visibility = Visibility.Visible;
         TrackProgressRing.Data = BuildTrackProgressGeometry(value.Progress);
+        TrackTimelineText.Text =
+            $"{FormatTrackTime(value.Position)} / {FormatTrackTime(value.Duration)}";
+        TrackTimelineText.Visibility = Visibility.Visible;
         TogglePlayPauseButton.ToolTip =
             $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}） · " +
             $"{FormatTrackTime(value.Position)} / {FormatTrackTime(value.Duration)}";
@@ -5593,8 +5600,8 @@ public partial class MainWindow : Window
             return geometry;
         }
 
-        const double center = 19;
-        const double radius = 16;
+        const double center = 22;
+        const double radius = 19.5;
         Point start = new(center, center - radius);
         double angle = progress * 360 - 90;
         Point end = new(

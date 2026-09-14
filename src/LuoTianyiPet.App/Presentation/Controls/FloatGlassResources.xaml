@@ -1,0 +1,32 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 浅玻璃浮层共享令牌：音乐悬浮岛、音量弹层、宠物快捷面板、托盘面板共用 -->
+    <LinearGradientBrush x:Key="FloatGlassBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#F8FFFFFF" />
+        <GradientStop Offset="0.52" Color="#EEF0F8FF" />
+        <GradientStop Offset="1" Color="#EBDCF3FF" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="FloatGlassBorderBrush" Color="#8C66CCFF" />
+    <!-- 菜单专用背板：比岛的轻玻璃更实，保证复杂桌面下的文字对比 -->
+    <LinearGradientBrush x:Key="FloatPanelBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Offset="0" Color="#F7FBFFFF" />
+        <GradientStop Offset="0.52" Color="#F3F5FBFF" />
+        <GradientStop Offset="1" Color="#F1E7F6FF" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="FloatControlBorderBrush" Color="#33176A90" />
+    <SolidColorBrush x:Key="FloatDangerHoverBrush" Color="#1AB3261E" />
+    <SolidColorBrush x:Key="FloatDangerPressedBrush" Color="#2EB3261E" />
+    <LinearGradientBrush x:Key="FloatGlassHighlightBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#8CFFFFFF" />
+        <GradientStop Offset="0.35" Color="#00FFFFFF" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="FloatInkBrush" Color="#FF123E56" />
+    <SolidColorBrush x:Key="FloatMutedBrush" Color="#FF5C7484" />
+    <SolidColorBrush x:Key="FloatAccentBrush" Color="#FF66CCFF" />
+    <SolidColorBrush x:Key="FloatAccentInkBrush" Color="#FF176A90" />
+    <SolidColorBrush x:Key="FloatAccentDeepBrush" Color="#FF075277" />
+    <SolidColorBrush x:Key="FloatHoverBrush" Color="#4266CCFF" />
+    <SolidColorBrush x:Key="FloatPressedBrush" Color="#7066CCFF" />
+    <SolidColorBrush x:Key="FloatDividerBrush" Color="#6666CCFF" />
+    <SolidColorBrush x:Key="FloatDangerBrush" Color="#FFB3261E" />
+</ResourceDictionary>

@@ -24,7 +24,67 @@
         MouseLeftButtonUp="OnMouseLeftButtonUp"
         MouseMove="OnMouseMove">
     <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Controls/FloatGlassResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
         <ControlTemplate x:Key="MediaButtonTemplate" TargetType="Button">
+            <Grid x:Name="ButtonRoot"
+                  RenderTransformOrigin="0.5,0.5">
+                <Grid.RenderTransform>
+                    <ScaleTransform />
+                </Grid.RenderTransform>
+                <Border Margin="-2"
+                        Background="Transparent" />
+                <Border Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="18" />
+                <Border x:Name="HoverFace"
+                        CornerRadius="18"
+                        Background="{StaticResource FloatHoverBrush}"
+                        Opacity="0"
+                        IsHitTestVisible="False" />
+                <ContentPresenter HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverFace"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 To="1"
+                                                 Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverFace"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 To="0"
+                                                 Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter TargetName="ButtonRoot" Property="RenderTransform">
+                        <Setter.Value>
+                            <ScaleTransform ScaleX="0.96" ScaleY="0.96" />
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter TargetName="ButtonRoot" Property="Opacity" Value="0.42" />
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+
+        <ControlTemplate x:Key="MediaPrimaryButtonTemplate" TargetType="Button">
             <Grid x:Name="ButtonRoot"
                   RenderTransformOrigin="0.5,0.5">
                 <Grid.RenderTransform>
@@ -33,22 +93,42 @@
                 <Border Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="18" />
+                        CornerRadius="22" />
+                <Border x:Name="HoverFace"
+                        CornerRadius="22"
+                        Background="#FF35B8F2"
+                        Opacity="0"
+                        IsHitTestVisible="False" />
                 <ContentPresenter HorizontalAlignment="Center"
                                   VerticalAlignment="Center" />
             </Grid>
             <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter TargetName="ButtonRoot" Property="RenderTransform">
-                        <Setter.Value>
-                            <ScaleTransform ScaleX="1.08" ScaleY="1.08" />
-                        </Setter.Value>
-                    </Setter>
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverFace"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 To="1"
+                                                 Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="HoverFace"
+                                                 Storyboard.TargetProperty="Opacity"
+                                                 To="0"
+                                                 Duration="0:0:0.12" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
                     <Setter TargetName="ButtonRoot" Property="RenderTransform">
                         <Setter.Value>
-                            <ScaleTransform ScaleX="0.92" ScaleY="0.92" />
+                            <ScaleTransform ScaleX="0.96" ScaleY="0.96" />
                         </Setter.Value>
                     </Setter>
                 </Trigger>
@@ -66,39 +146,30 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Focusable" Value="False" />
-            <Setter Property="Foreground" Value="#FF176A90" />
+            <Setter Property="Foreground" Value="{StaticResource FloatAccentInkBrush}" />
             <Setter Property="Template" Value="{StaticResource MediaButtonTemplate}" />
             <Setter Property="ToolTipService.ShowDuration" Value="12000" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#4266CCFF" />
-                    <Setter Property="BorderBrush" Value="#8066CCFF" />
-                    <Setter Property="Foreground" Value="#FF075277" />
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#7066CCFF" />
+                    <Setter Property="Foreground" Value="{StaticResource FloatAccentDeepBrush}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="MediaPrimaryButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="38" />
-            <Setter Property="Height" Value="38" />
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Background" Value="#FF66CCFF" />
+            <Setter Property="Background" Value="{StaticResource FloatAccentBrush}" />
             <Setter Property="BorderBrush" Value="#D9FFFFFF" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Focusable" Value="False" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Template" Value="{StaticResource MediaButtonTemplate}" />
+            <Setter Property="Template" Value="{StaticResource MediaPrimaryButtonTemplate}" />
             <Setter Property="ToolTipService.ShowDuration" Value="12000" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#FF35B8F2" />
                     <Setter Property="BorderBrush" Value="White" />
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#FF169DD8" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -167,6 +238,7 @@
             </Setter>
         </Style>
 
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid x:Name="Root">
@@ -310,7 +382,7 @@
                 Padding="7"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Bottom"
-                BorderBrush="#B366CCFF"
+                BorderBrush="{StaticResource FloatGlassBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="24"
                 IsHitTestVisible="False"
@@ -320,78 +392,125 @@
                 <ScaleTransform x:Name="MediaControlsLayoutScale" ScaleX="1" ScaleY="1" />
             </Border.LayoutTransform>
             <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Offset="0" Color="#F8FFFFFF" />
-                    <GradientStop Offset="0.52" Color="#EEF0F8FF" />
-                    <GradientStop Offset="1" Color="#EBDCF3FF" />
-                </LinearGradientBrush>
+                <StaticResource ResourceKey="FloatGlassBrush" />
             </Border.Background>
             <Border.Effect>
-                <DropShadowEffect BlurRadius="12"
+                <DropShadowEffect BlurRadius="14"
                                   Color="#FF176A90"
                                   Direction="270"
-                                  Opacity="0.30"
-                                  ShadowDepth="3" />
+                                  Opacity="0.26"
+                                  ShadowDepth="4" />
             </Border.Effect>
             <Border.RenderTransform>
                 <TranslateTransform x:Name="MediaControlsTranslate" Y="8" />
             </Border.RenderTransform>
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="56" />
+                    <ColumnDefinition Width="60" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="38" />
-                    <ColumnDefinition Width="38" />
-                    <ColumnDefinition Width="38" />
-                    <ColumnDefinition Width="38" />
+                    <ColumnDefinition Width="36" />
+                    <ColumnDefinition Width="44" />
+                    <ColumnDefinition Width="36" />
+                    <ColumnDefinition Width="36" />
                 </Grid.ColumnDefinitions>
+                <Border Grid.ColumnSpan="6"
+                        Margin="-6"
+                        BorderBrush="{StaticResource FloatGlassHighlightBrush}"
+                        BorderThickness="1"
+                        CornerRadius="23"
+                        IsHitTestVisible="False" />
 
                 <Border x:Name="TrackArtworkHost"
                         Grid.Column="0"
                         Width="52"
                         Height="52"
-                        HorizontalAlignment="Left"
+                        HorizontalAlignment="Center"
                         VerticalAlignment="Center"
-                        Background="#2432B9F2"
                         CornerRadius="15"
                         ClipToBounds="True">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Offset="0" Color="#3A8FD2F2" />
+                            <GradientStop Offset="1" Color="#2A63B4F2" />
+                        </LinearGradientBrush>
+                    </Border.Background>
                     <Grid>
-                        <TextBlock x:Name="TrackArtworkPlaceholder"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   Foreground="#FF176A90"
-                                   FontSize="25"
-                                   FontWeight="SemiBold"
-                                   Text="♪" />
+                        <Grid.Clip>
+                            <RectangleGeometry Rect="0,0,52,52"
+                                               RadiusX="15"
+                                               RadiusY="15" />
+                        </Grid.Clip>
                         <Image x:Name="TrackArtworkImage"
                                Stretch="UniformToFill"
                                Visibility="Collapsed" />
+                        <Viewbox x:Name="TrackArtworkPlaceholder"
+                                 Width="26"
+                                 Height="20"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center">
+                            <Canvas Width="14"
+                                    Height="10">
+                                <Path Data="M2.5,10 V6.5 M7,10 V2.5 M11.5,10 V4.5"
+                                      Stroke="{StaticResource FloatAccentInkBrush}"
+                                      StrokeThickness="2.2"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <Viewbox x:Name="TrackEqBadge"
+                                 Width="14"
+                                 Height="10"
+                                 Margin="0,0,5,5"
+                                 HorizontalAlignment="Right"
+                                 VerticalAlignment="Bottom"
+                                 Visibility="Collapsed">
+                            <Canvas Width="14"
+                                    Height="10">
+                                <Path Data="M2.5,10 V6.5 M7,10 V2.5 M11.5,10 V4.5"
+                                      Stroke="White"
+                                      StrokeThickness="3"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <Border BorderBrush="#8CFFFFFF"
+                                BorderThickness="1"
+                                CornerRadius="15"
+                                IsHitTestVisible="False" />
                     </Grid>
                 </Border>
 
                 <Grid x:Name="TrackInfoBubble"
                       Grid.Column="1"
-                      Margin="9,2,7,2"
+                      Margin="12,2,6,2"
                       VerticalAlignment="Center"
                       IsHitTestVisible="False"
                       AutomationProperties.Name="当前歌曲">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <TextBlock x:Name="TrackTitleText"
-                               Foreground="#FF123E56"
+                               Foreground="{StaticResource FloatInkBrush}"
                                FontSize="13"
                                FontWeight="SemiBold"
                                TextAlignment="Left"
                                TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="TrackArtistText"
                                Grid.Row="1"
-                               Margin="0,4,0,0"
-                               Foreground="#FF5C7484"
+                               Margin="0,3,0,0"
+                               Foreground="{StaticResource FloatMutedBrush}"
                                FontSize="10"
                                TextAlignment="Left"
                                TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="TrackTimelineText"
+                               Grid.Row="2"
+                               Margin="0,2,0,0"
+                               Foreground="{StaticResource FloatMutedBrush}"
+                               FontSize="9.5"
+                               TextAlignment="Left"
+                               Visibility="Collapsed" />
                 </Grid>
 
                 <Button x:Name="PreviousTrackButton"
@@ -400,57 +519,73 @@
                         Click="OnPreviousTrackClick"
                         AutomationProperties.Name="上一首"
                         ToolTip="上一首（Ctrl+Alt+Left）">
-                    <Viewbox Width="19" Height="19">
+                    <Viewbox Width="20" Height="20">
                         <Canvas Width="24" Height="24">
-                            <Path Data="M5,5 H7.5 V19 H5 Z M9,12 L19,5 V19 Z"
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            <Path Data="M6.5,5 V19 M18,5 L9.5,12 L18,19 Z"
+                                  Fill="Transparent"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="2.3"
+                                  StrokeLineJoin="Round"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" />
                         </Canvas>
                     </Viewbox>
                 </Button>
 
                 <Grid Grid.Column="3"
-                      Width="38"
-                      Height="38">
-                    <Ellipse x:Name="TrackProgressRingTrack"
-                             Width="34"
-                             Height="34"
+                      Width="44"
+                      Height="44">
+                    <Ellipse x:Name="PlayStateHalo"
+                             Width="46"
+                             Height="46"
                              HorizontalAlignment="Center"
                              VerticalAlignment="Center"
-                             Panel.ZIndex="1"
-                             Fill="Transparent"
-                             Stroke="#80FFFFFF"
-                             StrokeThickness="2"
+                             Panel.ZIndex="0"
+                             Fill="#2466CCFF"
                              IsHitTestVisible="False"
                              Visibility="Collapsed" />
                     <Button x:Name="TogglePlayPauseButton"
+                            Panel.ZIndex="1"
                             Style="{StaticResource MediaPrimaryButtonStyle}"
                             Click="OnTogglePlayPauseClick"
                             AutomationProperties.Name="播放或暂停"
                             ToolTip="播放 / 暂停（Ctrl+Alt+P）">
-                        <Grid Width="20" Height="20">
+                        <Grid Width="24" Height="24">
                             <Viewbox x:Name="PlayGlyph">
                                 <Canvas Width="24" Height="24">
-                                    <Path Data="M7.5,4.5 L20,12 L7.5,19.5 Z"
+                                    <Path Data="M8,4.5 L20,12 L8,19.5 Z"
                                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                                 </Canvas>
                             </Viewbox>
                             <Viewbox x:Name="PauseGlyph" Visibility="Collapsed">
                                 <Canvas Width="24" Height="24">
-                                    <Path Data="M6.5,5 H10.5 V19 H6.5 Z M13.5,5 H17.5 V19 H13.5 Z"
+                                    <Path Data="M7,5 H11 V19 H7 Z M13,5 H17 V19 H13 Z"
                                           Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                                 </Canvas>
                             </Viewbox>
                         </Grid>
                     </Button>
+                    <Ellipse x:Name="TrackProgressRingTrack"
+                             Width="39"
+                             Height="39"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Panel.ZIndex="2"
+                             Fill="Transparent"
+                             Stroke="#59FFFFFF"
+                             StrokeThickness="2.5"
+                             IsHitTestVisible="False"
+                             Visibility="Collapsed" />
                     <Path x:Name="TrackProgressRing"
-                          Width="38"
-                          Height="38"
-                          Panel.ZIndex="2"
+                          Width="44"
+                          Height="44"
+                          Panel.ZIndex="3"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
                           Fill="Transparent"
-                          Stroke="White"
+                          Stroke="{StaticResource FloatAccentDeepBrush}"
                           StrokeThickness="2.5"
+                          StrokeStartLineCap="Round"
                           IsHitTestVisible="False"
                           Visibility="Collapsed" />
                 </Grid>
@@ -461,28 +596,36 @@
                         Click="OnNextTrackClick"
                         AutomationProperties.Name="下一首"
                         ToolTip="下一首（Ctrl+Alt+Right）">
-                    <Viewbox Width="19" Height="19">
+                    <Viewbox Width="20" Height="20">
                         <Canvas Width="24" Height="24">
-                            <Path Data="M5,5 L15,12 L5,19 Z M16.5,5 H19 V19 H16.5 Z"
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            <Path Data="M17.5,5 V19 M6,5 L14.5,12 L6,19 Z"
+                                  Fill="Transparent"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="2.3"
+                                  StrokeLineJoin="Round"
+                                  StrokeStartLineCap="Round"
+                                  StrokeEndLineCap="Round" />
                         </Canvas>
                     </Viewbox>
                 </Button>
 
                 <Button x:Name="CloudMusicVolumeButton"
                         Grid.Column="5"
-                        Style="{StaticResource MediaPrimaryButtonStyle}"
+                        Style="{StaticResource MediaIconButtonStyle}"
                         Click="OnCloudMusicVolumeClick"
                         AutomationProperties.Name="网易云音乐独立音量"
                         ToolTip="调节网易云音乐音量（不影响其他应用）">
-                    <Viewbox Width="19" Height="19">
+                    <Viewbox Width="20" Height="20">
                         <Canvas Width="24" Height="24">
-                            <Path Data="M4,9 H8 L13,5 V19 L8,15 H4 Z"
-                                  Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                            <Path Data="M16,8.2 C17.2,9.1 18,10.4 18,12 C18,13.6 17.2,14.9 16,15.8 M18.5,5.5 C20.5,7.1 21.8,9.4 21.8,12 C21.8,14.6 20.5,16.9 18.5,18.5"
+                            <Path Data="M4,9.5 H8 L13,5.5 V18.5 L8,14.5 H4 Z"
                                   Fill="Transparent"
                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
-                                  StrokeThickness="1.7"
+                                  StrokeThickness="2.3"
+                                  StrokeLineJoin="Round" />
+                            <Path Data="M16,9 C17,9.8 17.6,10.8 17.6,12 C17.6,13.2 17,14.2 16,15 M18.6,6.4 C20.4,7.9 21.5,9.8 21.5,12 C21.5,14.2 20.4,16.1 18.6,17.6"
+                                  Fill="Transparent"
+                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                  StrokeThickness="2.3"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round" />
                         </Canvas>
@@ -495,51 +638,60 @@
         <Popup x:Name="CloudMusicVolumePopup"
                Placement="Top"
                PlacementTarget="{Binding ElementName=CloudMusicVolumeButton}"
-               VerticalOffset="-7"
+               VerticalOffset="-4"
                AllowsTransparency="True"
                StaysOpen="False"
                Closed="OnCloudMusicVolumePopupClosed">
-            <Border Width="58"
-                    Padding="8,9,8,8"
-                    Background="#F7F7FCFF"
-                    BorderBrush="#CC66CCFF"
-                    BorderThickness="1"
-                    CornerRadius="12">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="13"
+            <Grid>
+                <Grid.Effect>
+                    <DropShadowEffect BlurRadius="14"
                                       Color="#FF176A90"
                                       Direction="270"
-                                      Opacity="0.28"
-                                      ShadowDepth="3" />
-                </Border.Effect>
-                <StackPanel HorizontalAlignment="Center">
-                    <TextBlock x:Name="CloudMusicVolumeValueText"
-                               Margin="0,0,0,2"
-                               HorizontalAlignment="Center"
-                               Foreground="#FF176A90"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               Text="--%" />
-                    <Grid x:Name="CloudMusicVolumeDragSurface"
-                          Width="30"
-                          Height="116"
-                          Background="Transparent"
-                          PreviewMouseLeftButtonDown="OnCloudMusicVolumeSliderPreviewMouseLeftButtonDown"
-                          PreviewMouseMove="OnCloudMusicVolumeSliderPreviewMouseMove"
-                          PreviewMouseLeftButtonUp="OnCloudMusicVolumeSliderPreviewMouseLeftButtonUp">
-                        <Slider x:Name="CloudMusicVolumeSlider"
-                                Minimum="0"
-                                Maximum="100"
-                                TickFrequency="1"
-                                IsSnapToTickEnabled="True"
-                                IsMoveToPointEnabled="True"
-                                IsHitTestVisible="False"
-                                Style="{StaticResource CloudMusicVerticalVolumeSliderStyle}"
-                                ValueChanged="OnCloudMusicVolumeSliderValueChanged"
-                                AutomationProperties.Name="网易云音乐竖向音量" />
-                    </Grid>
-                </StackPanel>
-            </Border>
+                                      Opacity="0.26"
+                                      ShadowDepth="4" />
+                </Grid.Effect>
+                <Border Width="54"
+                        Margin="0,0,0,4"
+                        Padding="8,9,8,8"
+                        Background="{StaticResource FloatGlassBrush}"
+                        BorderBrush="{StaticResource FloatGlassBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock x:Name="CloudMusicVolumeValueText"
+                                   Margin="0,0,0,2"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{StaticResource FloatAccentInkBrush}"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Text="--%" />
+                        <Grid x:Name="CloudMusicVolumeDragSurface"
+                              Width="30"
+                              Height="116"
+                              Background="Transparent"
+                              PreviewMouseLeftButtonDown="OnCloudMusicVolumeSliderPreviewMouseLeftButtonDown"
+                              PreviewMouseMove="OnCloudMusicVolumeSliderPreviewMouseMove"
+                              PreviewMouseLeftButtonUp="OnCloudMusicVolumeSliderPreviewMouseLeftButtonUp">
+                            <Slider x:Name="CloudMusicVolumeSlider"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    IsMoveToPointEnabled="True"
+                                    IsHitTestVisible="False"
+                                    Style="{StaticResource CloudMusicVerticalVolumeSliderStyle}"
+                                    ValueChanged="OnCloudMusicVolumeSliderValueChanged"
+                                    AutomationProperties.Name="网易云音乐竖向音量" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Path Data="M0,0 L5,5 L10,0"
+                      Fill="{StaticResource FloatGlassBrush}"
+                      Stroke="{StaticResource FloatGlassBorderBrush}"
+                      StrokeThickness="1"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Bottom" />
+            </Grid>
         </Popup>
 
         <Button x:Name="EdgeDockHandle"

@@ -42,6 +42,8 @@ public partial class MainWindow
                 CloudMusicVolumeButton.Visibility == Visibility.Visible,
                 "Enabling islands exposes the combined surface and all four controls");
             Check(TrackTitleText.Text == "未在播放", "No track uses a quiet empty state");
+            Check(TrackTimelineText.Visibility == Visibility.Collapsed,
+                "Missing timeline keeps the third-row time text hidden");
             byte[] sampleArtwork = Convert.FromBase64String(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
             ShowTrackInfo(
@@ -61,9 +63,16 @@ public partial class MainWindow
                 "Track artwork decodes in memory and replaces the placeholder");
             Check(TrackProgressRing.Visibility == Visibility.Visible &&
                 TrackProgressRingTrack.Visibility == Visibility.Visible &&
+                TrackTimelineText.Visibility == Visibility.Visible &&
+                TrackTimelineText.Text == "0:42 / 3:56" &&
                 TogglePlayPauseButton.ToolTip?.ToString()?.Contains("0:42 / 3:56", StringComparison.Ordinal) == true,
-                "Track timeline renders a progress ring and exposes elapsed/total time in the play tooltip");
-            CaptureQuickActionsQa(this, Path.Combine(directory, "02-visible.png"));
+                "Track timeline renders a progress ring, third-row time text and tooltip elapsed/total");
+            CaptureQuickActionsQa(this, Path.Combine(directory, "02-visible.png"), true);
+            CloudMusicVolumeButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            await Task.Delay(150);
+            Check(CloudMusicVolumePopup.IsOpen, "Volume key opens the anchored volume popup");
+            CloudMusicVolumePopup.IsOpen = false;
+            await Task.Delay(150);
             SetMusicIslandsVisible(false);
             HideFeedbackBubble(restoreTrackInfo: true);
             // Simulate a metadata response already in flight when the switch was turned off.
@@ -76,8 +85,19 @@ public partial class MainWindow
             BeginWindowDrag();
             Check(!_isWindowDragging && Left == left && Top == top, "Locked position rejects dragging");
             string previousStyle = _settings.Appearance.FullBodyStyle;
-            HandlePointerAction(new PointerGestureAction(PointerGestureActionType.ToggleDisplayMode));
-            Check(_settings.Appearance.FullBodyStyle != previousStyle, "Locked position still permits double-click appearance changes");
+            bool styleChanged = false;
+            for (int attempt = 0; attempt < 8 && !styleChanged; attempt++)
+            {
+                // An idle crystal yawn holds the display-mode toggle; end it so the check is deterministic.
+                if (_stateMachine.ActiveReactionToken is Guid reactionToken)
+                {
+                    _stateMachine.CompleteReaction(reactionToken, DateTimeOffset.Now);
+                }
+                HandlePointerAction(new PointerGestureAction(PointerGestureActionType.ToggleDisplayMode));
+                styleChanged = _settings.Appearance.FullBodyStyle != previousStyle;
+                if (!styleChanged) await Task.Delay(150);
+            }
+            Check(styleChanged, "Locked position still permits double-click appearance changes");
             SetPositionLocked(false);
             BeginWindowDrag();
             Check(_isWindowDragging, "Unlock restores dragging");
@@ -97,7 +117,7 @@ public partial class MainWindow
                 value => SetPermanentTopmost(value, true), SetMusicIslandsVisible,
                 value => SetDisplayScalePercent(value, true));
             _petQuickPanel.ShowNearPet(new DesktopRectangle(Left, Top, ActualWidth, ActualHeight), GetQuickActionsWorkArea());
-            CaptureQuickActionsQa(_petQuickPanel, Path.Combine(directory, "03-pet-menu.png"));
+            CaptureQuickActionsQa(_petQuickPanel, Path.Combine(directory, "03-pet-menu.png"), true);
             int petSettingsRequests=0,petExitRequests=0;
             _petQuickPanel.OpenSettings=()=>petSettingsRequests++;
             _petQuickPanel.ExitPet=()=>{petExitRequests++;return Task.CompletedTask;};
@@ -130,7 +150,7 @@ public partial class MainWindow
             tray.ShowNearTray(trayAnchor);
             Check(!tray.ShowPetButton.IsKeyboardFocused && !tray.OpenSettingsButton.IsKeyboardFocused,
                 "Mouse reopening clears the previous keyboard selection");
-            CaptureQuickActionsQa(tray, Path.Combine(directory, "04-tray-menu.png"));
+            CaptureQuickActionsQa(tray, Path.Combine(directory, "04-tray-menu.png"), true);
             for (int reopen = 0; reopen < 8; reopen++)
             {
                 tray.HidePanel();
@@ -168,16 +188,26 @@ public partial class MainWindow
         }
     }
 
-    private static void CaptureQuickActionsQa(Window window, string path)
+    private static void CaptureQuickActionsQa(Window window, string path, bool dpi = false)
     {
         window.UpdateLayout();
         FrameworkElement content = (FrameworkElement)window.Content;
-        RenderTargetBitmap bitmap = new((int)Math.Ceiling(window.ActualWidth),
-            (int)Math.Ceiling(window.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(content);
-        PngBitmapEncoder encoder = new();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        using FileStream file = File.Create(path);
-        encoder.Save(file);
+        void Shot(string file, double scale)
+        {
+            RenderTargetBitmap bitmap = new((int)Math.Ceiling(window.ActualWidth * scale),
+                (int)Math.Ceiling(window.ActualHeight * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+            bitmap.Render(content);
+            PngBitmapEncoder encoder = new();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using FileStream fileStream = File.Create(file);
+            encoder.Save(fileStream);
+        }
+        Shot(path, 1.0);
+        if (dpi)
+        {
+            string stem = Path.ChangeExtension(path, null);
+            Shot(stem + "-125.png", 1.25);
+            Shot(stem + "-150.png", 1.5);
+        }
     }
 }

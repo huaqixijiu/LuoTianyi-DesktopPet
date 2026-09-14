@@ -8,22 +8,26 @@
  KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.DirectionalNavigation="Cycle"
  Deactivated="OnDeactivated" PreviewKeyDown="OnPreviewKeyDown">
  <Window.Resources>
+  <ResourceDictionary>
+   <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="FloatGlassResources.xaml" />
+   </ResourceDictionary.MergedDictionaries>
   <Style x:Key="MenuFocus" TargetType="Control">
    <Setter Property="Template"><Setter.Value><ControlTemplate>
-    <Border Margin="2" CornerRadius="5" BorderThickness="1" BorderBrush="#3998AD" />
+    <Border Margin="2" CornerRadius="5" BorderThickness="1" BorderBrush="{StaticResource FloatAccentDeepBrush}" />
    </ControlTemplate></Setter.Value></Setter>
   </Style>
   <Style TargetType="Button">
-   <Setter Property="Height" Value="35" />
+   <Setter Property="Height" Value="38" />
    <Setter Property="Padding" Value="7,0" />
    <Setter Property="FontSize" Value="12" />
-   <Setter Property="Foreground" Value="#303D43" />
+   <Setter Property="Foreground" Value="{StaticResource FloatInkBrush}" />
    <Setter Property="Background" Value="Transparent" />
    <Setter Property="HorizontalContentAlignment" Value="Left" />
    <Setter Property="FocusVisualStyle" Value="{StaticResource MenuFocus}" />
    <Setter Property="Template"><Setter.Value>
     <ControlTemplate TargetType="Button">
-     <Border x:Name="Surface" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="6">
+     <Border x:Name="Surface" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="8">
       <Grid>
        <Grid.ColumnDefinitions><ColumnDefinition Width="26" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
        <TextBlock Text="{TemplateBinding Tag}" FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
@@ -31,25 +35,26 @@
       </Grid>
      </Border>
      <ControlTemplate.Triggers>
-      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="#E9F5F7" /></Trigger>
-      <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="#D8EDF1" /></Trigger>
+      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{StaticResource FloatHoverBrush}" /></Trigger>
+      <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="{StaticResource FloatPressedBrush}" /></Trigger>
       <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.4" /></Trigger>
      </ControlTemplate.Triggers>
     </ControlTemplate>
    </Setter.Value></Setter>
   </Style>
+  </ResourceDictionary>
  </Window.Resources>
- <Border Margin="12" Padding="4,6" Background="#FBFDFE" BorderBrush="#DEE6E9" BorderThickness="1" CornerRadius="11">
-  <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.14" Color="#253D49" /></Border.Effect>
+ <Border Margin="12" Padding="4,6" Background="{StaticResource FloatGlassBrush}" BorderBrush="{StaticResource FloatGlassBorderBrush}" BorderThickness="1" CornerRadius="14">
+  <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.18" Color="#176A90" /></Border.Effect>
   <StackPanel>
    <Button x:Name="ShowPetButton" Content="召回天依" Tag="&#xE80F;" Click="OnShowPetClick" />
    <Button x:Name="HidePetButton" Content="暂时隐藏" Tag="&#xE921;" Click="OnHidePetClick" ToolTip="从托盘左键即可找回天依" />
    <Button x:Name="OpenSettingsButton" Content="设置" Tag="&#xE713;" Click="OnOpenSettingsClick" />
    <Button x:Name="ReminderSettingsButton" Content="提醒设置" Tag="&#xE823;" Click="OnReminderSettingsClick" Visibility="Collapsed" />
-   <Border Height="1" Background="#E5EBEE" Margin="8,5" />
+   <Border Height="1" Background="{StaticResource FloatDividerBrush}" Margin="8,5" />
    <Button x:Name="ExitButton" Content="退出桌宠" Tag="&#xE7E8;" Click="OnExitClick">
     <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-     <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#AD4956" /></Trigger></Style.Triggers>
+     <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{StaticResource FloatDangerBrush}" /></Trigger></Style.Triggers>
     </Style></Button.Style>
    </Button>
   </StackPanel>
