@@ -44,11 +44,25 @@ public partial class MainWindow
             Check(TrackTitleText.Text == "未在播放", "No track uses a quiet empty state");
             byte[] sampleArtwork = Convert.FromBase64String(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
-            ShowTrackInfo(new MediaTrackSnapshot(true, true, "测试歌曲", "洛天依", sampleArtwork), true);
+            ShowTrackInfo(
+                new MediaTrackSnapshot(
+                    true,
+                    true,
+                    "测试歌曲",
+                    "洛天依",
+                    sampleArtwork,
+                    new MediaTrackTimeline(
+                        TimeSpan.FromSeconds(42),
+                        TimeSpan.FromMinutes(3) + TimeSpan.FromSeconds(56))),
+                true);
             await Task.Delay(220);
             Check(TrackArtworkImage.Visibility == Visibility.Visible &&
                 TrackArtworkPlaceholder.Visibility == Visibility.Collapsed,
                 "Track artwork decodes in memory and replaces the placeholder");
+            Check(TrackProgressRing.Visibility == Visibility.Visible &&
+                TrackProgressRingTrack.Visibility == Visibility.Visible &&
+                TogglePlayPauseButton.ToolTip?.ToString()?.Contains("0:42 / 3:56", StringComparison.Ordinal) == true,
+                "Track timeline renders a progress ring and exposes elapsed/total time in the play tooltip");
             CaptureQuickActionsQa(this, Path.Combine(directory, "02-visible.png"));
             SetMusicIslandsVisible(false);
             HideFeedbackBubble(restoreTrackInfo: true);

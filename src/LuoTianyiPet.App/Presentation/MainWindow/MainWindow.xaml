@@ -408,27 +408,52 @@
                     </Viewbox>
                 </Button>
 
-                <Button x:Name="TogglePlayPauseButton"
-                        Grid.Column="3"
-                        Style="{StaticResource MediaPrimaryButtonStyle}"
-                        Click="OnTogglePlayPauseClick"
-                        AutomationProperties.Name="播放或暂停"
-                        ToolTip="播放 / 暂停（Ctrl+Alt+P）">
-                    <Grid Width="20" Height="20">
-                        <Viewbox x:Name="PlayGlyph">
-                            <Canvas Width="24" Height="24">
-                                <Path Data="M7.5,4.5 L20,12 L7.5,19.5 Z"
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                            </Canvas>
-                        </Viewbox>
-                        <Viewbox x:Name="PauseGlyph" Visibility="Collapsed">
-                            <Canvas Width="24" Height="24">
-                                <Path Data="M6.5,5 H10.5 V19 H6.5 Z M13.5,5 H17.5 V19 H13.5 Z"
-                                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
-                            </Canvas>
-                        </Viewbox>
-                    </Grid>
-                </Button>
+                <Grid Grid.Column="3"
+                      Width="38"
+                      Height="38">
+                    <Ellipse x:Name="TrackProgressRingTrack"
+                             Width="34"
+                             Height="34"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Panel.ZIndex="1"
+                             Fill="Transparent"
+                             Stroke="#80FFFFFF"
+                             StrokeThickness="2"
+                             IsHitTestVisible="False"
+                             Visibility="Collapsed" />
+                    <Button x:Name="TogglePlayPauseButton"
+                            Style="{StaticResource MediaPrimaryButtonStyle}"
+                            Click="OnTogglePlayPauseClick"
+                            AutomationProperties.Name="播放或暂停"
+                            ToolTip="播放 / 暂停（Ctrl+Alt+P）">
+                        <Grid Width="20" Height="20">
+                            <Viewbox x:Name="PlayGlyph">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M7.5,4.5 L20,12 L7.5,19.5 Z"
+                                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Canvas>
+                            </Viewbox>
+                            <Viewbox x:Name="PauseGlyph" Visibility="Collapsed">
+                                <Canvas Width="24" Height="24">
+                                    <Path Data="M6.5,5 H10.5 V19 H6.5 Z M13.5,5 H17.5 V19 H13.5 Z"
+                                          Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                </Canvas>
+                            </Viewbox>
+                        </Grid>
+                    </Button>
+                    <Path x:Name="TrackProgressRing"
+                          Width="38"
+                          Height="38"
+                          Panel.ZIndex="2"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Fill="Transparent"
+                          Stroke="White"
+                          StrokeThickness="2.5"
+                          IsHitTestVisible="False"
+                          Visibility="Collapsed" />
+                </Grid>
 
                 <Button x:Name="NextTrackButton"
                         Grid.Column="4"

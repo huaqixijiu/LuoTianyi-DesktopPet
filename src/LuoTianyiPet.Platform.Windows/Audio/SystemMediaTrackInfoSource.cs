@@ -42,11 +42,13 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
                 SessionFound: true,
                 properties?.Title ?? string.Empty,
                 properties?.Artist ?? string.Empty));
+            MediaTrackTimeline? timeline = TryReadTimeline(session);
             MediaTrackSnapshot snapshot = metadata with
             {
                 ArtworkBytes = metadata.HasTrack
                     ? await ReadArtworkAsync(properties, BuildIdentity(metadata.Title, metadata.Artist))
                     : null,
+                Timeline = metadata.HasTrack ? timeline : null,
             };
             return SupplementArtistFromWindow(snapshot, ReadFromWindowTitle(targetProcessName));
         }
@@ -81,6 +83,42 @@ public sealed class SystemMediaTrackInfoSource : IMediaTrackInfoSource
         }
 
         return media;
+    }
+
+    internal static MediaTrackTimeline? NormalizeTimeline(
+        TimeSpan startTime,
+        TimeSpan position,
+        TimeSpan endTime)
+    {
+        TimeSpan duration = endTime - startTime;
+        if (duration <= TimeSpan.Zero || position < startTime)
+        {
+            return null;
+        }
+
+        TimeSpan relativePosition = position - startTime;
+        if (relativePosition > duration)
+        {
+            relativePosition = duration;
+        }
+
+        return new MediaTrackTimeline(relativePosition, duration);
+    }
+
+    private static MediaTrackTimeline? TryReadTimeline(
+        GlobalSystemMediaTransportControlsSession session)
+    {
+        try
+        {
+            GlobalSystemMediaTransportControlsSessionTimelineProperties timeline =
+                session.GetTimelineProperties();
+            return NormalizeTimeline(timeline.StartTime, timeline.Position, timeline.EndTime);
+        }
+        catch (Exception)
+        {
+            // Timeline support is provider-dependent. Metadata and artwork must still work.
+            return null;
+        }
     }
 
     private async Task<byte[]?> ReadArtworkAsync(

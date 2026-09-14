@@ -192,6 +192,8 @@ public partial class MainWindow : Window
     private bool _musicPreviewOverride;
     private bool _audioProbeFailureLogged;
     private bool _trackInfoProbeFailureLogged;
+    private bool _trackTimelineAvailableLogged;
+    private string _lastTrackProbeSignature = string.Empty;
     private bool _trackInfoRefreshInFlight;
     private bool _trackInfoShowRequested;
     private bool _hasObservedTrackSnapshot;
@@ -5327,6 +5329,25 @@ public partial class MainWindow : Window
             _hasObservedTrackSnapshot = true;
             _lastTrackSnapshot = snapshot;
             _lastTrackIdentity = identity;
+            UpdateTrackTimeline(snapshot.Timeline);
+            string trackProbeSignature =
+                $"Session={snapshot.SessionFound};Track={snapshot.HasTrack};" +
+                $"Timeline={snapshot.Timeline is MediaTrackTimeline timelineValue && timelineValue.IsValid};" +
+                $"Artwork={snapshot.ArtworkBytes is not null}";
+            if (!trackProbeSignature.Equals(_lastTrackProbeSignature, StringComparison.Ordinal))
+            {
+                _lastTrackProbeSignature = trackProbeSignature;
+                _logger.Info("media.track_probe_result", trackProbeSignature);
+            }
+            if (snapshot.Timeline is MediaTrackTimeline timeline &&
+                timeline.IsValid &&
+                !_trackTimelineAvailableLogged)
+            {
+                _trackTimelineAvailableLogged = true;
+                _logger.Info(
+                    "media.track_timeline_available",
+                    "Windows media session provided a usable track timeline.");
+            }
 
             if (snapshot.HasTrack &&
                 _musicActivityDetector.IsPlaying &&
@@ -5460,6 +5481,7 @@ public partial class MainWindow : Window
         TrackArtistText.Text = "等待网易云更新歌曲信息";
         TrackArtistText.Visibility = Visibility.Visible;
         UpdateTrackArtwork(null);
+        UpdateTrackTimeline(null);
         System.Windows.Automation.AutomationProperties.SetName(
             TrackInfoBubble,
             "正在切换歌曲，等待网易云更新歌曲信息");
@@ -5474,6 +5496,7 @@ public partial class MainWindow : Window
             ? Visibility.Collapsed
             : Visibility.Visible;
         UpdateTrackArtwork(snapshot.ArtworkBytes);
+        UpdateTrackTimeline(snapshot.Timeline);
         System.Windows.Automation.AutomationProperties.SetName(
             TrackInfoBubble,
             MediaTrackText.BuildAccessibleLabel(snapshot));
@@ -5486,6 +5509,7 @@ public partial class MainWindow : Window
         TrackArtistText.Text = string.Empty;
         TrackArtistText.Visibility = Visibility.Collapsed;
         UpdateTrackArtwork(null);
+        UpdateTrackTimeline(null);
         System.Windows.Automation.AutomationProperties.SetName(
             TrackInfoBubble,
             "未在播放");
@@ -5537,6 +5561,94 @@ public partial class MainWindow : Window
         {
             _logger.Info("media.track_artwork_unavailable", "Track artwork could not be decoded.");
         }
+    }
+
+    private void UpdateTrackTimeline(MediaTrackTimeline? timeline)
+    {
+        if (timeline is not MediaTrackTimeline value || !value.IsValid)
+        {
+            TrackProgressRingTrack.Visibility = Visibility.Collapsed;
+            TrackProgressRing.Visibility = Visibility.Collapsed;
+            TrackProgressRing.Data = null;
+            TogglePlayPauseButton.ToolTip =
+                $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}）";
+            return;
+        }
+
+        TrackProgressRingTrack.Visibility = Visibility.Visible;
+        TrackProgressRing.Visibility = Visibility.Visible;
+        TrackProgressRing.Data = BuildTrackProgressGeometry(value.Progress);
+        TogglePlayPauseButton.ToolTip =
+            $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}） · " +
+            $"{FormatTrackTime(value.Position)} / {FormatTrackTime(value.Duration)}";
+    }
+
+    private static Geometry BuildTrackProgressGeometry(double progress)
+    {
+        progress = Math.Max(0, Math.Min(1, progress));
+        StreamGeometry geometry = new();
+        if (progress <= 0)
+        {
+            geometry.Freeze();
+            return geometry;
+        }
+
+        const double center = 19;
+        const double radius = 16;
+        Point start = new(center, center - radius);
+        double angle = progress * 360 - 90;
+        Point end = new(
+            center + radius * Math.Cos(angle * Math.PI / 180),
+            center + radius * Math.Sin(angle * Math.PI / 180));
+        using (StreamGeometryContext context = geometry.Open())
+        {
+            context.BeginFigure(start, isFilled: false, isClosed: false);
+            if (progress >= 0.999999)
+            {
+                Point opposite = new(center, center + radius);
+                context.ArcTo(
+                    opposite,
+                    new System.Windows.Size(radius, radius),
+                    rotationAngle: 0,
+                    isLargeArc: true,
+                    sweepDirection: SweepDirection.Clockwise,
+                    isStroked: true,
+                    isSmoothJoin: true);
+                context.ArcTo(
+                    start,
+                    new System.Windows.Size(radius, radius),
+                    rotationAngle: 0,
+                    isLargeArc: true,
+                    sweepDirection: SweepDirection.Clockwise,
+                    isStroked: true,
+                    isSmoothJoin: true);
+            }
+            else
+            {
+                context.ArcTo(
+                    end,
+                    new System.Windows.Size(radius, radius),
+                    rotationAngle: 0,
+                    isLargeArc: progress > 0.5,
+                    sweepDirection: SweepDirection.Clockwise,
+                    isStroked: true,
+                    isSmoothJoin: true);
+            }
+        }
+
+        geometry.Freeze();
+        return geometry;
+    }
+
+    private static string FormatTrackTime(TimeSpan value)
+    {
+        int totalSeconds = Math.Max(0, (int)Math.Floor(value.TotalSeconds));
+        int hours = totalSeconds / 3600;
+        int minutes = totalSeconds / 60 % 60;
+        int seconds = totalSeconds % 60;
+        return hours > 0
+            ? $"{hours}:{minutes:00}:{seconds:00}"
+            : $"{totalSeconds / 60}:{seconds:00}";
     }
 
     private void ShowTrackInfoSurface(bool holdAfterLeave)

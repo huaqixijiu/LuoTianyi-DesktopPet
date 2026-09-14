@@ -6,6 +6,42 @@ namespace LuoTianyiPet.Platform.Windows.Tests;
 public sealed class SystemMediaTrackInfoSourceTests
 {
     [Theory]
+    [InlineData(10, 42, 190, 32, 180)]
+    [InlineData(0, 0, 180, 0, 180)]
+    [InlineData(0, 250, 180, 180, 180)]
+    public void NormalizeTimeline_ReturnsRelativeClampedProgress(
+        int startSeconds,
+        int positionSeconds,
+        int endSeconds,
+        int expectedPositionSeconds,
+        int expectedDurationSeconds)
+    {
+        MediaTrackTimeline? timeline = SystemMediaTrackInfoSource.NormalizeTimeline(
+            TimeSpan.FromSeconds(startSeconds),
+            TimeSpan.FromSeconds(positionSeconds),
+            TimeSpan.FromSeconds(endSeconds));
+
+        Assert.True(timeline.HasValue);
+        Assert.Equal(TimeSpan.FromSeconds(expectedPositionSeconds), timeline.Value.Position);
+        Assert.Equal(TimeSpan.FromSeconds(expectedDurationSeconds), timeline.Value.Duration);
+    }
+
+    [Theory]
+    [InlineData(180, 179, 180)]
+    [InlineData(0, -1, 180)]
+    [InlineData(10, 20, 10)]
+    public void NormalizeTimeline_RejectsInvalidProviderValues(
+        int startSeconds,
+        int positionSeconds,
+        int endSeconds)
+    {
+        Assert.Null(SystemMediaTrackInfoSource.NormalizeTimeline(
+            TimeSpan.FromSeconds(startSeconds),
+            TimeSpan.FromSeconds(positionSeconds),
+            TimeSpan.FromSeconds(endSeconds)));
+    }
+
+    [Theory]
     [InlineData(0, PetVisualState.MusicSwayAnimation)]
     [InlineData(1, PetVisualState.OneClickSingingAnimation)]
     public void IncompleteSystemArtist_UsesSameTrackCollaboratorsForBothSingingAnimations(

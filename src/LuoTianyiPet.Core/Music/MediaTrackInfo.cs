@@ -1,11 +1,23 @@
 namespace LuoTianyiPet.Core;
 
+public readonly record struct MediaTrackTimeline(TimeSpan Position, TimeSpan Duration)
+{
+    public bool IsValid => Duration > TimeSpan.Zero &&
+        Position >= TimeSpan.Zero &&
+        Position <= Duration;
+
+    public double Progress => IsValid
+        ? Position.TotalMilliseconds / Duration.TotalMilliseconds
+        : 0;
+}
+
 public readonly record struct MediaTrackSnapshot(
     bool ProbeSucceeded,
     bool SessionFound,
     string Title,
     string Artist,
-    byte[]? ArtworkBytes = null)
+    byte[]? ArtworkBytes = null,
+    MediaTrackTimeline? Timeline = null)
 {
     public static MediaTrackSnapshot Unavailable => new(false, false, string.Empty, string.Empty);
 
