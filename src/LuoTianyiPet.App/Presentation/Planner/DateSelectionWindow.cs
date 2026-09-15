@@ -39,6 +39,8 @@ internal sealed class DateSelectionWindow : Window
         DockPanel.SetDock(prev, Dock.Left); DockPanel.SetDock(next, Dock.Right); nav.Children.Add(prev); nav.Children.Add(next);
         nav.Children.Add(new TextBlock { Text = _month.ToString("yyyy年M月"), TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 17 }); _panel.Children.Add(nav);
         Grid grid = new(); for (int c = 0; c < 7; c++) grid.ColumnDefinitions.Add(new()); for (int r = 0; r < 7; r++) grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        grid.AddHandler(UIElement.PreviewMouseMoveEvent, new System.Windows.Input.MouseEventHandler((_, e) => ContinueDrag(grid, e)), true);
+        grid.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new System.Windows.Input.MouseButtonEventHandler((_, e) => EndDrag(e)), true);
         for (int c = 0; c < 7; c++) { TextBlock t = new() { Text = "一二三四五六日"[c].ToString(), TextAlignment = TextAlignment.Center, Margin = new Thickness(4, 10, 4, 8) }; Grid.SetColumn(t,c); grid.Children.Add(t); }
         DateTime start = _month.AddDays(-((int)_month.DayOfWeek + 6) % 7);
         for (int i = 0; i < 42; i++)
@@ -48,8 +50,6 @@ internal sealed class DateSelectionWindow : Window
             b.IsEnabled = day >= ReminderSchedule.MinimumDate && day <= ReminderSchedule.MaximumDate;
             b.Tag = day;
             b.PreviewMouseLeftButtonDown += (_, e) => BeginDrag(b, grid, day, e);
-            b.PreviewMouseMove += (_, e) => ContinueDrag(grid, e);
-            b.PreviewMouseLeftButtonUp += (_, e) => EndDrag(e);
             _dayButtons[day] = b;
             Grid.SetColumn(b,i%7); Grid.SetRow(b,i/7+1); grid.Children.Add(b);
         }

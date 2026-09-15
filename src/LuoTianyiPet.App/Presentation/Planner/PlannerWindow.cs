@@ -136,6 +136,8 @@ internal sealed partial class PlannerWindow : Window
         var add=Primary(Action("",()=>{_occurrenceDate=null;Edit(null,true);}));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新增事项",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;right.Children.Add(add);
         if(Width<1000&&!week&&_details){DockPanel.SetDock(left,Dock.Top);nav.Children.Add(left);right.HorizontalAlignment=HorizontalAlignment.Right;nav.Children.Add(right);}else{DockPanel.SetDock(right,Dock.Right);nav.Children.Add(right);nav.Children.Add(left);}DockPanel.SetDock(nav,Dock.Top);main.Children.Add(nav);
         Grid grid=new();for(int c=0;c<7;c++)grid.ColumnDefinitions.Add(new());grid.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        grid.AddHandler(UIElement.PreviewMouseMoveEvent,new System.Windows.Input.MouseEventHandler((_,e)=>ContinueCalendarDrag(grid,e)),true);
+        grid.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent,new System.Windows.Input.MouseButtonEventHandler((_,e)=>EndCalendarDrag(e)),true);
         for(int c=0;c<7;c++){var t=Text("周"+"一二三四五六日"[c],13,FontWeights.SemiBold,PlannerTheme.Muted);t.TextAlignment=TextAlignment.Center;t.Margin=new Thickness(0,8,0,8);Grid.SetColumn(t,c);grid.Children.Add(t);}
         DateTime first=week?WeekStart(_date):WeekStart(new DateTime(_date.Year,_date.Month,1));int count=week?7:((int)(new DateTime(_date.Year,_date.Month,DateTime.DaysInMonth(_date.Year,_date.Month))-first).TotalDays/7+1)*7;
         for(int r=0;r<count/7;r++)grid.RowDefinitions.Add(new());
@@ -314,29 +316,31 @@ internal sealed partial class PlannerWindow : Window
             _calendarDragLastPoint=System.Windows.Input.Mouse.GetPosition(grid);
             System.Windows.Input.Mouse.Capture(dateButton,System.Windows.Input.CaptureMode.Element);
         };
-        dateButton.PreviewMouseMove+=(_,e)=>
-        {
-            if(!_calendarDragActive||!_batch||e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
-            Point point=System.Windows.Input.Mouse.GetPosition(grid);
-            if((point-_calendarDragLastPoint).Length<1)return;
-            AddCalendarDragPath(grid,_calendarDragLastPoint,point);
-            _calendarDragLastPoint=point;
-        };
-        dateButton.PreviewMouseLeftButtonUp+=(_,e)=>
-        {
-            if(!_calendarDragActive||e.ChangedButton!=System.Windows.Input.MouseButton.Left)return;
-            bool moved=_calendarDragMoved;
-            _calendarDragActive=false;
-            _calendarDragMoved=false;
-            _calendarDragVisited.Clear();
-            _calendarDragStartDay=null;
-            System.Windows.Input.Mouse.Capture(null);
-            if(!moved)return;
-            _suppressCalendarClick=true;
-            e.Handled=true;
-            Render();
-            Dispatcher.BeginInvoke(new Action(()=>_suppressCalendarClick=false),System.Windows.Threading.DispatcherPriority.Input);
-        };
+    }
+
+    private void ContinueCalendarDrag(Grid grid,System.Windows.Input.MouseEventArgs e)
+    {
+        if(!_calendarDragActive||!_batch||e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
+        Point point=System.Windows.Input.Mouse.GetPosition(grid);
+        if((point-_calendarDragLastPoint).Length<1)return;
+        AddCalendarDragPath(grid,_calendarDragLastPoint,point);
+        _calendarDragLastPoint=point;
+    }
+
+    private void EndCalendarDrag(System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if(!_calendarDragActive||e.ChangedButton!=System.Windows.Input.MouseButton.Left)return;
+        bool moved=_calendarDragMoved;
+        _calendarDragActive=false;
+        _calendarDragMoved=false;
+        _calendarDragVisited.Clear();
+        _calendarDragStartDay=null;
+        System.Windows.Input.Mouse.Capture(null);
+        if(!moved)return;
+        _suppressCalendarClick=true;
+        e.Handled=true;
+        Render();
+        Dispatcher.BeginInvoke(new Action(()=>_suppressCalendarClick=false),System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void AddCalendarDragPath(Grid grid,Point from,Point to)
