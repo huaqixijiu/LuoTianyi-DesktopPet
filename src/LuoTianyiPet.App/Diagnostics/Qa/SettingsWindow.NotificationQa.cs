@@ -43,12 +43,15 @@ public partial class SettingsWindow
                 Check(source.RequestCount == 0, prefix + "Opening settings never requests system permission");
                 Check(!window.NotificationRulesExpander.IsExpanded, prefix + "Rules start collapsed");
                 double collapsedExtent=window.NotificationPage.ExtentHeight;
-                Check(window.NotificationPage.ScrollableHeight > 0 && window.AlarmSoundCheckBox.IsVisible, prefix + "Notification page includes scrollable alarm settings");
+                Check(window.AlarmSoundCheckBox.IsVisible && window.AlarmVolumeSlider.IsVisible, prefix + "Music on keeps the volume row visible");
+                window.AlarmSoundCheckBox.IsChecked = false;
+                window.UpdateLayout();
+                Check(!window.AlarmVolumeSlider.IsVisible, prefix + "Music off hides the volume row");
+                window.AlarmSoundCheckBox.IsChecked = true;
+                window.UpdateLayout();
                 Check(window.NotificationPage.ScrollableWidth < 1, prefix + "Page never scrolls horizontally");
-                Check(window.NotificationAccessStatusText.Text == (status switch {
-                    MessageNotificationAccessStatus.Allowed => "已授权", MessageNotificationAccessStatus.Denied => "已拒绝",
-                    MessageNotificationAccessStatus.Unspecified => "未授权", MessageNotificationAccessStatus.PackageIdentityRequired => "需安装版", _ => "暂不可用" }), prefix + "Actual source status has a compact label");
-                Check(window.NotificationAccessButton.IsEnabled == (status is MessageNotificationAccessStatus.Unspecified or MessageNotificationAccessStatus.Unavailable), prefix + "Only actionable permission states enable the button");
+                Check((window.NotificationAccessBanner.Visibility == Visibility.Collapsed) == (status == MessageNotificationAccessStatus.Allowed), prefix + "Access banner appears only while access needs attention");
+                Check(window.NotificationAccessButton.IsEnabled == (status is MessageNotificationAccessStatus.Unspecified or MessageNotificationAccessStatus.Unavailable) && window.NotificationAccessButton.IsVisible == window.NotificationAccessButton.IsEnabled, prefix + "Only actionable permission states show an enabled authorize button");
                 Check(window.NotificationQqIcon.Source is BitmapImage qq && qq.UriSource.ToString().EndsWith("notification-qq.png") &&
                     window.NotificationWeChatIcon.Source is BitmapImage wc && wc.UriSource.ToString().EndsWith("notification-wechat.png"), prefix + "Both icons use the existing user-derived PNG assets");
                 CaptureNotificationSettings(window, Path.Combine(directory, status + ".png"), 1);
@@ -75,8 +78,8 @@ public partial class SettingsWindow
                 ToggleButton disclosure = FindNotificationVisual<ToggleButton>(window.NotificationRulesExpander)!;
                 ((IToggleProvider)new ToggleButtonAutomationPeer(disclosure)).Toggle();
                 window.UpdateLayout();
-                Check(window.NotificationRulesExpander.IsExpanded && window.NotificationPage.ScrollableHeight > 0,
-                    prefix + "Disclosure opens into a scrollable explanation");
+                Check(window.NotificationRulesExpander.IsExpanded && window.NotificationRulesFirstParagraph.IsVisible,
+                    prefix + "Disclosure opens the rules inline");
                 window.NotificationPage.ScrollToEnd();
                 window.UpdateLayout();
                 Check(window.SaveStatusText.IsVisible, prefix + "Footer remains visible while reading rules");
@@ -93,8 +96,8 @@ public partial class SettingsWindow
                     await Task.Delay(30);
                     Check(source.RequestCount == 1 && window.SelectedNotificationPreferences.WindowsNotificationAccessGranted,
                         "Grant button updates the pending preference exactly once");
-                    Check(window.NotificationAccessStatusText.Text == "已授权" && !window.NotificationAccessButton.IsVisible,
-                        "Granted state removes the redundant authorization button");
+                    Check(window.NotificationAccessBanner.Visibility == Visibility.Collapsed && !window.NotificationAccessButton.IsVisible,
+                        "Granted state hides the whole access banner");
                 }
                 if (status == MessageNotificationAccessStatus.Allowed)
                 {
@@ -107,8 +110,8 @@ public partial class SettingsWindow
             }
             window = Create(null);
             window.Show(); window.NotificationNavigationRadioButton.IsChecked = true;
-            Check(!window.NotificationAccessButton.IsEnabled && window.NotificationAccessStatusText.Text == "暂不可用",
-                "Absent platform source has no dead authorization action");
+            Check(!window.NotificationAccessButton.IsEnabled && window.NotificationAccessButton.Visibility == Visibility.Collapsed && window.NotificationAccessBanner.Visibility == Visibility.Visible,
+                "Absent platform source shows guidance without a dead action");
             window.Close(); window = Create(new NotificationSettingsQaSource { Status = MessageNotificationAccessStatus.Allowed });
             SettingsWindow modal = window;
             _ = modal.Dispatcher.BeginInvoke(new Action(() =>

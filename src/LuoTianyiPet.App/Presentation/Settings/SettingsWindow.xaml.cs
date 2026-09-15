@@ -265,33 +265,26 @@ public partial class SettingsWindow : Window
             // An existing system grant can outlive the locally saved preference.
             SelectedNotificationPreferences = SelectedNotificationPreferences with { WindowsNotificationAccessGranted = true };
         }
-        NotificationAccessStatusText.Text = status switch
+        NotificationAccessBanner.Visibility = status == MessageNotificationAccessStatus.Allowed
+            ? Visibility.Collapsed : Visibility.Visible;
+        NotificationAccessBannerText.Text = status switch
         {
-            MessageNotificationAccessStatus.Allowed => "已授权",
-            MessageNotificationAccessStatus.Unspecified => "未授权",
-            MessageNotificationAccessStatus.Denied => "已拒绝",
-            MessageNotificationAccessStatus.PackageIdentityRequired => "需安装版",
-            _ => "暂不可用",
+            MessageNotificationAccessStatus.Denied => "系统通知访问已被拒绝",
+            MessageNotificationAccessStatus.PackageIdentityRequired => "系统通知访问需要安装版",
+            _ => "授权系统通知访问，提醒内容更完整",
         };
-        NotificationAccessStatusText.Foreground = new System.Windows.Media.SolidColorBrush(
-            status == MessageNotificationAccessStatus.Allowed
-                ? System.Windows.Media.Color.FromRgb(0x35, 0x7A, 0x62)
-                : System.Windows.Media.Color.FromRgb(0x96, 0x6C, 0x35));
         NotificationAccessHintText.Text = status switch
         {
-            MessageNotificationAccessStatus.Allowed => "已允许获取系统通知中的昵称和摘要。",
             MessageNotificationAccessStatus.Unspecified => "授权后，可获取系统通知中的昵称和摘要。",
             MessageNotificationAccessStatus.Denied => "可在 Windows 设置中调整通知访问；仍会尝试来源提醒。",
             MessageNotificationAccessStatus.PackageIdentityRequired => "安装版支持系统通知访问；当前仍会尝试来源提醒。",
             _ => "系统通知暂不可用；仍会尝试来源提醒。",
         };
-        NotificationAccessButton.IsEnabled = _messageNotificationSource is not null &&
+        bool actionable = _messageNotificationSource is not null &&
             status is MessageNotificationAccessStatus.Unspecified or MessageNotificationAccessStatus.Unavailable;
-        NotificationAccessButton.Content = status == MessageNotificationAccessStatus.Allowed
-            ? "已授权"
-            : "授权";
-        NotificationAccessButton.Visibility = status == MessageNotificationAccessStatus.Allowed
-            ? Visibility.Collapsed : Visibility.Visible;
+        NotificationAccessButton.IsEnabled = actionable;
+        NotificationAccessButton.Visibility = actionable
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
 }

@@ -79,6 +79,26 @@
             </ControlTemplate></Setter.Value></Setter>
         </Style>
 
+        <Style x:Key="SourceChip" TargetType="CheckBox">
+            <Setter Property="Cursor" Value="Hand" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+                <Border x:Name="Chip" Padding="9,6" Background="White" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="9">
+                    <StackPanel Orientation="Horizontal">
+                        <ContentPresenter VerticalAlignment="Center" />
+                        <Border x:Name="CheckBadge" Width="16" Height="16" Margin="8,0,0,0" Background="{StaticResource Primary}" CornerRadius="8" Opacity="0" VerticalAlignment="Center">
+                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="White" FontFamily="Segoe MDL2 Assets" FontSize="9" Text="&#xE73E;" />
+                        </Border>
+                    </StackPanel>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chip" Property="Background" Value="{StaticResource SettingsCardHoverBrush}" /></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="Chip" Property="Background" Value="{StaticResource SettingsHoverBrush}" /><Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource Primary}" /><Setter TargetName="CheckBadge" Property="Opacity" Value="1" /></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chip" Property="BorderBrush" Value="{StaticResource PrimaryDark}" /></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chip" Property="Opacity" Value="0.45" /></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+
         <Style x:Key="SelectionCard" TargetType="RadioButton">
             <Setter Property="MinHeight" Value="82" /><Setter Property="Margin" Value="0,0,8,8" /><Setter Property="Padding" Value="11,9" />
             <Setter Property="Background" Value="White" /><Setter Property="BorderBrush" Value="{StaticResource Line}" /><Setter Property="BorderThickness" Value="1" />
@@ -260,59 +280,58 @@
 
             <ScrollViewer x:Name="NotificationPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="22,16,16,16">
-                    <TextBlock Style="{StaticResource PageTitle}" Text="通知" /><TextBlock Style="{StaticResource PageDescription}" Text="让桌宠在收到消息时，做出可爱的提醒。" />
-                    <Border Style="{StaticResource GroupCard}"><CheckBox x:Name="MessageReminderCheckBox" AutomationProperties.Name="启用 QQ 和微信消息来源提醒" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel><TextBlock Style="{StaticResource OptionTitle}" Text="消息提醒" /><TextBlock Style="{StaticResource OptionDescription}" Text="接收来自应用的消息，在桌面上显示提醒。" /></StackPanel></CheckBox></Border>
-                    <StackPanel x:Name="DetailedReminderSection">
-                        <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding IsChecked, ElementName=MessageReminderCheckBox}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                        <TextBlock Style="{StaticResource GroupTitle}" Text="详细提醒" />
-                        <TextBlock Style="{StaticResource OptionDescription}" Margin="4,1,4,6" Text="开启后可选择接收哪些应用的消息提醒。" />
-                        <Border Style="{StaticResource GroupCard}"><StackPanel>
-                        <CheckBox x:Name="QqDetailedReminderCheckBox" AutomationProperties.Name="QQ 详细提醒" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationQqIcon" Width="28" Height="28" Margin="0,0,12,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-qq.png" DecodePixelWidth="112" /></Image.Source></Image><TextBlock Text="QQ" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel></CheckBox>
-                        <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
-                        <CheckBox x:Name="WeChatDetailedReminderCheckBox" AutomationProperties.Name="微信详细提醒（试用）" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationWeChatIcon" Width="28" Height="28" Margin="0,0,12,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-wechat.png" DecodePixelWidth="112" /></Image.Source></Image><TextBlock Text="微信" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" /><Border Margin="10,0,0,0" Padding="5,1" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4" VerticalAlignment="Center"><TextBlock Text="试用" FontSize="11" Foreground="{StaticResource Muted}" /></Border></StackPanel></CheckBox>
-                        </StackPanel></Border>
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource GroupTitle}" Text="通知权限" />
-                    <Border Style="{StaticResource GroupCard}" Padding="12,10"><Grid>
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                        <Border Width="34" Height="34" Margin="0,0,10,0" Background="{StaticResource SettingsTileBrush}" CornerRadius="9"><Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="M12,3.5 L18.5,6 V11 C18.5,15.5 15.8,18.9 12,20.5 C8.2,18.9 5.5,15.5 5.5,11 V6 Z M9.3,11.4 L11.2,13.3 L14.9,9.6" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.7" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /></Canvas></Viewbox></Border>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock Style="{StaticResource OptionTitle}" Text="Windows 通知访问" /><TextBlock x:Name="NotificationAccessHintText" Style="{StaticResource OptionDescription}" Text="授权后，可获取系统通知中的昵称和摘要。" /></StackPanel>
-                        <TextBlock x:Name="NotificationAccessStatusText" Grid.Column="2" Margin="8,0,12,0" VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource Muted}" Text="检查中" />
-                        <Button x:Name="NotificationAccessButton" Grid.Column="3" MinWidth="62" Height="32" Padding="10,0" AutomationProperties.Name="授权 Windows 通知访问" Click="OnRequestNotificationAccessClick" Content="授权" />
+                    <TextBlock Style="{StaticResource PageTitle}" Text="通知" /><TextBlock Style="{StaticResource PageDescription}" Text="有新消息时，在天依耳旁提醒你。" />
+                    <Border x:Name="NotificationAccessBanner" Margin="0,0,0,10" Padding="12,9" Background="{StaticResource SettingsHoverBrush}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Visibility="Collapsed"><Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <Viewbox Width="16" Height="16" Margin="0,0,9,0"><Canvas Width="24" Height="24"><Path Data="M12,3.5 L18.5,6 V11 C18.5,15.5 15.8,18.9 12,20.5 C8.2,18.9 5.5,15.5 5.5,11 V6 Z M9.3,11.4 L11.2,13.3 L14.9,9.6" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.7" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /></Canvas></Viewbox>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center"><TextBlock x:Name="NotificationAccessBannerText" FontSize="12" FontWeight="SemiBold" Text="授权系统通知访问，提醒内容更完整" /><TextBlock x:Name="NotificationAccessHintText" Style="{StaticResource OptionDescription}" Text="授权后，可获取系统通知中的昵称和摘要。" /></StackPanel>
+                        <Button x:Name="NotificationAccessButton" Grid.Column="2" MinWidth="62" Height="30" Padding="10,0" AutomationProperties.Name="授权 Windows 通知访问" Click="OnRequestNotificationAccessClick" Content="授权" />
                     </Grid></Border>
-                    <Border Style="{StaticResource GroupCard}" Padding="12,2">
-                    <Expander x:Name="NotificationRulesExpander" IsExpanded="False" HorizontalContentAlignment="Stretch" AutomationProperties.Name="了解提醒规则与隐私">
-                        <Expander.Template><ControlTemplate TargetType="Expander"><StackPanel>
-                            <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" AutomationProperties.Name="了解提醒规则与隐私" Cursor="Hand" FocusVisualStyle="{x:Null}"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
-                                <Border x:Name="HeaderSurface" Padding="0,10" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6"><Grid><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,8,0"><Canvas Width="24" Height="24"><Ellipse Canvas.Left="4.5" Canvas.Top="4.5" Width="15" Height="15" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.7" /><Path Data="M12,11 V16.2" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /><Ellipse Canvas.Left="11" Canvas.Top="7.2" Width="2" Height="2" Fill="{StaticResource FloatAccentInkBrush}" /></Canvas></Viewbox><TextBlock Style="{StaticResource OptionTitle}" Text="了解提醒规则与隐私" VerticalAlignment="Center" /></StackPanel><TextBlock x:Name="Chevron" Text="&#xE70D;" FontFamily="Segoe MDL2 Assets" FontSize="12" Foreground="{StaticResource Muted}" HorizontalAlignment="Right" VerticalAlignment="Center" /></Grid></Border>
-                                <ControlTemplate.Triggers><Trigger Property="IsChecked" Value="False"><Setter TargetName="Chevron" Property="Text" Value="&#xE76C;" /></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderSurface" Property="Background" Value="{StaticResource SettingsHoverBrush}" /></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HeaderSurface" Property="BorderBrush" Value="{StaticResource Primary}" /></Trigger></ControlTemplate.Triggers>
-                            </ControlTemplate></ToggleButton.Template></ToggleButton>
-                            <ContentPresenter x:Name="RulesContent" Visibility="Collapsed" Margin="0,0,0,10" />
-                        </StackPanel><ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="RulesContent" Property="Visibility" Value="Visible" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Expander.Template>
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource OptionDescription}" Text="提醒来源为系统通知：QQ 摘要来自系统通知，微信试用读取公开会话摘要，不打开聊天、不读取历史，免打扰会话不提醒；未捕获到的消息不会补报。" />
-                            <TextBlock Style="{StaticResource OptionDescription}" Margin="0,8,0,0" Text="昵称与摘要仅在本机内存中用于当前提醒，不写入历史或日志、不上传；忽略与清空只影响桌宠，不修改客户端已读状态。" />
-                        </StackPanel>
-                    </Expander>
-                    </Border>
-                    <TextBlock Style="{StaticResource GroupTitle}" Text="日历与闹钟提醒" />
                     <Border Style="{StaticResource GroupCard}"><StackPanel>
-                        <Grid Margin="10,9,10,7"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                            <Border Width="34" Height="34" Margin="0,0,10,0" Background="{StaticResource SettingsTileBrush}" CornerRadius="9"><Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Data="M5.2,8.8 A4,4 0 0 1 8.8,5.2 M15.2,5.2 A4,4 0 0 1 18.8,8.8 M12,9.5 V13 L14.7,15" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.75" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /><Ellipse Canvas.Left="5" Canvas.Top="6" Width="14" Height="14" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.75" /></Canvas></Viewbox></Border>
-                            <StackPanel VerticalAlignment="Center"><TextBlock Style="{StaticResource OptionTitle}" Text="日历与闹钟" /><TextBlock Style="{StaticResource OptionDescription}" Text="在设定的时间，提醒你重要的日程。" /></StackPanel>
-                        </Grid>
+                        <CheckBox x:Name="MessageReminderCheckBox" AutomationProperties.Name="启用 QQ 和微信消息来源提醒" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><TextBlock Style="{StaticResource OptionTitle}" Text="消息提醒" /></CheckBox>
+                        <StackPanel x:Name="DetailedReminderSection">
+                            <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding IsChecked, ElementName=MessageReminderCheckBox}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                            <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
+                            <Grid Margin="10,8,10,10"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <TextBlock Margin="0,0,10,0" Foreground="{StaticResource Muted}" FontSize="12" Text="提醒来源" VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <CheckBox x:Name="QqDetailedReminderCheckBox" Style="{StaticResource SourceChip}" AutomationProperties.Name="QQ 详细提醒" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationQqIcon" Width="20" Height="20" Margin="0,0,7,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-qq.png" DecodePixelWidth="80" /></Image.Source></Image><TextBlock Text="QQ" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel></CheckBox>
+                                    <CheckBox x:Name="WeChatDetailedReminderCheckBox" Style="{StaticResource SourceChip}" Margin="8,0,0,0" AutomationProperties.Name="微信详细提醒（试用）" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationWeChatIcon" Width="20" Height="20" Margin="0,0,7,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-wechat.png" DecodePixelWidth="80" /></Image.Source></Image><TextBlock Text="微信" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" /><Border Margin="7,0,0,0" Padding="5,1" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4" VerticalAlignment="Center"><TextBlock Text="试用" FontSize="10.5" Foreground="{StaticResource Muted}" /></Border></StackPanel></CheckBox>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel></Border>
+                    <Border Style="{StaticResource GroupCard}"><StackPanel>
+                        <TextBlock Style="{StaticResource CardHeader}" Text="日历与闹钟"><TextBlock.ToolTip><ToolTip>响铃时临时置顶。每轮最长3分42秒，未处理则暂停10分钟后再次提醒；关闭本次提醒即停止。</ToolTip></TextBlock.ToolTip></TextBlock>
+                        <TextBlock Style="{StaticResource OptionDescription}" Margin="11,0,11,4" Text="在设定的时间，提醒你重要的日程。" />
                         <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
                         <CheckBox x:Name="AlarmAnimationCheckBox" AutomationProperties.Name="闹钟播放来啦动画" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel><TextBlock Style="{StaticResource OptionTitle}" Text="播放「来啦」动画" /></StackPanel></CheckBox>
                         <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
                         <CheckBox x:Name="AlarmSoundCheckBox" AutomationProperties.Name="闹钟播放提醒音乐" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel><TextBlock Style="{StaticResource OptionTitle}" Text="播放提醒音乐" /><TextBlock Style="{StaticResource OptionDescription}" Text="再给我一天的时间吧QAQ · 洛天依Official、心华" /></StackPanel></CheckBox>
-                        <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
-                        <Grid Margin="10,8,10,4"><Grid.ColumnDefinitions><ColumnDefinition Width="50"/><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/></Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource OptionTitle}" Text="音量" VerticalAlignment="Center" />
-                            <Slider x:Name="AlarmVolumeSlider" Grid.Column="1" Style="{StaticResource SettingsSlider}" Minimum="0" Maximum="1" Margin="8,0,16,0" VerticalAlignment="Center" ValueChanged="OnAlarmVolumeChanged" AutomationProperties.Name="提醒音乐音量" />
-                            <Button x:Name="TestAlarmSoundButton" Grid.Column="2" Content="试听音乐" Height="32" Click="OnTestAlarmSound" />
-                        </Grid>
-                        <TextBlock Style="{StaticResource OptionDescription}" Margin="10,2,10,10" Text="响铃时临时置顶。每轮最长3分42秒，未处理则暂停10分钟后再次提醒；关闭本次提醒即停止。" />
+                        <StackPanel x:Name="AlarmVolumeSection">
+                            <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding IsChecked, ElementName=AlarmSoundCheckBox}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                            <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
+                            <Grid Margin="10,8,10,10"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource OptionTitle}" Text="音量" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <Viewbox Grid.Column="1" Width="16" Height="16" Margin="0,0,6,0"><Canvas Width="24" Height="24"><Path Data="M4,9.5 H7.5 L12,5.5 V18.5 L7.5,14.5 H4 Z M15,9 C16.8,10.8 16.8,13.2 15,15" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.7" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /></Canvas></Viewbox>
+                                <Slider x:Name="AlarmVolumeSlider" Grid.Column="2" Style="{StaticResource SettingsSlider}" Minimum="0" Maximum="1" Margin="0,0,12,0" VerticalAlignment="Center" ValueChanged="OnAlarmVolumeChanged" AutomationProperties.Name="提醒音乐音量" />
+                                <Button x:Name="TestAlarmSoundButton" Grid.Column="3" Content="试听音乐" Height="30" Padding="10,0" Click="OnTestAlarmSound" />
+                            </Grid>
+                        </StackPanel>
                     </StackPanel></Border>
+                    <Expander x:Name="NotificationRulesExpander" IsExpanded="False" HorizontalContentAlignment="Stretch" Margin="2,4,0,0" AutomationProperties.Name="了解提醒规则与隐私">
+                        <Expander.Template><ControlTemplate TargetType="Expander"><StackPanel>
+                            <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" AutomationProperties.Name="了解提醒规则与隐私" Cursor="Hand" FocusVisualStyle="{x:Null}"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
+                                <Border x:Name="HeaderSurface" Padding="4,8" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6"><StackPanel Orientation="Horizontal"><TextBlock x:Name="HeaderText" Foreground="{StaticResource PrimaryDark}" FontSize="12" FontWeight="SemiBold" Text="了解提醒规则与隐私" VerticalAlignment="Center" /><TextBlock x:Name="Chevron" Margin="6,0,0,0" Text="&#xE76C;" FontFamily="Segoe MDL2 Assets" FontSize="10" Foreground="{StaticResource PrimaryDark}" VerticalAlignment="Center" /></StackPanel></Border>
+                                <ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Chevron" Property="Text" Value="&#xE70D;" /></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderSurface" Property="Background" Value="{StaticResource SettingsHoverBrush}" /></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HeaderSurface" Property="BorderBrush" Value="{StaticResource Primary}" /></Trigger></ControlTemplate.Triggers>
+                            </ControlTemplate></ToggleButton.Template></ToggleButton>
+                            <ContentPresenter x:Name="RulesContent" Visibility="Collapsed" Margin="4,0,4,6" />
+                        </StackPanel><ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="RulesContent" Property="Visibility" Value="Visible" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Expander.Template>
+                        <StackPanel>
+                            <TextBlock x:Name="NotificationRulesFirstParagraph" Style="{StaticResource OptionDescription}" Text="提醒来源为系统通知：QQ 摘要来自系统通知，微信试用读取公开会话摘要，不打开聊天、不读取历史，免打扰会话不提醒；未捕获到的消息不会补报。" />
+                            <TextBlock Style="{StaticResource OptionDescription}" Margin="0,8,0,0" Text="昵称与摘要仅在本机内存中用于当前提醒，不写入历史或日志、不上传；忽略与清空只影响桌宠，不修改客户端已读状态。" />
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </ScrollViewer>
 
