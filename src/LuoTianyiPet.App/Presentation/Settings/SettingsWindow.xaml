@@ -4,7 +4,7 @@
         Title="洛天依桌宠设置" Icon="/assets/app/luotianyi-pet.ico"
         Width="600" Height="664" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" Background="#F7FBFD"
-        FontFamily="Segoe UI, Noto Sans SC, Microsoft YaHei UI" UseLayoutRounding="True"
+        FontFamily="Segoe UI, Microsoft YaHei UI" UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display" SnapsToDevicePixels="True" Loaded="OnLoaded">
     <Window.Resources>
         <ResourceDictionary>
