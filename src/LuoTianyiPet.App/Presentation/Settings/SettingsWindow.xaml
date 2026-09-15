@@ -4,8 +4,8 @@
         Title="洛天依桌宠设置" Icon="/assets/app/luotianyi-pet.ico"
         Width="600" Height="664" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" Background="#F7FBFD"
-        FontFamily="Segoe UI, Microsoft YaHei UI" UseLayoutRounding="True"
-        SnapsToDevicePixels="True" Loaded="OnLoaded">
+        FontFamily="Segoe UI, Noto Sans SC, Microsoft YaHei UI" UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display" SnapsToDevicePixels="True" Loaded="OnLoaded">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -29,7 +29,7 @@
         <Style x:Key="GroupTitle" TargetType="TextBlock"><Setter Property="Margin" Value="2,2,4,5" /><Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
         <Style x:Key="CardHeader" TargetType="TextBlock"><Setter Property="Margin" Value="11,9,11,2" /><Setter Property="FontSize" Value="12.5" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
         <Style x:Key="OptionTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="13" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
-        <Style x:Key="OptionDescription" TargetType="TextBlock"><Setter Property="Margin" Value="0,2,0,0" /><Setter Property="Foreground" Value="{StaticResource Muted}" /><Setter Property="FontSize" Value="10.5" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+        <Style x:Key="OptionDescription" TargetType="TextBlock"><Setter Property="Margin" Value="0,2,0,0" /><Setter Property="Foreground" Value="{StaticResource Muted}" /><Setter Property="FontSize" Value="11" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
 
         <Style x:Key="GroupCard" TargetType="Border">
             <Setter Property="Margin" Value="0,0,0,10" /><Setter Property="Padding" Value="4" />
@@ -243,7 +243,7 @@
                     <Border Style="{StaticResource GroupCard}"><StackPanel Margin="11,9,11,10">
                         <Grid><TextBlock FontSize="12.5" FontWeight="SemiBold" Text="显示大小" /><TextBlock HorizontalAlignment="Right" Foreground="{StaticResource PrimaryDark}" FontWeight="SemiBold" Text="{Binding Value, ElementName=DisplayScaleSlider, StringFormat={}{0:0}%}" /></Grid>
                         <Slider x:Name="DisplayScaleSlider" Style="{StaticResource SettingsSlider}" Margin="0,10,0,4" Minimum="50" Maximum="300" TickFrequency="5" SmallChange="5" LargeChange="10" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" ValueChanged="OnSettingChanged" AutomationProperties.Name="桌宠显示大小" />
-                        <Grid><TextBlock FontSize="10" Foreground="{StaticResource Muted}" Text="50%" /><TextBlock FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Text="100% 为默认大小 · 拖动时实时预览" /><TextBlock FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Right" Text="300%" /></Grid>
+                        <Grid><TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" Text="50%" /><TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Text="100% 为默认大小 · 拖动时实时预览" /><TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Right" Text="300%" /></Grid>
                     </StackPanel></Border>
                 </StackPanel>
             </ScrollViewer>
@@ -280,7 +280,7 @@
 
             <ScrollViewer x:Name="NotificationPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="22,16,16,16">
-                    <TextBlock Style="{StaticResource PageTitle}" Text="通知" /><TextBlock Style="{StaticResource PageDescription}" Text="有新消息时，在天依耳旁提醒你。" />
+                    <TextBlock Style="{StaticResource PageTitle}" Text="通知" /><TextBlock Style="{StaticResource PageDescription}" Text="有新消息时，天依会提醒你~" />
                     <Border x:Name="NotificationAccessBanner" Margin="0,0,0,10" Padding="12,9" Background="{StaticResource SettingsHoverBrush}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="10" Visibility="Collapsed"><Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                         <Viewbox Width="16" Height="16" Margin="0,0,9,0"><Canvas Width="24" Height="24"><Path Data="M12,3.5 L18.5,6 V11 C18.5,15.5 15.8,18.9 12,20.5 C8.2,18.9 5.5,15.5 5.5,11 V6 Z M9.3,11.4 L11.2,13.3 L14.9,9.6" Fill="Transparent" Stroke="{StaticResource FloatAccentInkBrush}" StrokeThickness="1.7" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /></Canvas></Viewbox>
@@ -293,10 +293,10 @@
                             <StackPanel.Style><Style TargetType="StackPanel"><Style.Triggers><DataTrigger Binding="{Binding IsChecked, ElementName=MessageReminderCheckBox}" Value="False"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
                             <Separator Margin="10,0" Background="{StaticResource FloatDividerBrush}" />
                             <Grid Margin="10,8,10,10"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <TextBlock Margin="0,0,10,0" Foreground="{StaticResource Muted}" FontSize="12" Text="提醒来源" VerticalAlignment="Center" />
+                                <TextBlock Margin="0,0,10,0" Foreground="{StaticResource Muted}" FontSize="12" Text="读取消息内容" VerticalAlignment="Center"><TextBlock.ToolTip><ToolTip>关闭的应用仍会提醒未读消息；开启后桌宠会尝试获取发信人与消息内容。</ToolTip></TextBlock.ToolTip></TextBlock>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <CheckBox x:Name="QqDetailedReminderCheckBox" Style="{StaticResource SourceChip}" AutomationProperties.Name="QQ 详细提醒" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationQqIcon" Width="20" Height="20" Margin="0,0,7,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-qq.png" DecodePixelWidth="80" /></Image.Source></Image><TextBlock Text="QQ" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel></CheckBox>
-                                    <CheckBox x:Name="WeChatDetailedReminderCheckBox" Style="{StaticResource SourceChip}" Margin="8,0,0,0" AutomationProperties.Name="微信详细提醒（试用）" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationWeChatIcon" Width="20" Height="20" Margin="0,0,7,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-wechat.png" DecodePixelWidth="80" /></Image.Source></Image><TextBlock Text="微信" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" /><Border Margin="7,0,0,0" Padding="5,1" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="4" VerticalAlignment="Center"><TextBlock Text="试用" FontSize="10.5" Foreground="{StaticResource Muted}" /></Border></StackPanel></CheckBox>
+                                    <CheckBox x:Name="QqDetailedReminderCheckBox" Style="{StaticResource SourceChip}" AutomationProperties.Name="读取 QQ 消息内容" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationQqIcon" Width="20" Height="20" Margin="0,0,7,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-qq.png" DecodePixelWidth="80" /></Image.Source></Image><TextBlock Text="QQ" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel></CheckBox>
+                                    <CheckBox x:Name="WeChatDetailedReminderCheckBox" Style="{StaticResource SourceChip}" Margin="8,0,0,0" AutomationProperties.Name="读取微信消息内容" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel Orientation="Horizontal"><Image x:Name="NotificationWeChatIcon" Width="20" Height="20" Margin="0,0,7,0"><Image.Source><BitmapImage UriSource="/assets/ui/notification-wechat.png" DecodePixelWidth="80" /></Image.Source></Image><TextBlock Text="微信" FontSize="12.5" FontWeight="SemiBold" VerticalAlignment="Center" /></StackPanel></CheckBox>
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
@@ -328,7 +328,7 @@
                             <ContentPresenter x:Name="RulesContent" Visibility="Collapsed" Margin="4,0,4,6" />
                         </StackPanel><ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="RulesContent" Property="Visibility" Value="Visible" /></Trigger></ControlTemplate.Triggers></ControlTemplate></Expander.Template>
                         <StackPanel>
-                            <TextBlock x:Name="NotificationRulesFirstParagraph" Style="{StaticResource OptionDescription}" Text="提醒来源为系统通知：QQ 摘要来自系统通知，微信试用读取公开会话摘要，不打开聊天、不读取历史，免打扰会话不提醒；未捕获到的消息不会补报。" />
+                            <TextBlock x:Name="NotificationRulesFirstParagraph" Style="{StaticResource OptionDescription}" Text="提醒来源为系统通知：QQ 摘要来自系统通知，微信读取公开会话摘要，不打开聊天、不读取历史，免打扰会话不提醒；未捕获到的消息不会补报。" />
                             <TextBlock Style="{StaticResource OptionDescription}" Margin="0,8,0,0" Text="昵称与摘要仅在本机内存中用于当前提醒，不写入历史或日志、不上传；忽略与清空只影响桌宠，不修改客户端已读状态。" />
                         </StackPanel>
                     </Expander>
