@@ -233,6 +233,18 @@ internal sealed partial class PlannerWindow : Window
     private static DateTime WeekStart(DateTime date)=>date.Date.AddDays(-((int)date.DayOfWeek+6)%7);
     private void MoveDate(int offset,bool week){DateTime next=week?_date.AddDays(offset):_date.AddMonths(offset);if(next>=ReminderSchedule.MinimumDate&&next<=ReminderSchedule.MaximumDate)_date=next;Render();}
     private void EditWorkdays(){_batch=true;_alarm=false;Render();}
+    private async Task ToggleWeeklyRestDay(DayOfWeek day)
+    {
+        bool enabling=!_service.Book.RestWeekdays.Contains(day);
+        await Execute(book=>
+        {
+            var selected=book.RestWeekdays.ToList();
+            if(!selected.Remove(day))selected.Add(day);
+            ReminderSchedule.SetRestWeekdays(book,selected,DateTime.Now);
+        });
+        _status.Text=enabling?$"已设置每周{DayName(day)}为休息日。":$"已取消每周{DayName(day)}休息日。";
+    }
+    private static string DayName(DayOfWeek day)=>"日一二三四五六"[(int)day].ToString();
     private UIElement RestControls()
     {
         Grid inner=new();
@@ -249,7 +261,8 @@ internal sealed partial class PlannerWindow : Window
         foreach(var d in Days)
         {
             var day=d;
-            var btn=AsyncChip("周"+"日一二三四五六"[(int)d],()=>Execute(b=>{var selected=b.RestWeekdays.ToList();if(!selected.Remove(day))selected.Add(day);ReminderSchedule.SetRestWeekdays(b,selected,DateTime.Now);}));
+            var btn=AsyncChip("周"+DayName(d),()=>ToggleWeeklyRestDay(day));
+            btn.Name="Weekly"+DayName(d);
             if(_service.Book.RestWeekdays.Contains(d)){btn.Background=PlannerTheme.AccentSoft;btn.Foreground=PlannerTheme.Accent;btn.BorderBrush=PlannerTheme.Accent;btn.FontWeight=FontWeights.SemiBold;}
             btn.Margin=new Thickness(0,0,6,6);days.Children.Add(btn);
         }
