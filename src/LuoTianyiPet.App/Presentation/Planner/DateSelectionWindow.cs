@@ -11,12 +11,12 @@ internal sealed class DateSelectionWindow : Window
     private DateTime _month;
     private readonly StackPanel _panel = new() { Margin = new Thickness(16) };
     private readonly Dictionary<DateTime, Button> _dayButtons = [];
-    private readonly HashSet<DateTime> _dragVisited = [];
     private TextBlock? _selectionCount;
     private bool _dragging;
     private bool _dragMoved;
     private Point _dragLastPoint;
     private DateTime? _dragLastDay;
+    private Vector? _dragLastDirection;
     private bool _suppressNextClick;
     public DateSelectionWindow(IEnumerable<DateTime> dates, DateTime month)
     {
@@ -31,7 +31,8 @@ internal sealed class DateSelectionWindow : Window
     {
         _dragging = false;
         _dragMoved = false;
-        _dragVisited.Clear();
+        _dragLastDay = null;
+        _dragLastDirection = null;
         _dayButtons.Clear();
         System.Windows.Input.Mouse.Capture(null);
         _panel.Children.Clear();
@@ -72,9 +73,9 @@ internal sealed class DateSelectionWindow : Window
         if (e.ChangedButton != System.Windows.Input.MouseButton.Left || !button.IsEnabled) return;
         _dragging = true;
         _dragMoved = false;
-        _dragVisited.Clear();
         _dragLastPoint = System.Windows.Input.Mouse.GetPosition(grid);
         _dragLastDay = null;
+        _dragLastDirection = null;
         System.Windows.Input.Mouse.Capture(button, System.Windows.Input.CaptureMode.Element);
     }
 
@@ -83,6 +84,9 @@ internal sealed class DateSelectionWindow : Window
         if (!_dragging || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed) return;
         Point point = System.Windows.Input.Mouse.GetPosition(grid);
         if ((point - _dragLastPoint).Length < 1) return;
+        Vector direction = point - _dragLastPoint;
+        if (_dragLastDirection is Vector previousDirection && Vector.Multiply(previousDirection, direction) < 0) _dragLastDay = null;
+        _dragLastDirection = direction;
         ApplyDragPath(grid, _dragLastPoint, point);
         _dragLastPoint = point;
     }
@@ -94,6 +98,7 @@ internal sealed class DateSelectionWindow : Window
         _dragging = false;
         _dragMoved = false;
         _dragLastDay = null;
+        _dragLastDirection = null;
         if (moved)
         {
             System.Windows.Input.Mouse.Capture(null);
@@ -115,7 +120,6 @@ internal sealed class DateSelectionWindow : Window
             if (_dragLastDay is DateTime previous && previous != day) _dragMoved = true;
             if (_dragLastDay == day) continue;
             _dragLastDay = day;
-            if (!_dragVisited.Add(day)) continue;
             if (!Selection.Add(day)) Selection.Remove(day);
         }
         UpdateSelectionVisuals();

@@ -31,10 +31,11 @@ internal sealed partial class PlannerWindow : Window
     private bool _alarm,_editing,_batch,_manage,_details=true;
     private bool _calendarDragActive;
     private bool _calendarDragMoved;
-    private readonly HashSet<DateTime> _calendarDragVisited=[];
     private bool _suppressCalendarClick;
     private DateTime? _calendarDragStartDay;
+    private DateTime? _calendarDragLastDay;
     private Point _calendarDragLastPoint;
+    private Vector? _calendarDragLastDirection;
     private static readonly string[] Repeats=["仅一次","每天","每周指定","指定日期","工作日 · 跟随日历","休息日 · 跟随日历"];
     private static readonly DayOfWeek[] Days=[DayOfWeek.Monday,DayOfWeek.Tuesday,DayOfWeek.Wednesday,DayOfWeek.Thursday,DayOfWeek.Friday,DayOfWeek.Saturday,DayOfWeek.Sunday];
     public event Action? ReminderSettingsRequested;
@@ -88,7 +89,8 @@ internal sealed partial class PlannerWindow : Window
     private void UpdateDateStatus(DateTime day)=>_status.Text=$"{day:yyyy年M月d日 dddd}  {CalendarLabels.FullLunar(day)}";
     private void Render()
     {
-        _calendarDragVisited.Clear();
+        _calendarDragLastDay=null;
+        _calendarDragLastDirection=null;
         while(_shell.Children.Count>1)_shell.Children.RemoveAt(_shell.Children.Count-1);_root.IsEnabled=true;_header.Children.Clear();_footer.Children.Clear();_running.Clear();
         DockPanel brand=new(){Margin=new Thickness(18,10,14,8)};
         StackPanel windows=Row();
@@ -311,9 +313,10 @@ internal sealed partial class PlannerWindow : Window
             if(!_batch||e.ChangedButton!=System.Windows.Input.MouseButton.Left||!dateButton.IsEnabled)return;
             _calendarDragActive=true;
             _calendarDragMoved=false;
-            _calendarDragVisited.Clear();
             _calendarDragStartDay=day;
+            _calendarDragLastDay=null;
             _calendarDragLastPoint=System.Windows.Input.Mouse.GetPosition(grid);
+            _calendarDragLastDirection=null;
             System.Windows.Input.Mouse.Capture(dateButton,System.Windows.Input.CaptureMode.Element);
         };
     }
@@ -323,6 +326,9 @@ internal sealed partial class PlannerWindow : Window
         if(!_calendarDragActive||!_batch||e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
         Point point=System.Windows.Input.Mouse.GetPosition(grid);
         if((point-_calendarDragLastPoint).Length<1)return;
+        Vector direction=point-_calendarDragLastPoint;
+        if(_calendarDragLastDirection is Vector previousDirection&&Vector.Multiply(previousDirection,direction)<0)_calendarDragLastDay=null;
+        _calendarDragLastDirection=direction;
         AddCalendarDragPath(grid,_calendarDragLastPoint,point);
         _calendarDragLastPoint=point;
     }
@@ -333,8 +339,9 @@ internal sealed partial class PlannerWindow : Window
         bool moved=_calendarDragMoved;
         _calendarDragActive=false;
         _calendarDragMoved=false;
-        _calendarDragVisited.Clear();
         _calendarDragStartDay=null;
+        _calendarDragLastDay=null;
+        _calendarDragLastDirection=null;
         System.Windows.Input.Mouse.Capture(null);
         if(!moved)return;
         _suppressCalendarClick=true;
@@ -354,7 +361,8 @@ internal sealed partial class PlannerWindow : Window
             if(TryGetCalendarDate(grid,point,out DateTime day))
             {
                 if(_calendarDragStartDay is DateTime start&&day!=start)_calendarDragMoved=true;
-                if(!_calendarDragVisited.Add(day))continue;
+                if(_calendarDragLastDay==day)continue;
+                _calendarDragLastDay=day;
                 if(!_selected.Add(day))_selected.Remove(day);
             }
         }
