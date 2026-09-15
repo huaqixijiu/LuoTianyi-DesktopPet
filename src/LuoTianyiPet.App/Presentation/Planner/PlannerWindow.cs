@@ -92,30 +92,37 @@ internal sealed partial class PlannerWindow : Window
         _calendarDragLastDay=null;
         _calendarDragLastDirection=null;
         while(_shell.Children.Count>1)_shell.Children.RemoveAt(_shell.Children.Count-1);_root.IsEnabled=true;_header.Children.Clear();_footer.Children.Clear();_running.Clear();
-        DockPanel brand=new(){Margin=new Thickness(18,10,14,8)};
+        Grid head=new(){Margin=new Thickness(18,10,14,8)};
+        head.ColumnDefinitions.Add(new(){Width=GridLength.Auto});head.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});head.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        DockPanel brand=new();
         StackPanel windows=Row();
+        var settings=IconButton("gear",()=>ShowPlannerSettings(),"通知与闹钟设置",18);settings.Name="PlannerSettingsButton";settings.Width=44;settings.Height=32;windows.Children.Add(settings);
         foreach(var entry in new[]{("minimize",(Action)(()=>WindowState=WindowState.Minimized),""),("maximize",(Action)(()=>WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized),""),("close",(Action)Close,"close")})
         {
             var b=IconButton(entry.Item1,entry.Item2,entry.Item1=="minimize"?"最小化":entry.Item1=="maximize"?"最大化":"关闭",16);
             if(entry.Item3=="close")b.Style=(Style)FindResource("PlannerCloseBtn");
             b.Width=44;b.Height=32;windows.Children.Add(b);
         }
-        DockPanel.SetDock(windows,Dock.Right);brand.Children.Add(windows);
         try{var bitmap=new BitmapImage();bitmap.BeginInit();bitmap.UriSource=RuntimeAssetLocator.PackUri("app/luotianyi-pet.png");bitmap.DecodePixelWidth=128;bitmap.EndInit();var avatar=new System.Windows.Controls.Image{Width=50,Height=50,Margin=new Thickness(0,0,12,0),Source=bitmap};RenderOptions.SetBitmapScalingMode(avatar,BitmapScalingMode.HighQuality);DockPanel.SetDock(avatar,Dock.Left);brand.Children.Add(avatar);}catch{}
-        StackPanel identity=new();var brandName=Text("洛天依 · 小天的时光",19,FontWeights.SemiBold);identity.Children.Add(brandName);identity.Children.Add(Text("在每一个平凡的日子里，与你相遇。",13));brand.Children.Add(identity);brand.MouseLeftButtonDown+=(_,e)=>{if(e.ClickCount==2)WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized;else if(e.LeftButton==System.Windows.Input.MouseButtonState.Pressed)DragMove();};_header.Children.Add(brand);
-        DockPanel tabs=new(){Margin=new Thickness(16,0,16,0)};var settings=IconButton("gear",()=>ShowPlannerSettings(),"通知与闹钟设置",20);settings.Margin=new Thickness(6,0,0,0);DockPanel.SetDock(settings,Dock.Right);tabs.Children.Add(settings);
+        StackPanel identity=new();identity.Children.Add(Text("洛天依 · 小天的时光",19,FontWeights.SemiBold));identity.Children.Add(Text("在每一个平凡的日子里，与你相遇。",13));brand.Children.Add(identity);
+        brand.MouseLeftButtonDown+=(_,e)=>{if(e.ClickCount==2)WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized;else if(e.LeftButton==System.Windows.Input.MouseButtonState.Pressed)DragMove();};
+        Grid.SetColumn(brand,0);head.Children.Add(brand);
+        Border capsule=new(){Background=Brushes.White,CornerRadius=new CornerRadius(10),BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Padding=new Thickness(3),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
         StackPanel pages=Row();
         foreach(var entry in new[]{("日历",false,"calendar"),("闹钟",true,"clock")})
         {
             bool selected=_alarm==entry.Item2;
-            var tab=Action(entry.Item1,()=>Navigate(entry.Item2));tab.Width=118;tab.Height=45;tab.Background=Brushes.Transparent;tab.BorderThickness=new Thickness(0);tab.FontSize=16;tab.FontWeight=FontWeights.SemiBold;
-            StackPanel label=Row();label.Children.Add(PlannerTheme.Icon(entry.Item3,20,selected?PlannerTheme.Accent:PlannerTheme.Ink,8));label.Children.Add(Text(entry.Item1,16,FontWeights.SemiBold,selected?PlannerTheme.Accent:PlannerTheme.Ink));tab.Content=label;
-            pages.Children.Add(new Border{Child=tab,BorderThickness=new Thickness(0,0,0,2),BorderBrush=selected?PlannerTheme.Accent:Brushes.Transparent,Margin=new Thickness(0,0,12,0)});
+            var tab=new Button{Style=(Style)FindResource("PlannerSegment"),Margin=new Thickness(1)};
+            StackPanel label=Row();label.Children.Add(PlannerTheme.Icon(entry.Item3,18,selected?PlannerTheme.Accent:PlannerTheme.Ink,8));label.Children.Add(Text(entry.Item1,14,selected?FontWeights.SemiBold:null,selected?PlannerTheme.Accent:PlannerTheme.Ink));tab.Content=label;
+            if(selected)tab.Background=PlannerTheme.AccentSoft;
+            bool target=entry.Item2;tab.Click+=(_,_)=>Navigate(target);pages.Children.Add(tab);
         }
-        tabs.Children.Add(pages);_header.Children.Add(new Border{Child=tabs,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(0,1,0,1),Margin=new Thickness(0,0,0,12)});
+        capsule.Child=pages;Grid.SetColumn(capsule,1);head.Children.Add(capsule);
+        Grid.SetColumn(windows,2);head.Children.Add(windows);
+        _header.Children.Add(head);
         _body.VerticalScrollBarVisibility=_alarm||_manage?ScrollBarVisibility.Auto:ScrollBarVisibility.Disabled;
         if(_manage)RenderGroups();else if(_alarm)RenderAlarms();else RenderCalendar();
-        if(!_alarm)_footer.Children.Add(_status);UpdateDateStatus(_date);UpdateRemaining();
+        UpdateDateStatus(_date);UpdateRemaining();
     }
     private void RenderCalendar()
     {
@@ -132,9 +139,17 @@ internal sealed partial class PlannerWindow : Window
         left.Children.Add(Chip("今天",()=>{_date=DateTime.Today;_details=true;Render();}));
         if(!week){var rest=Chip(_batch?"完成班休":"设置班休",()=>{_batch=!_batch;_selected.Clear();Render();});rest.Name="SetWorkdays";if(_batch){rest.Background=PlannerTheme.AccentSoft;rest.Foreground=PlannerTheme.Accent;rest.BorderBrush=PlannerTheme.Accent;}left.Children.Add(rest);}
         StackPanel right=Row();
-        var month=Chip("月",()=>SetView(false));var weekBtn=Chip("周",()=>SetView(true));
-        if(week){Primary(weekBtn);}else{Primary(month);}
-        right.Children.Add(month);right.Children.Add(weekBtn);
+        Border viewCapsule=new(){Background=Brushes.White,CornerRadius=new CornerRadius(10),BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Padding=new Thickness(3),VerticalAlignment=VerticalAlignment.Center};
+        StackPanel views=Row();
+        foreach(var entry in new[]{("月",false),("周",true)})
+        {
+            bool selected=week==entry.Item2;
+            var view=new Button{Style=(Style)FindResource("PlannerSegment"),Content=Text(entry.Item1,14,selected?FontWeights.SemiBold:null,selected?PlannerTheme.Accent:PlannerTheme.Ink),Margin=new Thickness(1),Name=entry.Item2?"ViewWeek":"ViewMonth"};
+            if(selected)view.Background=PlannerTheme.AccentSoft;
+            bool target=entry.Item2;view.Click+=(_,_)=>SetView(target);views.Children.Add(view);
+        }
+        viewCapsule.Child=views;right.Children.Add(viewCapsule);
+        if(!week){var manage=IconButton("sliders",()=>{_manage=true;Render();},"批量管理",18);manage.Margin=new Thickness(6,3,3,3);right.Children.Add(manage);}
         var add=Primary(Action("",()=>{_occurrenceDate=null;Edit(null,true);}));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新增事项",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;right.Children.Add(add);
         if(Width<1000&&!week&&_details){DockPanel.SetDock(left,Dock.Top);nav.Children.Add(left);right.HorizontalAlignment=HorizontalAlignment.Right;nav.Children.Add(right);}else{DockPanel.SetDock(right,Dock.Right);nav.Children.Add(right);nav.Children.Add(left);}DockPanel.SetDock(nav,Dock.Top);main.Children.Add(nav);
         Grid grid=new();for(int c=0;c<7;c++)grid.ColumnDefinitions.Add(new());grid.RowDefinitions.Add(new(){Height=GridLength.Auto});
@@ -145,45 +160,66 @@ internal sealed partial class PlannerWindow : Window
         for(int r=0;r<count/7;r++)grid.RowDefinitions.Add(new());
         for(int n=0;n<count;n++)
         {
-            DateTime day=first.AddDays(n);string dayKey=day.ToString("yyyy-MM-dd");bool overrideExists=_service.Book.RestOverrides.ContainsKey(dayKey);bool isRest=_service.Book.IsRest(day);var items=DayItems(day).ToList();DockPanel cell=new();
-            StackPanel dates=new();DockPanel heading=new();var number=Text(week?day.ToString("M月d日"):day.Month==_date.Month?day.Day.ToString():day.ToString("M/d"),week?16:15,FontWeights.SemiBold);
-            if(day==DateTime.Today){number.Foreground=PlannerTheme.Accent;number.TextDecorations=TextDecorations.Underline;}
+            DateTime day=first.AddDays(n);string dayKey=day.ToString("yyyy-MM-dd");bool overrideExists=_service.Book.RestOverrides.ContainsKey(dayKey);bool isRest=_service.Book.IsRest(day);var items=DayItems(day).ToList();DockPanel cell=new();Button? quickAdd=null;
+            StackPanel dates=new();DockPanel heading=new();var number=Text(week?$"周{"日一二三四五六"[(int)day.DayOfWeek]} · {day:M月d日}":day.Month==_date.Month?day.Day.ToString():day.ToString("M/d"),week?13:15,FontWeights.SemiBold);
+            if(day==DateTime.Today){number.Foreground=PlannerTheme.Accent;if(!week)number.TextDecorations=TextDecorations.Underline;}
             bool explicitRest=overrideExists;
             Brush badgeBackground=explicitRest?(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):(isRest?PlannerTheme.RestBackground:PlannerTheme.WorkBackground);
             Brush badgeForeground=explicitRest?Brushes.White:(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground);
             var badge=Text(isRest?"休":"班",11,foreground:badgeForeground);badge.TextAlignment=TextAlignment.Center;badge.Margin=new Thickness(0);Border badgeBox=new(){Child=badge,Width=22,Height=22,Background=badgeBackground,CornerRadius=new CornerRadius(4),Margin=new Thickness(1)};
-            heading.Children.Add(badgeBox);heading.Children.Add(number);dates.Children.Add(heading);
-            var lunar=Text(CalendarLabels.LunarDay(day),12);dates.Children.Add(lunar);
-            dates.Children.Add(HolidayText(day));
-            if(!week&&items.Count>0){StackPanel dots=Row();dots.Margin=new Thickness(2,1,2,0);for(int d=0;d<Math.Min(3,items.Count);d++)dots.Children.Add(new Ellipse{Width=6,Height=6,Fill=PlannerTheme.Accent,Margin=new Thickness(0,0,3,0)});dates.Children.Add(dots);}
+            if(week)
+            {
+                StackPanel weekHead=Row();weekHead.Children.Add(number);weekHead.Children.Add(Text(" · "+CalendarLabels.LunarDay(day),12));dates.Children.Add(weekHead);
+                quickAdd=IconButton("plus",()=>{_date=day;_occurrenceDate=null;Edit(null,true);},"新增当天事项",16,PlannerTheme.Accent);quickAdd.HorizontalAlignment=HorizontalAlignment.Right;quickAdd.VerticalAlignment=VerticalAlignment.Top;quickAdd.Visibility=Visibility.Collapsed;quickAdd.Margin=new Thickness(0,-2,0,0);
+            }
+            else
+            {
+                DockPanel.SetDock(badgeBox,Dock.Right);heading.Children.Add(number);heading.Children.Add(badgeBox);dates.Children.Add(heading);
+                string festivals=CalendarLabels.Festivals(day),term=CalendarLabels.SolarTerm(day);
+                TextBlock aux=festivals.Length>0?Text(festivals,12,foreground:PlannerTheme.RestForeground):term.Length>0?Text(term,12,foreground:PlannerTheme.TermForeground):Text(CalendarLabels.LunarDay(day),12);
+                aux.Name="CellAux"+day.ToString("yyyyMMdd");
+                if(items.Count>2){DockPanel auxWrap=new();var plus=Text($"+{items.Count-2}",12,FontWeights.SemiBold,PlannerTheme.Accent);plus.Margin=new Thickness(2,0,2,0);DockPanel.SetDock(plus,Dock.Right);auxWrap.Children.Add(plus);aux.Margin=new Thickness(2,0,2,0);auxWrap.Children.Add(aux);dates.Children.Add(auxWrap);}
+                else dates.Children.Add(aux);
+                if(items.Count>0)
+                {
+                    StackPanel bars=new(){Margin=new Thickness(2,3,2,0)};
+                    var shown=items.Take(2).ToList();
+                    for(int bi=0;bi<shown.Count;bi++)
+                    {
+                        var item=shown[bi];
+                        DockPanel bar=new(){Margin=new Thickness(0,0,0,2)};
+                        StackPanel lead=Row();lead.Children.Add(new Border{Width=3,Height=14,CornerRadius=new CornerRadius(1.5),Background=PlannerTheme.ItemAccent(item.Id),Margin=new Thickness(0,0,5,0),VerticalAlignment=VerticalAlignment.Center});
+                        if(item.Enabled&&item.HasTime)lead.Children.Add(PlannerTheme.Bell());
+                        lead.Children.Add(Text(item.HasTime?item.Start.ToString("HH:mm"):"",12,FontWeights.SemiBold));
+                        DockPanel.SetDock(lead,Dock.Left);bar.Children.Add(lead);
+                        var barTitle=Text(ReminderEngine.Label(item),12);barTitle.TextWrapping=TextWrapping.NoWrap;barTitle.TextTrimming=TextTrimming.CharacterEllipsis;bar.Children.Add(barTitle);
+                        bars.Children.Add(bar);
+                    }
+                    dates.Children.Add(bars);
+                }
+            }
             foreach(var label in dates.Children.OfType<TextBlock>())label.Margin=new Thickness(2,0,2,0);
-            Button dateButton=Action("",()=>OnCalendarDateClick(day));dateButton.Name="Day"+day.ToString("yyyyMMdd");dateButton.Content=dates;dateButton.Padding=new Thickness(0);dateButton.Margin=new Thickness(0);dateButton.BorderThickness=new Thickness(0);dateButton.Background=Brushes.Transparent;dateButton.HorizontalContentAlignment=HorizontalAlignment.Stretch;dateButton.VerticalAlignment=VerticalAlignment.Stretch;dateButton.VerticalContentAlignment=VerticalAlignment.Top;
-            dateButton.ToolTip=overrideExists?$"单独设置：{(isRest?"休息日":"工作日")}":$"跟随每周规则：{(isRest?"休息日":"工作日")}";
+            Button dateButton=Action("",()=>OnCalendarDateClick(day));dateButton.Name="Day"+day.ToString("yyyyMMdd");dateButton.Content=dates;dateButton.Padding=new Thickness(0);dateButton.Margin=new Thickness(0);dateButton.BorderThickness=new Thickness(0);dateButton.Background=Brushes.Transparent;dateButton.HorizontalContentAlignment=HorizontalAlignment.Stretch;dateButton.VerticalAlignment=week?VerticalAlignment.Top:VerticalAlignment.Stretch;dateButton.VerticalContentAlignment=VerticalAlignment.Top;
+            dateButton.ToolTip=$"{day:yyyy年M月d日} {CalendarLabels.FullLunar(day)}\n"+(overrideExists?$"单独设置：{(isRest?"休息日":"工作日")}":$"跟随每周规则：{(isRest?"休息日":"工作日")}");
             dateButton.IsEnabled=day>=ReminderSchedule.MinimumDate&&day<=ReminderSchedule.MaximumDate;
             if(_batch&&!week)AttachCalendarDragHandlers(dateButton,grid,day);
             dateButton.MouseDoubleClick+=(_,_)=>{if(!_batch){_date=day;_occurrenceDate=null;Edit(null,true);}};
-            if(week){DockPanel.SetDock(dateButton,Dock.Top);cell.Children.Add(dateButton);StackPanel cards=new();foreach(var item in items)cards.Children.Add(EventCard(item,day,true));cell.Children.Add(new ScrollViewer{Content=cards,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});}else cell.Children.Add(dateButton);
+            if(week){DockPanel headWrap=new(){LastChildFill=false};DockPanel.SetDock(headWrap,Dock.Top);DockPanel.SetDock(dateButton,Dock.Left);DockPanel.SetDock(quickAdd,Dock.Right);headWrap.Children.Add(dateButton);headWrap.Children.Add(quickAdd!);cell.Children.Add(headWrap);StackPanel cards=new();foreach(var item in items)cards.Children.Add(EventCard(item,day,true));cell.Children.Add(new ScrollViewer{Content=cards,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});}else cell.Children.Add(dateButton);
             bool highlighted=_selected.Contains(day)||!_batch&&day==_date;
             Border border=new(){Child=cell,Padding=new Thickness(7),CornerRadius=new CornerRadius(6),BorderBrush=highlighted?PlannerTheme.Accent:PlannerTheme.Line,BorderThickness=new Thickness(1),Background=highlighted?PlannerTheme.Soft:week&&day==DateTime.Today?PlannerTheme.AccentSoft:Brushes.White};_calendarDateBorders[day]=border;Grid.SetColumn(border,n%7);Grid.SetRow(border,n/7+1);grid.Children.Add(border);
+            if(quickAdd is Button addButton){border.MouseEnter+=(_,_)=>addButton.Visibility=Visibility.Visible;border.MouseLeave+=(_,_)=>addButton.Visibility=Visibility.Collapsed;}
         }
         main.Children.Add(grid);layout.Children.Add(main);
         if(side){var panel=_batch?RestControls():DayDetails();Grid.SetColumn(panel,1);layout.Children.Add(panel);}
         _body.Content=layout;
-        var foot=Row();
+        DockPanel footDock=new();
+        StackPanel foot=Row();
         StackPanel dotLegend=Row();dotLegend.Children.Add(new Ellipse{Width=8,Height=8,Fill=PlannerTheme.Accent,Margin=new Thickness(3,0,6,0),VerticalAlignment=VerticalAlignment.Center});dotLegend.Children.Add(Text("有事项",11));foot.Children.Add(dotLegend);
         foot.Children.Add(LegendBadge("休","休息日",PlannerTheme.RestBackground,PlannerTheme.RestForeground));
         foot.Children.Add(LegendBadge("班","工作日",PlannerTheme.WorkBackground,PlannerTheme.WorkForeground));
         if(!week)foot.Children.Add(Text("浅色=每周规则 · 深色=单独设置",11,foreground:PlannerTheme.Muted));
-        _footer.Children.Add(foot);
-    }
-    private static TextBlock HolidayText(DateTime day)
-    {
-        TextBlock block=new(){FontSize=12,TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(2,0,2,0),LineHeight=15};
-        string festivals=CalendarLabels.Festivals(day),term=CalendarLabels.SolarTerm(day);
-        if(festivals.Length>0)block.Inlines.Add(new System.Windows.Documents.Run(festivals){Foreground=PlannerTheme.RestForeground});
-        if(festivals.Length>0&&term.Length>0)block.Inlines.Add(new System.Windows.Documents.Run(" · "){Foreground=PlannerTheme.Muted});
-        if(term.Length>0)block.Inlines.Add(new System.Windows.Documents.Run(term){Foreground=PlannerTheme.TermForeground});
-        return block;
+        DockPanel.SetDock(foot,Dock.Right);footDock.Children.Add(foot);if(_status.Parent is System.Windows.Controls.Panel statusParent)statusParent.Children.Remove(_status);footDock.Children.Add(_status);
+        _footer.Children.Add(footDock);
     }
     private static UIElement LegendBadge(string glyph,string label,Brush background,Brush foreground)
     {
@@ -206,14 +242,14 @@ internal sealed partial class PlannerWindow : Window
     private UIElement DayDetails()
     {
         DateTime detailDay=_date;string detailKey=detailDay.ToString("yyyy-MM-dd");bool overrideExists=_service.Book.RestOverrides.ContainsKey(detailKey);bool isRest=_service.Book.IsRest(detailDay);
-        DockPanel panel=new(){Margin=new Thickness(14,0,2,0)};DockPanel title=new();var close=IconButton("close",()=>{_details=false;Render();},"收起当天事项");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);var effectiveStatus=Text((isRest?"休息日":"工作日")+(overrideExists?" · 单独设置":" · 跟随每周规则"),12,FontWeights.SemiBold,overrideExists?(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):PlannerTheme.Muted);effectiveStatus.Name="EffectiveRestStatus";effectiveStatus.Margin=new Thickness(4,0,8,0);DockPanel.SetDock(effectiveStatus,Dock.Right);title.Children.Add(effectiveStatus);title.Children.Add(Text(detailDay.ToString("M月d日 dddd"),18,FontWeights.SemiBold));DockPanel.SetDock(title,Dock.Top);panel.Children.Add(title);
+        DockPanel panel=new(){Margin=new Thickness(14,0,2,0)};DockPanel title=new();var close=IconButton("close",()=>{_details=false;Render();},"收起当天事项");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);var effectiveStatus=Text((isRest?"休息日":"工作日")+(overrideExists?" · 单独设置":" · 跟随每周规则"),12,FontWeights.SemiBold,overrideExists?(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):PlannerTheme.Accent);effectiveStatus.Name="EffectiveRestStatus";effectiveStatus.Margin=new Thickness(2,1,2,1);Border statusPill=new(){Child=effectiveStatus,Background=overrideExists?(isRest?PlannerTheme.RestBackground:PlannerTheme.WorkBackground):PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(6),Padding=new Thickness(8,3,8,3),Margin=new Thickness(4,4,8,4),VerticalAlignment=VerticalAlignment.Center};DockPanel.SetDock(statusPill,Dock.Right);title.Children.Add(statusPill);title.Children.Add(Text(detailDay.ToString("M月d日 dddd"),18,FontWeights.SemiBold));DockPanel.SetDock(title,Dock.Top);panel.Children.Add(title);
         var lunar=Text(CalendarLabels.FullLunar(detailDay)+" "+CalendarLabels.Get(detailDay),12);DockPanel.SetDock(lunar,Dock.Top);panel.Children.Add(lunar);
-        var add=Chip("＋ 添加当天事项",()=>{_occurrenceDate=null;Edit(null,true);});add.Name="AddSelectedDay";add.Height=38;add.HorizontalAlignment=HorizontalAlignment.Stretch;DockPanel.SetDock(add,Dock.Bottom);panel.Children.Add(add);
+        var add=Chip("＋ 添加当天事项",()=>{_occurrenceDate=null;Edit(null,true);});add.Name="AddSelectedDay";add.Height=38;add.HorizontalAlignment=HorizontalAlignment.Stretch;add.Background=PlannerTheme.AccentSoft;add.Foreground=PlannerTheme.Accent;add.BorderBrush=PlannerTheme.AccentSoft;DockPanel.SetDock(add,Dock.Bottom);panel.Children.Add(add);
         StackPanel list=new();foreach(var item in DayItems(detailDay))list.Children.Add(EventCard(item,detailDay,false));if(list.Children.Count==0)list.Children.Add(Text("当天暂无事项",14));panel.Children.Add(new ScrollViewer{Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return panel;
     }
     private void ItemMenu(ReminderItem item,DateTime day)
     {
-        System.Windows.Controls.ContextMenu menu=new();foreach(var label in new[]{"编辑事项","仅删除当天","删除整组…","批量管理…"}){var entry=new System.Windows.Controls.MenuItem{Header=label};entry.Click+=(_,_)=>{if(label=="编辑事项"){_occurrenceDate=day;Edit(item,true);}else if(label=="批量管理…"){_manage=true;Render();}else ConfirmDelete([item.Id],label=="仅删除当天"?day:null);};menu.Items.Add(entry);}menu.IsOpen=true;
+        System.Windows.Controls.ContextMenu menu=new(){Style=(Style)FindResource("PlannerContextMenu")};foreach(var label in new[]{"编辑事项","仅删除当天","删除整组…","批量管理…"}){var entry=new System.Windows.Controls.MenuItem{Header=label,Style=(Style)FindResource("PlannerMenuItem")};entry.Click+=(_,_)=>{if(label=="编辑事项"){_occurrenceDate=day;Edit(item,true);}else if(label=="批量管理…"){_manage=true;Render();}else ConfirmDelete([item.Id],label=="仅删除当天"?day:null);};menu.Items.Add(entry);}menu.IsOpen=true;
     }
     private void SetView(bool week){if(week)_batch=false;_=Execute(b=>b.WeekView=week);}
     private static DateTime WeekStart(DateTime date)=>date.Date.AddDays(-((int)date.DayOfWeek+6)%7);
@@ -253,18 +289,22 @@ internal sealed partial class PlannerWindow : Window
         DockPanel.SetDock(clearSelected,Dock.Right);
         head.Children.Add(clearSelected);
         Grid.SetRow(head,4);inner.Children.Add(head);
-        StackPanel rows=new();
+        WrapPanel chips=new(){Margin=new Thickness(0,4,0,2),VerticalAlignment=VerticalAlignment.Top};
+        Brush chipBackground=new SolidColorBrush(Color.FromRgb(242,248,252));
         foreach(var day in _selected.OrderBy(d=>d))
         {
-            DockPanel row=new(){Margin=new Thickness(0,1,0,1)};
-            var remove=IconButton("close",()=>{_selected.Remove(day);Render();},"移除该日期",13,PlannerTheme.Muted);remove.MinWidth=26;remove.MinHeight=26;DockPanel.SetDock(remove,Dock.Right);row.Children.Add(remove);
-            string key=day.ToString("yyyy-MM-dd");bool hasOverride=_service.Book.RestOverrides.TryGetValue(key,out bool overrideRest);string label=$"{day:M月d日（ddd）}";
-            if(hasOverride)label+=$" · {(overrideRest?"休息日":"工作日")}";
-            row.Children.Add(Text(label,13,hasOverride?FontWeights.SemiBold:null,hasOverride?(overrideRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):null));
-            rows.Children.Add(row);
+            string key=day.ToString("yyyy-MM-dd");bool hasOverride=_service.Book.RestOverrides.TryGetValue(key,out bool overrideRest);
+            StackPanel row=Row();
+            if(hasOverride)row.Children.Add(new Ellipse{Width=6,Height=6,Fill=overrideRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground,Margin=new Thickness(0,0,6,0),VerticalAlignment=VerticalAlignment.Center});
+            row.Children.Add(Text($"{day:M/d ddd}",12.5,hasOverride?FontWeights.SemiBold:null));
+            var remove=IconButton("close",()=>{_selected.Remove(day);Render();},"移除该日期",12,PlannerTheme.Muted);remove.MinWidth=22;remove.MinHeight=22;remove.Margin=new Thickness(2,0,-6,0);row.Children.Add(remove);
+            Border chip=new(){Child=row,Background=chipBackground,CornerRadius=new CornerRadius(8),BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,6,6)};
+            if(hasOverride)chip.ToolTip=$"{day:M月d日（ddd）} · 单独设置：{(overrideRest?"休息日":"工作日")}";
+            chips.Children.Add(chip);
         }
-        if(rows.Children.Count==0)rows.Children.Add(Text("单击日期可选中或取消；按住左键拖动可连续选择日期。",12));
-        ScrollViewer selectedDates=new(){Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Stretch,Margin=new Thickness(0,2,0,4)};Grid.SetRow(selectedDates,5);inner.Children.Add(selectedDates);
+        if(chips.Children.Count==0)chips.Children.Add(Text("单击日期可选中或取消；按住左键拖动可连续选择日期。",12,foreground:PlannerTheme.Muted));
+        ScrollViewer selectedDates=new(){Content=chips,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0),MaxHeight=230};
+        Border selectedArea=new(){Child=selectedDates,Background=PlannerTheme.ChipBackground,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(6,5,6,5),Margin=new Thickness(0,2,0,4),MinHeight=78,VerticalAlignment=VerticalAlignment.Stretch};Grid.SetRow(selectedArea,5);inner.Children.Add(selectedArea);
         Button[] batchActions=[
             Primary(AsyncAction("设为休息日",()=>SetRest(true))),
             AsyncAction("设为工作日",()=>SetRest(false)),
@@ -417,7 +457,7 @@ internal sealed partial class PlannerWindow : Window
     }
     private void RenderAlarms()
     {
-        DockPanel header=new(){Margin=new Thickness(20,0,20,10)};var add=Primary(Action("",()=>Edit(null,false)));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新建提醒",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;add.Name="NewAlarm";DockPanel.SetDock(add,Dock.Right);header.Children.Add(add);header.Children.Add(Text("闹钟",22,FontWeights.SemiBold));_header.Children.Add(header);
+        DockPanel header=new(){Margin=new Thickness(20,0,20,10)};var add=Primary(Action("",()=>Edit(null,false)));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新建提醒",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;add.Name="NewAlarm";DockPanel.SetDock(add,Dock.Right);header.Children.Add(add);header.Children.Add(Text("闹钟",20,FontWeights.SemiBold));_header.Children.Add(header);
         StackPanel list=new();
         var groups=new[]{("正在倒计时","hourglass",_service.Book.Items.Where(i=>i.Relative && (i.PausedSeconds!=null || i.Enabled && (i.Start>DateTime.Now || _service.Book.Occurrences.Any(o=>o.RuleId==i.Id&&o.Phase is ReminderPhase.Due or ReminderPhase.DueSnoozed))))),("我的闹钟","clock",_service.Book.Items.Where(i=>!i.Relative&&!i.Calendar)),("日历提醒","calendar",_service.Book.Items.Where(i=>i.Calendar&&i.ReminderCreated==true))};
         foreach(var group in groups)
@@ -433,18 +473,18 @@ internal sealed partial class PlannerWindow : Window
     private UIElement AlarmRow(ReminderItem item)
     {
         Grid row=new(){Margin=new Thickness(8,8,8,8)};
-        row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.ColumnDefinitions.Add(new(){Width=new GridLength(150)});row.ColumnDefinitions.Add(new());row.ColumnDefinitions.Add(new(){Width=new GridLength(230)});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+        row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});row.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         row.Children.Add(new Border{Width=4,CornerRadius=new CornerRadius(2),Background=PlannerTheme.ItemAccent(item.Id),Margin=new Thickness(2,8,14,8),VerticalAlignment=VerticalAlignment.Stretch});
         TextBlock clock=Text(item.Start.ToString("HH:mm"),26);clock.FontFamily=new System.Windows.Media.FontFamily("Segoe UI");clock.FontWeight=FontWeights.SemiBold;
-        if(item.Relative){_running.Add((clock,item));clock.Foreground=PlannerTheme.Accent;clock.HorizontalAlignment=HorizontalAlignment.Center;Grid.SetColumn(row.Children.Count==0?clock:clock,1);row.Children.Add(new Border{Child=clock,Background=PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(10),Padding=new Thickness(10,12,10,12),Margin=new Thickness(0,4,12,4),HorizontalAlignment=HorizontalAlignment.Stretch});}
+        if(item.Relative){_running.Add((clock,item));clock.Foreground=PlannerTheme.Accent;clock.HorizontalAlignment=HorizontalAlignment.Center;StackPanel countdown=Row();countdown.HorizontalAlignment=HorizontalAlignment.Center;countdown.Children.Add(PlannerTheme.Icon("hourglass",18,PlannerTheme.Accent,8));countdown.Children.Add(clock);Grid.SetColumn(row.Children.Count==0?clock:clock,1);row.Children.Add(new Border{Child=countdown,Background=PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(10),Padding=new Thickness(10,12,10,12),Margin=new Thickness(0,4,12,4),HorizontalAlignment=HorizontalAlignment.Stretch});}
         else row.Children.Add(clock);
         Grid.SetColumn(row.Children[row.Children.Count-1],1);
         StackPanel details=new();var name=Text(ReminderEngine.Label(item),15,FontWeights.SemiBold);details.Children.Add(name);details.Children.Add(Text(item.Relative?$"共 {TimeSpan.FromSeconds(item.DurationSeconds).TotalMinutes:0.##} 分钟" : item.Calendar?"来自日历 · "+item.Start.ToString("M月d日"):item.Repeat==ReminderRepeat.Weekly?"每周"+string.Join("、",item.Weekdays.Select(d=>"日一二三四五六"[(int)d])):Repeats[(int)item.Repeat],12));
-        Grid.SetColumn(details,2);row.Children.Add(details);
+        details.Margin=new Thickness(0,0,18,0);Grid.SetColumn(details,2);row.Children.Add(details);
         var next=ReminderSchedule.Next(item,_service.Book,DateTime.Now);
         StackPanel nextRow=Row();nextRow.Children.Add(PlannerTheme.Icon("repeat",14,PlannerTheme.Muted,6));
         nextRow.Children.Add(Text(item.PausedSeconds!=null?"已暂停":!item.Enabled?"已关闭":next is DateTime at?(item.Relative?"结束：":"下一次：")+at.ToString("M月d日 HH:mm"):"已到时间",12));
-        Grid.SetColumn(nextRow,3);row.Children.Add(nextRow);
+        nextRow.Margin=new Thickness(12,0,18,0);Grid.SetColumn(nextRow,3);row.Children.Add(nextRow);
         StackPanel controls=Row();
         if(item.Relative)
         {
@@ -459,5 +499,15 @@ internal sealed partial class PlannerWindow : Window
         Grid.SetColumn(controls,4);row.Children.Add(controls);
         return new Border{Child=row,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(0,0,0,1),Margin=new Thickness(4,0,4,0)};
     }
-    private void ShowPlannerSettings(){if(ReminderSettingsRequested!=null)ReminderSettingsRequested();else {var settings=new SettingsWindow(new(),new(),new(),new(),new(),false,null,_service.Book.Preferences);settings.NavigateNotifications();if(settings.ShowDialog()==true)_=Execute(b=>b.Preferences=settings.SelectedReminderPreferences);}}
+    private void ShowPlannerSettings()
+    {
+        if(ReminderSettingsRequested!=null)
+        {
+            ReminderSettingsRequested();
+            return;
+        }
+        var settings=new SettingsWindow(new(),new(),new(),new(),new(),false,null,_service.Book.Preferences);
+        settings.NavigateNotifications();
+        if(settings.ShowDialog()==true)_=Execute(b=>b.Preferences=settings.SelectedReminderPreferences);
+    }
 }

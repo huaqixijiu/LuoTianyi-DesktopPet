@@ -9,7 +9,7 @@ internal sealed class DateSelectionWindow : Window
 {
     public HashSet<DateTime> Selection { get; }
     private DateTime _month;
-    private readonly StackPanel _panel = new() { Margin = new Thickness(16) };
+    private readonly StackPanel _panel = new() { Margin = new Thickness(10) };
     private readonly Dictionary<DateTime, Button> _dayButtons = [];
     private TextBlock? _selectionCount;
     private bool _dragging;
@@ -21,12 +21,19 @@ internal sealed class DateSelectionWindow : Window
     public DateSelectionWindow(IEnumerable<DateTime> dates, DateTime month)
     {
         Selection = new(dates.Select(d => d.Date)); _month = new(month.Year, month.Month, 1);
-        Title = "选择日期"; Width = 390; FontSize = 14; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
+        Title = "选择日期"; Width = 400; FontSize = 14; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
-        FontFamily = new FontFamily("Microsoft YaHei UI"); Background = Brushes.White; Content = _panel;
+        WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
+        FontFamily = new FontFamily("Microsoft YaHei UI");
+        Border shell = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), Padding = new Thickness(8), Margin = new Thickness(8) };
+        shell.Child = _panel;
+        shell.MouseLeftButtonDown += (_, e) => { if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed) DragMove(); };
+        Content = shell;
         PlannerTheme.Apply(this); Render();
     }
     private Button Make(string text, Action click) { Button b = new() { Content = text, Margin = new Thickness(2), Padding = new Thickness(7) }; b.Click += (_, _) => click(); return b; }
+    private Button NavButton(string kind, Action click, string tip) { Button b = new() { Style = (Style)FindResource("PlannerIconBtn"), Content = PlannerTheme.Icon(kind, 16, PlannerTheme.Ink, 0), ToolTip = tip }; b.Click += (_, _) => click(); return b; }
+    private Button FooterChip(string text, Action click, bool primary) { Button b = new() { Content = text, Style = (Style)FindResource("PlannerChip"), Margin = new Thickness(6, 0, 0, 0), Height = 34 }; b.Click += (_, _) => click(); if (primary) { b.Background = PlannerTheme.PrimaryFill; b.Foreground = Brushes.White; b.BorderThickness = new Thickness(0); b.FontWeight = FontWeights.SemiBold; } return b; }
     private void Render()
     {
         _dragging = false;
@@ -36,13 +43,13 @@ internal sealed class DateSelectionWindow : Window
         _dayButtons.Clear();
         System.Windows.Input.Mouse.Capture(null);
         _panel.Children.Clear();
-        DockPanel nav = new(); var prev = Make("‹", () => Move(-1)); var next = Make("›", () => Move(1));
+        DockPanel nav = new() { Margin = new Thickness(2, 2, 2, 6) }; var prev = NavButton("chevron-left", () => Move(-1), "上个月"); var next = NavButton("chevron-right", () => Move(1), "下个月");
         DockPanel.SetDock(prev, Dock.Left); DockPanel.SetDock(next, Dock.Right); nav.Children.Add(prev); nav.Children.Add(next);
-        nav.Children.Add(new TextBlock { Text = _month.ToString("yyyy年M月"), TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 17 }); _panel.Children.Add(nav);
+        nav.Children.Add(new TextBlock { Text = _month.ToString("yyyy年M月"), TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = PlannerTheme.Ink }); _panel.Children.Add(nav);
         Grid grid = new(); for (int c = 0; c < 7; c++) grid.ColumnDefinitions.Add(new()); for (int r = 0; r < 7; r++) grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.AddHandler(UIElement.PreviewMouseMoveEvent, new System.Windows.Input.MouseEventHandler((_, e) => ContinueDrag(grid, e)), true);
         grid.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new System.Windows.Input.MouseButtonEventHandler((_, e) => EndDrag(e)), true);
-        for (int c = 0; c < 7; c++) { TextBlock t = new() { Text = "一二三四五六日"[c].ToString(), TextAlignment = TextAlignment.Center, Margin = new Thickness(4, 10, 4, 8) }; Grid.SetColumn(t,c); grid.Children.Add(t); }
+        for (int c = 0; c < 7; c++) { TextBlock t = new() { Text = "一二三四五六日"[c].ToString(), TextAlignment = TextAlignment.Center, Margin = new Thickness(4, 10, 4, 8), FontSize = 12.5, Foreground = PlannerTheme.Muted }; Grid.SetColumn(t,c); grid.Children.Add(t); }
         DateTime start = _month.AddDays(-((int)_month.DayOfWeek + 6) % 7);
         for (int i = 0; i < 42; i++)
         {
@@ -54,10 +61,11 @@ internal sealed class DateSelectionWindow : Window
             _dayButtons[day] = b;
             Grid.SetColumn(b,i%7); Grid.SetRow(b,i/7+1); grid.Children.Add(b);
         }
-        _panel.Children.Add(grid); StackPanel footer = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0,12,0,0) };
-        _selectionCount = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4) };
-        footer.Children.Add(_selectionCount);
-        footer.Children.Add(Make("清空", () => { Selection.Clear(); UpdateSelectionVisuals(); })); footer.Children.Add(Make("取消", () => DialogResult = false)); var ok = Make("确定", () => DialogResult = true); ok.Name = "ConfirmDates"; ok.Background = PlannerTheme.Accent; ok.Foreground = Brushes.White; footer.Children.Add(ok); _panel.Children.Add(footer);
+        _panel.Children.Add(grid); DockPanel footer = new() { Margin = new Thickness(2, 12, 2, 2) };
+        _selectionCount = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = PlannerTheme.Ink };
+        StackPanel right = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
+        right.Children.Add(FooterChip("清空", () => { Selection.Clear(); UpdateSelectionVisuals(); }, false)); right.Children.Add(FooterChip("取消", () => DialogResult = false, false)); var ok = FooterChip("确定", () => DialogResult = true, true); ok.Name = "ConfirmDates"; right.Children.Add(ok);
+        DockPanel.SetDock(right, Dock.Right); footer.Children.Add(right); footer.Children.Add(_selectionCount); _panel.Children.Add(footer);
         UpdateSelectionVisuals();
     }
     private void Move(int delta) { DateTime next = _month.AddMonths(delta); if(next >= ReminderSchedule.MinimumDate && next <= ReminderSchedule.MaximumDate) { _month=next; Render(); } }
@@ -148,8 +156,8 @@ internal sealed class DateSelectionWindow : Window
         foreach (var pair in _dayButtons)
         {
             bool selected = Selection.Contains(pair.Key);
-            pair.Value.Background = selected ? PlannerTheme.Accent : Brushes.Transparent;
-            pair.Value.Foreground = selected ? Brushes.White : pair.Key.Month == _month.Month ? Brushes.DarkSlateGray : Brushes.Gray;
+            pair.Value.Background = selected ? PlannerTheme.Accent : Brushes.White;
+            pair.Value.Foreground = selected ? Brushes.White : pair.Key.Month == _month.Month ? PlannerTheme.Ink : PlannerTheme.Muted;
         }
         if (_selectionCount is not null) _selectionCount.Text = $"已选 {Selection.Count} 天";
     }
