@@ -25,10 +25,10 @@ public partial class SettingsWindow
             checks.Add("PASS " + label);
         }
         SettingsWindow? window = null;
-        SettingsWindow Create(IMessageNotificationSource? source) => new(
+        SettingsWindow Create(IMessageNotificationSource? source, MediaPreferences? media = null) => new(
             new MessageNotificationPreferences { EnableMessageReminders = true, EnableQqDetailedReminders = true,
                 EnableWeChatDetailedReminders = true, WindowsNotificationAccessGranted = false },
-            new WindowPreferences(), new FileTreatPreferences(), new AppearancePreferences(), new MediaPreferences(), false, source);
+            new WindowPreferences(), new FileTreatPreferences(), new AppearancePreferences(), media ?? new MediaPreferences(), false, source);
         try
         {
             foreach (MessageNotificationAccessStatus status in Enum.GetValues(typeof(MessageNotificationAccessStatus)))
@@ -61,8 +61,14 @@ public partial class SettingsWindow
                 Check(window.QqDetailedReminderCheckBox.IsChecked == false && window.WeChatDetailedReminderCheckBox.IsChecked == true,
                     prefix + "QQ and WeChat detail choices remain independent");
                 window.MessageReminderCheckBox.IsChecked = false;
+                window.UpdateLayout();
+                Check(!window.QqDetailedReminderCheckBox.IsVisible && !window.WeChatDetailedReminderCheckBox.IsVisible,
+                    prefix + "Master off collapses the detail section");
                 Check(window.WeChatDetailedReminderCheckBox.IsChecked == true, prefix + "Master off preserves detail preference");
                 window.MessageReminderCheckBox.IsChecked = true;
+                window.UpdateLayout();
+                Check(window.QqDetailedReminderCheckBox.IsVisible && window.WeChatDetailedReminderCheckBox.IsVisible,
+                    prefix + "Master on restores the detail section");
                 window.QqDetailedReminderCheckBox.IsChecked = true;
                 Check(window.SaveStatusText.Text == "有未保存的更改", prefix + "Changes are marked unsaved");
                 CaptureNotificationSettings(window, Path.Combine(directory, status + ".png"), 1);
@@ -120,6 +126,32 @@ public partial class SettingsWindow
             Check(!modal.SelectedNotificationPreferences.EnableMessageReminders && !modal.SelectedNotificationPreferences.EnableQqDetailedReminders &&
                 modal.SelectedNotificationPreferences.EnableWeChatDetailedReminders && modal.SelectedNotificationPreferences.WindowsNotificationAccessGranted,
                 "Save commits all notification choices and the current grant");
+            window = Create(null, new MediaPreferences { ShowMusicIslands = true });
+            SettingsWindow islandsModal = window;
+            _ = islandsModal.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                islandsModal.MusicNavigationRadioButton.IsChecked = true;
+                Check(islandsModal.MusicIslandsCheckBox.IsChecked == true,
+                    "Islands switch loads the saved media preference");
+                islandsModal.MusicIslandsCheckBox.IsChecked = false;
+                islandsModal.OnSaveClick(islandsModal, new RoutedEventArgs());
+            }));
+            Check(islandsModal.ShowDialog() == true, "Islands switch save accepts the dialog");
+            Check(!islandsModal.SelectedMediaPreferences.ShowMusicIslands,
+                "Save commits the islands switch through the existing media path");
+            window = Create(null);
+            window.Show();
+            foreach ((string tag, string name) in new[] { ("General", "general"), ("Music", "music"), ("Notification", "notification"), ("About", "about") })
+            {
+                ((System.Windows.Controls.RadioButton)window.FindName(tag + "NavigationRadioButton")).IsChecked = true;
+                await Task.Delay(120);
+                window.UpdateLayout();
+                ScrollViewer page = (ScrollViewer)window.FindName(tag + "Page");
+                Check(page.ScrollableWidth < 1, name + " page never scrolls horizontally");
+                CaptureNotificationSettings(window, Path.Combine(directory, name + "-125.png"), 1.25);
+                CaptureNotificationSettings(window, Path.Combine(directory, name + "-150.png"), 1.5);
+            }
+            window.Close();
             window = null;
         }
         catch (Exception error) { checks.Add("FAIL " + error); }

@@ -52,6 +52,7 @@ public partial class SettingsWindow : Window
         bool musicAnimationEnabled = SelectedMediaPreferences.MusicAnimationSelection !=
             MusicAnimationOptions.NoneSelection;
         MusicAnimationEnabledCheckBox.IsChecked = musicAnimationEnabled;
+        MusicIslandsCheckBox.IsChecked = SelectedMediaPreferences.ShowMusicIslands;
         SelectMusicAnimationCard(musicAnimationEnabled
             ? SelectedMediaPreferences.MusicAnimationSelection
             : MusicAnimationOptions.AutomaticSelection);
@@ -233,18 +234,16 @@ public partial class SettingsWindow : Window
             selectedMusicAnimation?.Tag is string selected
                 ? selected
                 : MusicAnimationOptions.NoneSelection;
-        if (!string.IsNullOrWhiteSpace(selection))
-        {
-            SelectedMediaPreferences = MediaPreferences.Normalize(
-                SelectedMediaPreferences with
-                {
-                    MusicAnimationSelection = selection,
-                    // The former one-animation Easter-egg switch is retired. In
-                    // intelligent mode both Luo Tianyi animations form the pool;
-                    // fixed mode is artist-independent.
-                    EnableLuoTianyiSingingEasterEgg = true,
-                });
-        }
+        SelectedMediaPreferences = MediaPreferences.Normalize(
+            SelectedMediaPreferences with
+            {
+                ShowMusicIslands = MusicIslandsCheckBox.IsChecked == true,
+                MusicAnimationSelection = selection,
+                // The former one-animation Easter-egg switch is retired. In
+                // intelligent mode both Luo Tianyi animations form the pool;
+                // fixed mode is artist-independent.
+                EnableLuoTianyiSingingEasterEgg = true,
+            });
         DialogResult = true;
     }
 
