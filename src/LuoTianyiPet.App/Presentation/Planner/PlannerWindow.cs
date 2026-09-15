@@ -36,9 +36,8 @@ internal sealed partial class PlannerWindow : Window
     private DateTime? _calendarDragLastDay;
     private Point _calendarDragLastPoint;
     private Vector? _calendarDragLastDirection;
-    private static readonly string[] Repeats=["仅一次","每天","每周指定","指定日期","工作日 · 跟随日历","休息日 · 跟随日历"];
+    private static readonly string[] Repeats=["仅一次","每天","每周","指定日期","工作日","休息日"];
     private static readonly DayOfWeek[] Days=[DayOfWeek.Monday,DayOfWeek.Tuesday,DayOfWeek.Wednesday,DayOfWeek.Thursday,DayOfWeek.Friday,DayOfWeek.Saturday,DayOfWeek.Sunday];
-    public event Action? ReminderSettingsRequested;
     public PlannerWindow(ReminderService service,bool alarm)
     {
         _service=service;_alarm=alarm;PlannerTheme.Apply(this);
@@ -96,7 +95,6 @@ internal sealed partial class PlannerWindow : Window
         head.ColumnDefinitions.Add(new(){Width=GridLength.Auto});head.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});head.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         DockPanel brand=new();
         StackPanel windows=Row();
-        var settings=IconButton("gear",()=>ShowPlannerSettings(),"通知与闹钟设置",18);settings.Name="PlannerSettingsButton";settings.Width=44;settings.Height=32;windows.Children.Add(settings);
         foreach(var entry in new[]{("minimize",(Action)(()=>WindowState=WindowState.Minimized),""),("maximize",(Action)(()=>WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized),""),("close",(Action)Close,"close")})
         {
             var b=IconButton(entry.Item1,entry.Item2,entry.Item1=="minimize"?"最小化":entry.Item1=="maximize"?"最大化":"关闭",16);
@@ -457,7 +455,7 @@ internal sealed partial class PlannerWindow : Window
     }
     private void RenderAlarms()
     {
-        DockPanel header=new(){Margin=new Thickness(20,0,20,10)};var add=Primary(Action("",()=>Edit(null,false)));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新建提醒",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;add.Name="NewAlarm";DockPanel.SetDock(add,Dock.Right);header.Children.Add(add);header.Children.Add(Text("闹钟",20,FontWeights.SemiBold));_header.Children.Add(header);
+        DockPanel header=new(){Margin=new Thickness(20,0,20,10)};var add=Primary(Action("",()=>Edit(null,false)));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新建闹钟",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;add.Name="NewAlarm";DockPanel.SetDock(add,Dock.Right);header.Children.Add(add);header.Children.Add(Text("闹钟",20,FontWeights.SemiBold));_header.Children.Add(header);
         StackPanel list=new();
         var groups=new[]{("正在倒计时","hourglass",_service.Book.Items.Where(i=>i.Relative && (i.PausedSeconds!=null || i.Enabled && (i.Start>DateTime.Now || _service.Book.Occurrences.Any(o=>o.RuleId==i.Id&&o.Phase is ReminderPhase.Due or ReminderPhase.DueSnoozed))))),("我的闹钟","clock",_service.Book.Items.Where(i=>!i.Relative&&!i.Calendar)),("日历提醒","calendar",_service.Book.Items.Where(i=>i.Calendar&&i.ReminderCreated==true))};
         foreach(var group in groups)
@@ -468,7 +466,7 @@ internal sealed partial class PlannerWindow : Window
             for(int i=0;i<items.Count;i++){var rowBorder=(Border)AlarmRow(items[i]);if(i==items.Count-1)rowBorder.BorderThickness=new Thickness(0);section.Children.Add(rowBorder);}
             var card=Card(section);card.Padding=new Thickness(12);if(group.Item1=="正在倒计时")card.Background=PlannerTheme.Soft;list.Children.Add(card);
         }
-        if(list.Children.Count==0)list.Children.Add(Text("暂无提醒，点击右上角「新建提醒」开始。",16));_body.Content=list;
+        if(list.Children.Count==0)list.Children.Add(Text("暂无闹钟，点击右上角「新建闹钟」开始。",16));_body.Content=list;
     }
     private UIElement AlarmRow(ReminderItem item)
     {
@@ -479,7 +477,7 @@ internal sealed partial class PlannerWindow : Window
         if(item.Relative){_running.Add((clock,item));clock.Foreground=PlannerTheme.Accent;clock.HorizontalAlignment=HorizontalAlignment.Center;StackPanel countdown=Row();countdown.HorizontalAlignment=HorizontalAlignment.Center;countdown.Children.Add(PlannerTheme.Icon("hourglass",18,PlannerTheme.Accent,8));countdown.Children.Add(clock);Grid.SetColumn(row.Children.Count==0?clock:clock,1);row.Children.Add(new Border{Child=countdown,Background=PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(10),Padding=new Thickness(10,12,10,12),Margin=new Thickness(0,4,12,4),HorizontalAlignment=HorizontalAlignment.Stretch});}
         else row.Children.Add(clock);
         Grid.SetColumn(row.Children[row.Children.Count-1],1);
-        StackPanel details=new();var name=Text(ReminderEngine.Label(item),15,FontWeights.SemiBold);details.Children.Add(name);details.Children.Add(Text(item.Relative?$"共 {TimeSpan.FromSeconds(item.DurationSeconds).TotalMinutes:0.##} 分钟" : item.Calendar?"来自日历 · "+item.Start.ToString("M月d日"):item.Repeat==ReminderRepeat.Weekly?"每周"+string.Join("、",item.Weekdays.Select(d=>"日一二三四五六"[(int)d])):Repeats[(int)item.Repeat],12));
+        StackPanel details=new();string displayName=string.IsNullOrWhiteSpace(item.Title)?(item.Relative?"倒计时":"闹钟"):item.Title;var name=Text(displayName,15,FontWeights.SemiBold);details.Children.Add(name);details.Children.Add(Text(item.Relative?$"共 {TimeSpan.FromSeconds(item.DurationSeconds).TotalMinutes:0.##} 分钟" : item.Calendar?"来自日历 · "+item.Start.ToString("M月d日"):item.Repeat==ReminderRepeat.Weekly?"每周"+string.Join("、",item.Weekdays.Select(d=>"日一二三四五六"[(int)d])):Repeats[(int)item.Repeat],12));
         details.Margin=new Thickness(0,0,18,0);Grid.SetColumn(details,2);row.Children.Add(details);
         var next=ReminderSchedule.Next(item,_service.Book,DateTime.Now);
         StackPanel nextRow=Row();nextRow.Children.Add(PlannerTheme.Icon("repeat",14,PlannerTheme.Muted,6));
@@ -498,16 +496,5 @@ internal sealed partial class PlannerWindow : Window
         }
         Grid.SetColumn(controls,4);row.Children.Add(controls);
         return new Border{Child=row,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(0,0,0,1),Margin=new Thickness(4,0,4,0)};
-    }
-    private void ShowPlannerSettings()
-    {
-        if(ReminderSettingsRequested!=null)
-        {
-            ReminderSettingsRequested();
-            return;
-        }
-        var settings=new SettingsWindow(new(),new(),new(),new(),new(),false,null,_service.Book.Preferences);
-        settings.NavigateNotifications();
-        if(settings.ShowDialog()==true)_=Execute(b=>b.Preferences=settings.SelectedReminderPreferences);
     }
 }

@@ -65,7 +65,6 @@ public partial class MainWindow
         if (_plannerWindow == null)
         {
             _plannerWindow = new PlannerWindow(_reminders, alarm);
-            _plannerWindow.ReminderSettingsRequested += OpenReminderSettings;
             _plannerWindow.Closed += (_, _) => _plannerWindow = null;
         }
         _plannerWindow.Navigate(alarm);

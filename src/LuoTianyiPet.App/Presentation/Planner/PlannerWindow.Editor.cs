@@ -14,7 +14,7 @@ internal sealed partial class PlannerWindow
     {
         _editing=true;StackPanel panel=new(){Width=600};DockPanel head=new();
         var close=IconButton("close",()=>{_editing=false;Render();},"关闭",18,PlannerTheme.Muted);DockPanel.SetDock(close,Dock.Right);head.Children.Add(close);
-        head.Children.Add(Text(original==null?calendar?"新建事项":"新建提醒":calendar?"编辑事项":"编辑提醒",22,FontWeights.SemiBold));panel.Children.Add(head);
+        head.Children.Add(Text(original==null?calendar?"新建事项":"新建闹钟":calendar?"编辑事项":"编辑闹钟",22,FontWeights.SemiBold));panel.Children.Add(head);
         panel.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(0,8,0,10)});
         TextBlock error=Text("",12);error.Name="EditorError";error.Foreground=PlannerTheme.Danger;error.Margin=new Thickness(3,8,3,0);
         bool relative=original?.Relative==true;
@@ -83,7 +83,7 @@ internal sealed partial class PlannerWindow
         List<(int Seconds,Button Button)> presets=[];
         void HighlightPreset(){int duration=hours.Value*3600+minutes.Value*60+secs.Value;foreach(var pair in presets){bool selected=pair.Seconds==duration;pair.Button.Background=selected?PlannerTheme.Soft:Brushes.White;pair.Button.Foreground=selected?PlannerTheme.Accent:PlannerTheme.Ink;pair.Button.FontWeight=selected?FontWeights.SemiBold:FontWeights.Normal;pair.Button.BorderBrush=selected?PlannerTheme.Accent:PlannerTheme.Line;}}
         StackPanel quick=Row();quick.HorizontalAlignment=HorizontalAlignment.Center;foreach(var preset in new[]{(300,"5分钟"),(900,"15分钟"),(1800,"30分钟"),(3600,"1小时")}){var button=Action(preset.Item2,()=>{hours.Input.Text=(preset.Item1/3600).ToString("00");minutes.Input.Text=(preset.Item1/60%60).ToString("00");secs.Input.Text="00";});button.Width=140;quick.Children.Add(button);presets.Add((preset.Item1,button));}foreach(var input in new[]{hours.Input,minutes.Input,secs.Input})input.TextChanged+=(_,_)=>HighlightPreset();HighlightPreset();
-        void Field(string label,UIElement input){Grid row=new(){Margin=new Thickness(0,9,0,9)};row.ColumnDefinitions.Add(new(){Width=new GridLength(116)});row.ColumnDefinitions.Add(new());var labelRow=Row();if(label.Length>0){string icon=label.Contains("日期")?"calendar":label.Contains("时间")||label.Contains("提前")?"clock":label.Contains("重复")?"repeat":"note";labelRow.Children.Add(PlannerTheme.Icon(icon,18));labelRow.Children.Add(Text(label,14));}labelRow.VerticalAlignment=VerticalAlignment.Center;row.Children.Add(labelRow);Grid.SetColumn(input,1);row.Children.Add(input);form.Children.Add(row);}
+        void Field(string label,UIElement input){Grid row=new(){Margin=new Thickness(0,9,0,9)};row.ColumnDefinitions.Add(new(){Width=new GridLength(116)});row.ColumnDefinitions.Add(new());var labelRow=Row();if(label.Length>0){string icon=label.Contains("日期")?"calendar":label.Contains("时间")||label.Contains("提前")?"clock":label.Contains("重复")||label.Contains("频率")?"repeat":"note";labelRow.Children.Add(PlannerTheme.Icon(icon,18));labelRow.Children.Add(Text(label,14));}labelRow.VerticalAlignment=VerticalAlignment.Center;row.Children.Add(labelRow);Grid.SetColumn(input,1);row.Children.Add(input);form.Children.Add(row);}
         Button? save=null;
         void SetMultiMode(bool enabled)
         {
@@ -127,7 +127,7 @@ internal sealed partial class PlannerWindow
                 if(!calendar)Field("名称（可选）",nameBox);
                 if(!calendar || original?.Repeat is ReminderRepeat.Daily or ReminderRepeat.Weekly or ReminderRepeat.Workdays or ReminderRepeat.RestDays)
                 {
-                    WrapPanel choices=new();var labels=new[]{"仅一次","每天","每周指定","指定日期","工作日","休息日"};
+                    WrapPanel choices=new();var labels=new[]{"仅一次","每天","每周","指定日期","工作日","休息日"};
                     foreach(int index in new[]{0,1,2,4,5,3})
                     {
                         int value=index;var choice=Chip(labels[index],()=>{repeat.SelectedIndex=value;Update();});
@@ -135,7 +135,7 @@ internal sealed partial class PlannerWindow
                         if(repeat.SelectedIndex==index){choice.Background=PlannerTheme.AccentSoft;choice.Foreground=PlannerTheme.Accent;choice.BorderBrush=PlannerTheme.Accent;choice.FontWeight=FontWeights.SemiBold;}
                         choices.Children.Add(choice);
                     }
-                    Field("重复",choices);repeat.Visibility=Visibility.Collapsed;form.Children.Add(repeat);
+                    Field("提醒频率",choices);repeat.Visibility=Visibility.Collapsed;form.Children.Add(repeat);
                 }
                 if(repeat.SelectedIndex==2)form.Children.Add(weekdays);
                 time.IsEnabled=!noTimeOn;
