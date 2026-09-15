@@ -9,6 +9,7 @@ public sealed class AnimationStageSizingTests
     [InlineData(100, 260, 384, 226)]
     [InlineData(150, 382, 503, 240)]
     [InlineData(200, 504, 622, 240)]
+    [InlineData(300, 748, 860, 240)]
     public void UserScaleDefinesStageAndIslands(int scale, double width, double height, double track)
     {
         AnimationStageSizing size = AnimationStageSizing.Resolve(244, 238, scale);
@@ -35,7 +36,7 @@ public sealed class AnimationStageSizingTests
     [InlineData(244, 0, 100)]
     [InlineData(double.NaN, 238, 100)]
     [InlineData(244, 238, 49)]
-    [InlineData(244, 238, 201)]
+    [InlineData(244, 238, 301)]
     public void InvalidGeometryIsRejected(double width, double height, int scale) =>
         Assert.Throws<ArgumentOutOfRangeException>(() => AnimationStageSizing.Resolve(width, height, scale));
 }

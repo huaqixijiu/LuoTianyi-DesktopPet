@@ -68,7 +68,8 @@ public partial class MainWindow
             Check(restSelection.Count==0&&Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="SetWorkdays")&&Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="ClearSelectedDates"),"A30 applying a rest rule clears selection and stays in adjust mode");
             Click(window,"Day"+day.ToString("yyyyMMdd"));window.UpdateLayout();Check(restSelection.Count==1,"A30 adjust mode still selects dates after applying a rule");Click(window,"ClearSelectedDates");window.UpdateLayout();Check(restSelection.Count==0,"A30 clear selection removes all selected dates");
             Snapshot(window,"02-workdays",true);Click(window,"SetWorkdays");
-            await service.ChangeAsync(b=>b.WeekView=true);Snapshot(window,"03-week",true);await service.ChangeAsync(b=>b.WeekView=false);
+            await service.ChangeAsync(b=>b.WeekView=true);Snapshot(window,"03-week",true);await service.ChangeAsync(b=>b.WeekView=false);await Task.Delay(100);window.UpdateLayout();
+            Check(Tree(window).OfType<Button>().Any(b=>Equals(b.Content,"月"))&&Tree(window).OfType<Button>().Any(b=>Equals(b.Content,"周")),"A02 month and week view buttons keep their labels");
             Edit(null,true);Snapshot(window,"04-new-event",true);Check(((CheckBox)Named(window,"CreateAlarm")).IsChecked==false,"A06 new calendar reminder disabled");
             Check(!Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="EarlyReminder"),"A06 early row absent while disabled");
             var dateControl=(DatePicker)Named(window,"ReminderDate");dateControl.ApplyTemplate();
@@ -80,7 +81,7 @@ public partial class MainWindow
             ((TextBox)Named(window,"ReminderTitle")).Text="不指定时间事项";Click(window,"SaveReminder");await Task.Delay(250);Check(service.Book.Items.Last().HasTime==false&&!service.Book.Items.Last().Enabled,"A29 unspecified time persists without midnight alarm");
             var eventItem=service.Book.Items.First();Edit(eventItem,true);Snapshot(window,"05-edit-event",true);Check(((TextBox)Named(window,"ReminderNotes")).AcceptsReturn==true,"A09 multi-line note");
             Tick(window,"EarlyReminder",true);((TextBox)Named(window,"EarlyMinutes")).Text="45";Click(window,"SaveReminder");await Task.Delay(250);Check(service.Book.Items.First(i=>i.Id==eventItem.Id).EarlyMinutes==45,"A10 early duration persists");
-            window.Navigate(true);Snapshot(window,"06-alarms",true);Edit(null,false);Snapshot(window,"07-new-alarm",true);
+            window.Navigate(true);Snapshot(window,"06-alarms",true);Edit(null,false);Check(Tree(window).OfType<Button>().Any(b=>Equals(b.Content,"◷ 闹钟")),"A06 scheduled reminder mode is labeled as alarm");Snapshot(window,"07-new-alarm",true);
             var countdownButton=Tree(window).OfType<Button>().First(b=>Equals(b.Content,"⌛ 倒计时"));countdownButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.UpdateLayout();Snapshot(window,"08-new-countdown",true);
             void Digits(string h,string m,string s){((TextBox)Named(window,"CountdownHours")).Text=h;((TextBox)Named(window,"CountdownMinutes")).Text=m;((TextBox)Named(window,"CountdownSeconds")).Text=s;}
             foreach(var preset in new[]{("5分钟",300),("15分钟",900),("30分钟",1800),("1小时",3600)}){Tree(window).OfType<Button>().First(b=>Equals(b.Content,preset.Item1)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));int h=int.Parse(((TextBox)Named(window,"CountdownHours")).Text),m=int.Parse(((TextBox)Named(window,"CountdownMinutes")).Text),sec=int.Parse(((TextBox)Named(window,"CountdownSeconds")).Text);Check(h*3600+m*60+sec==preset.Item2,"A16 preset "+preset.Item1);}

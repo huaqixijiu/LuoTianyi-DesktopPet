@@ -18,8 +18,7 @@ internal sealed partial class PlannerWindow
         panel.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(0,8,0,10)});
         TextBlock error=Text("",12);error.Name="EditorError";error.Foreground=PlannerTheme.Danger;error.Margin=new Thickness(3,8,3,0);
         bool relative=original?.Relative==true;
-        // The two mode labels are matched verbatim by the planner QA harness; keep the exact text.
-        var mode=Row();var specified=Action("◷ 指定时间",()=>{});var countdown=Action("⌛ 倒计时",()=>{});
+        var mode=Row();var specified=Action("◷ 闹钟",()=>{});var countdown=Action("⌛ 倒计时",()=>{});
         specified.MinWidth=290;countdown.MinWidth=290;specified.Height=44;countdown.Height=44;specified.FontSize=15;countdown.FontSize=15;
         specified.Margin=new Thickness(3,3,6,10);countdown.Margin=new Thickness(0,3,3,10);
         mode.Children.Add(specified);mode.Children.Add(countdown);if(!calendar)panel.Children.Add(mode);

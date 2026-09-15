@@ -9,7 +9,8 @@ public readonly record struct AnimationStageSizing(double Width, double Height, 
         if (!Numeric.IsFinite(maximumArtworkWidth) || maximumArtworkWidth <= 0 ||
             !Numeric.IsFinite(maximumArtworkHeight) || maximumArtworkHeight <= 0)
             throw new ArgumentOutOfRangeException(nameof(maximumArtworkWidth));
-        if (scalePercent < 50 || scalePercent > 200)
+        if (scalePercent < AppearancePreferences.MinimumDisplayScalePercent ||
+            scalePercent > AppearancePreferences.MaximumDisplayScalePercent)
             throw new ArgumentOutOfRangeException(nameof(scalePercent));
         double scale = scalePercent / 100.0;
         return new AnimationStageSizing(

@@ -113,6 +113,15 @@ public partial class SettingsWindow
             Check(!window.NotificationAccessButton.IsEnabled && window.NotificationAccessButton.Visibility == Visibility.Collapsed && window.NotificationAccessBanner.Visibility == Visibility.Visible,
                 "Absent platform source shows guidance without a dead action");
             window.Close(); window = Create(new NotificationSettingsQaSource { Status = MessageNotificationAccessStatus.Allowed });
+            int previewScale = 0;
+            window.DisplayScalePreviewChanged += value => previewScale = value;
+            window.Show();
+            window.DisplayScaleSlider.Value = AppearancePreferences.MaximumDisplayScalePercent;
+            window.UpdateLayout();
+            Check(window.DisplayScaleSlider.Maximum == 300 && previewScale == 300,
+                "Display scale settings expose and preview the 300% upper bound");
+            window.Close();
+            window = Create(new NotificationSettingsQaSource { Status = MessageNotificationAccessStatus.Allowed });
             SettingsWindow modal = window;
             _ = modal.Dispatcher.BeginInvoke(new Action(() =>
             {

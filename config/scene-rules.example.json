@@ -134,7 +134,7 @@
     },
     "displayScalePercentDefault": 100,
     "displayScalePercentMinimum": 50,
-    "displayScalePercentMaximum": 200,
+    "displayScalePercentMaximum": 300,
     "displayScaleEntryPoint": "windows-system-tray-slider"
   },
   "applicationExit": {

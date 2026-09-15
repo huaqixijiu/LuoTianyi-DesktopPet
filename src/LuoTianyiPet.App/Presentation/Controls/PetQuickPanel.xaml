@@ -26,13 +26,17 @@
                                Text="天依 · 常用功能" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Style="{StaticResource PanelIconButton}"
+                    <Button x:Name="CalendarButton"
+                            Style="{StaticResource PanelIconButton}"
+                            Focusable="False"
                             Click="OnCalendarClick"
                             ToolTip="打开日历"
                             AutomationProperties.Name="日历">
                         <Viewbox Width="21" Height="21"><Canvas Width="24" Height="24"><Path Data="M7,6 H17 A2.5,2.5 0 0 1 19.5,8.5 V17 A2.5,2.5 0 0 1 17,19.5 H7 A2.5,2.5 0 0 1 4.5,17 V8.5 A2.5,2.5 0 0 1 7,6 Z M4.5,10 H19.5 M8.5,4 V8 M15.5,4 V8" Fill="Transparent" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="2" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" /></Canvas></Viewbox>
                     </Button>
-                    <Button Style="{StaticResource PanelIconButton}"
+                    <Button x:Name="AlarmButton"
+                            Style="{StaticResource PanelIconButton}"
+                            Focusable="False"
                             Margin="4,0,0,0"
                             Click="OnAlarmClick"
                             ToolTip="打开闹钟"

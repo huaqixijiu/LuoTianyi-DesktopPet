@@ -117,6 +117,8 @@ public partial class MainWindow
                 value => SetPermanentTopmost(value, true), SetMusicIslandsVisible,
                 value => SetDisplayScalePercent(value, true));
             _petQuickPanel.ShowNearPet(new DesktopRectangle(Left, Top, ActualWidth, ActualHeight), GetQuickActionsWorkArea());
+            Check(!_petQuickPanel.CalendarButton.Focusable && !_petQuickPanel.AlarmButton.Focusable,
+                "Calendar and alarm quick-entry buttons do not retain a blue keyboard-focus state");
             CaptureQuickActionsQa(_petQuickPanel, Path.Combine(directory, "03-pet-menu.png"), true);
             int petSettingsRequests=0,petExitRequests=0;
             _petQuickPanel.OpenSettings=()=>petSettingsRequests++;
@@ -177,6 +179,16 @@ public partial class MainWindow
             await Task.Delay(250);
             CaptureQuickActionsQa(settings, Path.Combine(directory, "05-settings.png"));
             settings.Close();
+            int previousScale = _settings.Appearance.DisplayScalePercent;
+            SetDisplayScalePercent(AppearancePreferences.MaximumDisplayScalePercent, save: false);
+            await Task.Delay(180);
+            Check(_settings.Appearance.DisplayScalePercent == 300,
+                "Display scale applies the 300% upper bound to the live pet window");
+            _petQuickPanel?.RefreshState();
+            Check(_petQuickPanel is null || !_petQuickPanel.IncreaseScaleButton.IsEnabled,
+                "Quick panel disables increase at the 300% upper bound");
+            CaptureQuickActionsQa(this, Path.Combine(directory, "07-scale-300.png"));
+            SetDisplayScalePercent(previousScale, save: false);
             File.WriteAllLines(Path.Combine(directory, "result.txt"), checks);
             Close();
         }

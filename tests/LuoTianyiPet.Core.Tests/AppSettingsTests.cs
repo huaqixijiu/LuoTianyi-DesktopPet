@@ -56,7 +56,7 @@ public sealed class AppSettingsTests
     [Theory]
     [InlineData(10, AppearancePreferences.MinimumDisplayScalePercent)]
     [InlineData(125, 125)]
-    [InlineData(250, AppearancePreferences.MaximumDisplayScalePercent)]
+    [InlineData(350, AppearancePreferences.MaximumDisplayScalePercent)]
     public void AppearanceNormalization_ClampsScaleAndRejectsUnknownStyles(
         int storedScale,
         int expectedScale)

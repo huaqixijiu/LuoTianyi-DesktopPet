@@ -107,13 +107,26 @@ public partial class MainWindow
             Owner = this,
         };
         _settingsWindow = settingsWindow;
+        AppearancePreferences appearanceBeforePreview = _settings.Appearance;
+        Action<int> previewScaleChanged = previewScale =>
+            ApplyAppearancePreferences(
+                _settings.Appearance with { DisplayScalePercent = previewScale },
+                save: false);
+        settingsWindow.DisplayScalePreviewChanged += previewScaleChanged;
         if (_openPlannerNotificationSettings)
         {
             settingsWindow.NavigateNotifications();
             _openPlannerNotificationSettings = false;
         }
         settingsWindow.Closed += (_, _) => _settingsWindow = null;
-        if (settingsWindow.ShowDialog() == true)
+        bool saved = settingsWindow.ShowDialog() == true;
+        settingsWindow.DisplayScalePreviewChanged -= previewScaleChanged;
+        if (!saved)
+        {
+            ApplyAppearancePreferences(appearanceBeforePreview, save: false);
+            return;
+        }
+        if (saved)
         {
             ApplyMessageNotificationPreferences(settingsWindow.SelectedNotificationPreferences);
             ApplyFileTreatPreferences(settingsWindow.SelectedFileTreatPreferences, save: false);

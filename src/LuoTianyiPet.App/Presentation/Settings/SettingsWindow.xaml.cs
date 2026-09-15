@@ -11,6 +11,7 @@ public partial class SettingsWindow : Window
 {
     private readonly IMessageNotificationSource? _messageNotificationSource;
     private bool _isInitializing = true;
+    public event Action<int>? DisplayScalePreviewChanged;
     public SettingsWindow(
         MessageNotificationPreferences notificationPreferences,
         WindowPreferences windowPreferences,
@@ -165,6 +166,11 @@ public partial class SettingsWindow : Window
     {
         if (!_isInitializing)
         {
+            if (ReferenceEquals(sender, DisplayScaleSlider))
+            {
+                int previewScale = (int)Math.Round(DisplayScaleSlider.Value / 5d) * 5;
+                DisplayScalePreviewChanged?.Invoke(previewScale);
+            }
             SaveStatusText.Text = "有未保存的更改";
             SaveStatusText.Foreground = (System.Windows.Media.Brush)FindResource("PrimaryDark");
         }

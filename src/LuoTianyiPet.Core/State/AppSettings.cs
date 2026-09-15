@@ -102,7 +102,7 @@ public enum FullBodyInteractionMode
 public sealed record AppearancePreferences
 {
     public const int MinimumDisplayScalePercent = 50;
-    public const int MaximumDisplayScalePercent = 200;
+    public const int MaximumDisplayScalePercent = 300;
     public const int DefaultDisplayScalePercent = 100;
 
     public string FullBodyStyle { get; init; } = AppearanceOptionIds.FullBodyLongHair;
