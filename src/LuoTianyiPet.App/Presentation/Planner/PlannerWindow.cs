@@ -342,8 +342,8 @@ internal sealed partial class PlannerWindow : Window
         _calendarDragStartDay=null;
         _calendarDragLastDay=null;
         _calendarDragLastDirection=null;
-        System.Windows.Input.Mouse.Capture(null);
         if(!moved)return;
+        System.Windows.Input.Mouse.Capture(null);
         _suppressCalendarClick=true;
         e.Handled=true;
         Render();
