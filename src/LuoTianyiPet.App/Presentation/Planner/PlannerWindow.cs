@@ -226,8 +226,8 @@ internal sealed partial class PlannerWindow : Window
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
-        inner.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star),MinHeight=120});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        inner.RowDefinitions.Add(new(){Height=new GridLength(1,GridUnitType.Star),MinHeight=120});
         inner.RowDefinitions.Add(new(){Height=GridLength.Auto});
         DockPanel title=new();var close=IconButton("close",()=>{_batch=false;_selected.Clear();Render();},"完成班休");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);title.Children.Add(Text("调整班休",18,FontWeights.SemiBold));Grid.SetRow(title,0);inner.Children.Add(title);
         var weeklyTitle=Text("每周休息",13,FontWeights.SemiBold);Grid.SetRow(weeklyTitle,1);inner.Children.Add(weeklyTitle);
@@ -258,11 +258,13 @@ internal sealed partial class PlannerWindow : Window
         {
             DockPanel row=new(){Margin=new Thickness(0,1,0,1)};
             var remove=IconButton("close",()=>{_selected.Remove(day);Render();},"移除该日期",13,PlannerTheme.Muted);remove.MinWidth=26;remove.MinHeight=26;DockPanel.SetDock(remove,Dock.Right);row.Children.Add(remove);
-            row.Children.Add(Text($"{day:M月d日（ddd）}",13));
+            string key=day.ToString("yyyy-MM-dd");bool hasOverride=_service.Book.RestOverrides.TryGetValue(key,out bool overrideRest);string label=$"{day:M月d日（ddd）}";
+            if(hasOverride)label+=$" · {(overrideRest?"休息日":"工作日")}";
+            row.Children.Add(Text(label,13,hasOverride?FontWeights.SemiBold:null,hasOverride?(overrideRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):null));
             rows.Children.Add(row);
         }
         if(rows.Children.Count==0)rows.Children.Add(Text("单击日期可选中或取消；按住左键拖动可连续选择日期。",12));
-        ScrollViewer selectedDates=new(){Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Top,Height=144,Margin=new Thickness(0,2,0,4)};Grid.SetRow(selectedDates,5);inner.Children.Add(selectedDates);
+        ScrollViewer selectedDates=new(){Content=rows,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalAlignment=VerticalAlignment.Stretch,Margin=new Thickness(0,2,0,4)};Grid.SetRow(selectedDates,5);inner.Children.Add(selectedDates);
         Button[] batchActions=[
             Primary(AsyncAction("设为休息日",()=>SetRest(true))),
             AsyncAction("设为工作日",()=>SetRest(false)),
