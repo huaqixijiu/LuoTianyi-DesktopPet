@@ -168,8 +168,12 @@ internal sealed partial class PlannerWindow : Window
         _body.Content=layout;
         var foot=Row();
         StackPanel dotLegend=Row();dotLegend.Children.Add(new Ellipse{Width=8,Height=8,Fill=PlannerTheme.Accent,Margin=new Thickness(3,0,6,0),VerticalAlignment=VerticalAlignment.Center});dotLegend.Children.Add(Text("有事项",11));foot.Children.Add(dotLegend);
-        foot.Children.Add(LegendBadge("休","休息日",PlannerTheme.RestBackground,PlannerTheme.RestForeground));
-        foot.Children.Add(LegendBadge("班","工作日",PlannerTheme.WorkBackground,PlannerTheme.WorkForeground));
+        if(week)
+        {
+            foot.Children.Add(LegendBadge("休","休息日",PlannerTheme.RestBackground,PlannerTheme.RestForeground));
+            foot.Children.Add(LegendBadge("班","工作日",PlannerTheme.WorkBackground,PlannerTheme.WorkForeground));
+        }
+        else foot.Children.Add(MonthlyOverrideLegend());
         _footer.Children.Add(foot);
     }
     private static TextBlock HolidayText(DateTime day)
@@ -188,6 +192,14 @@ internal sealed partial class PlannerWindow : Window
         row.Children.Add(Text(label,11));
         return row;
     }
+    private static UIElement MonthlyOverrideLegend()
+    {
+        StackPanel row=Row();row.Margin=new Thickness(10,0,0,0);
+        row.Children.Add(new Border{Child=new TextBlock{Text="休/班",FontSize=10,Foreground=PlannerTheme.Accent,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0)},Width=32,Height=18,Background=PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(4),Margin=new Thickness(0,0,6,0),VerticalAlignment=VerticalAlignment.Center});
+        row.Children.Add(Text("= 单独设置的日子",11));
+        row.Children.Add(Text("其余日期跟随每周规则",11,foreground:PlannerTheme.Muted));
+        return row;
+    }
     private IEnumerable<ReminderItem> DayItems(DateTime day)=>_service.Book.Items.Where(i=>i.Calendar&&ReminderSchedule.OccursOn(i,_service.Book,day)).OrderBy(i=>i.HasTime?1:0).ThenBy(i=>i.Start.TimeOfDay);
     private UIElement EventCard(ReminderItem item,DateTime day,bool week)
     {
@@ -201,10 +213,17 @@ internal sealed partial class PlannerWindow : Window
     }
     private UIElement DayDetails()
     {
-        DockPanel panel=new(){Margin=new Thickness(14,0,2,0)};DockPanel title=new();var close=IconButton("close",()=>{_details=false;Render();},"收起当天事项");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);title.Children.Add(Text(_date.ToString("M月d日 dddd"),18,FontWeights.SemiBold));DockPanel.SetDock(title,Dock.Top);panel.Children.Add(title);
-        var lunar=Text(CalendarLabels.FullLunar(_date)+" "+CalendarLabels.Get(_date),12);DockPanel.SetDock(lunar,Dock.Top);panel.Children.Add(lunar);
+        DateTime detailDay=_date;bool hasOverride=_service.Book.RestOverrides.ContainsKey(detailDay.ToString("yyyy-MM-dd"));bool isRest=_service.Book.IsRest(detailDay);
+        DockPanel panel=new(){Margin=new Thickness(14,0,2,0)};DockPanel title=new();var close=IconButton("close",()=>{_details=false;Render();},"收起当天事项");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);title.Children.Add(Text(detailDay.ToString("M月d日 dddd"),18,FontWeights.SemiBold));DockPanel.SetDock(title,Dock.Top);panel.Children.Add(title);
+        if(hasOverride)
+        {
+            DockPanel overrideRow=new(){Name="SingleRestOverrideStatus",Margin=new Thickness(0,2,0,2)};
+            Button cancel=AsyncAction("取消单独设置",()=>CancelSingleRestOverride(detailDay));cancel.Name="CancelSingleRestOverride";cancel.Style=(Style)FindResource("PlannerLink");cancel.Height=28;cancel.Padding=new Thickness(6,2,6,2);cancel.ToolTip="删除当天的单独设置，恢复跟随每周规则";DockPanel.SetDock(cancel,Dock.Right);overrideRow.Children.Add(cancel);
+            Border badge=new(){Name="SingleRestOverrideBadge",Child=Text("单独设置："+(isRest?"休息日":"工作日"),12,FontWeights.SemiBold,isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground),Width=142,Height=26,Background=isRest?PlannerTheme.RestBackground:PlannerTheme.WorkBackground,CornerRadius=new CornerRadius(5),Padding=new Thickness(7,0,7,0),VerticalAlignment=VerticalAlignment.Center};overrideRow.Children.Add(badge);DockPanel.SetDock(overrideRow,Dock.Top);panel.Children.Add(overrideRow);
+        }
+        var lunar=Text(CalendarLabels.FullLunar(detailDay)+" "+CalendarLabels.Get(detailDay),12);DockPanel.SetDock(lunar,Dock.Top);panel.Children.Add(lunar);
         var add=Chip("＋ 添加当天事项",()=>{_occurrenceDate=null;Edit(null,true);});add.Name="AddSelectedDay";add.Height=38;add.HorizontalAlignment=HorizontalAlignment.Stretch;DockPanel.SetDock(add,Dock.Bottom);panel.Children.Add(add);
-        StackPanel list=new();foreach(var item in DayItems(_date))list.Children.Add(EventCard(item,_date,false));if(list.Children.Count==0)list.Children.Add(Text("当天暂无事项",14));panel.Children.Add(new ScrollViewer{Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return panel;
+        StackPanel list=new();foreach(var item in DayItems(detailDay))list.Children.Add(EventCard(item,detailDay,false));if(list.Children.Count==0)list.Children.Add(Text("当天暂无事项",14));panel.Children.Add(new ScrollViewer{Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return panel;
     }
     private void ItemMenu(ReminderItem item,DateTime day)
     {
@@ -235,7 +254,7 @@ internal sealed partial class PlannerWindow : Window
             btn.Margin=new Thickness(0,0,6,6);days.Children.Add(btn);
         }
         Grid.SetRow(days,2);inner.Children.Add(days);
-        var priorityHint=Text("指定日期会覆盖每周设置；清除指定设置后不再单独指定。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
+        var priorityHint=Text("指定日期会覆盖每周设置；取消单独设置后恢复跟随每周规则。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
         DockPanel head=new(){LastChildFill=false};
         head.Children.Add(Text("指定日期",13,FontWeights.SemiBold));
         head.Children.Add(Text($"已选 {_selected.Count} 天",12));
@@ -261,7 +280,7 @@ internal sealed partial class PlannerWindow : Window
         Button[] batchActions=[
             Primary(AsyncAction("设为休息日",()=>SetRest(true))),
             AsyncAction("设为工作日",()=>SetRest(false)),
-            AsyncAction("清除指定设置",()=>SetRest(null))
+            AsyncAction("取消单独设置",()=>SetRest(null))
         ];
         batchActions[0].Name="SetSelectedRestDays";
         batchActions[1].Name="SetSelectedWorkdays";
@@ -271,7 +290,7 @@ internal sealed partial class PlannerWindow : Window
             b.IsEnabled=_selected.Count>0;
             b.HorizontalAlignment=HorizontalAlignment.Stretch;
             b.Margin=new Thickness(0,4,0,4);
-            if(b==batchActions[2])b.ToolTip="清除该日期的单独设置，回到未单独指定状态";
+            if(b==batchActions[2])b.ToolTip="删除所选日期的单独设置，恢复跟随每周规则；每周规则变更不影响单独设置。";
         }
         StackPanel actions=new();foreach(var b in batchActions)actions.Children.Add(b);Grid.SetRow(actions,6);inner.Children.Add(actions);
         return new Border{Child=inner,Background=Brushes.White,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(14),Margin=new Thickness(14,0,2,0)};
@@ -280,10 +299,24 @@ internal sealed partial class PlannerWindow : Window
     {
         if(_selected.Count==0)return;
         DateTime[] selected=_selected.OrderBy(d=>d).ToArray();
+        int overrideCount=rest==null?selected.Count(d=>_service.Book.RestOverrides.ContainsKey(d.ToString("yyyy-MM-dd"))):0;
         await Execute(b=>{foreach(var d in selected)ReminderSchedule.SetRestOverride(b,d,rest,DateTime.Now);});
         _selected.Clear();
         Render();
-        if(rest==null)_status.Text="已清除指定设置，当前日期恢复为未单独设置。";
+        if(rest==null)
+        {
+            _status.Text=overrideCount>0?$"已取消 {overrideCount} 天的单独设置，恢复跟随每周规则。":"所选日期没有单独设置，已跟随每周规则。";
+        }
+    }
+    private async Task CancelSingleRestOverride(DateTime day)
+    {
+        string key=day.ToString("yyyy-MM-dd");
+        if(!_service.Book.RestOverrides.ContainsKey(key))
+        {
+            Render();_status.Text="所选日期没有单独设置，已跟随每周规则。";return;
+        }
+        await Execute(b=>ReminderSchedule.SetRestOverride(b,day,null,DateTime.Now));
+        Render();_status.Text=$"已取消单独设置，{day:M月d日}恢复跟随每周规则：{(_service.Book.IsRest(day)?"休息日":"工作日")}。";
     }
 
     private void OnCalendarDateClick(DateTime day)
