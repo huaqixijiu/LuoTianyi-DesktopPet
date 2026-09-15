@@ -31,10 +31,11 @@ internal sealed partial class PlannerWindow : Window
     private bool _alarm,_editing,_batch,_manage,_details=true;
     private bool _calendarDragActive;
     private bool _calendarDragMoved;
-    private bool _calendarDragTargetSelected;
     private bool _suppressCalendarClick;
     private DateTime? _calendarDragStartDay;
+    private DateTime? _calendarDragLastDay;
     private Point _calendarDragLastPoint;
+    private Vector? _calendarDragLastDirection;
     private static readonly string[] Repeats=["仅一次","每天","每周指定","指定日期","工作日 · 跟随日历","休息日 · 跟随日历"];
     private static readonly DayOfWeek[] Days=[DayOfWeek.Monday,DayOfWeek.Tuesday,DayOfWeek.Wednesday,DayOfWeek.Thursday,DayOfWeek.Friday,DayOfWeek.Saturday,DayOfWeek.Sunday];
     public event Action? ReminderSettingsRequested;
@@ -88,6 +89,8 @@ internal sealed partial class PlannerWindow : Window
     private void UpdateDateStatus(DateTime day)=>_status.Text=$"{day:yyyy年M月d日 dddd}  {CalendarLabels.FullLunar(day)}";
     private void Render()
     {
+        _calendarDragLastDay=null;
+        _calendarDragLastDirection=null;
         while(_shell.Children.Count>1)_shell.Children.RemoveAt(_shell.Children.Count-1);_root.IsEnabled=true;_header.Children.Clear();_footer.Children.Clear();_running.Clear();
         DockPanel brand=new(){Margin=new Thickness(18,10,14,8)};
         StackPanel windows=Row();
@@ -135,6 +138,8 @@ internal sealed partial class PlannerWindow : Window
         var add=Primary(Action("",()=>{_occurrenceDate=null;Edit(null,true);}));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("新增事项",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;right.Children.Add(add);
         if(Width<1000&&!week&&_details){DockPanel.SetDock(left,Dock.Top);nav.Children.Add(left);right.HorizontalAlignment=HorizontalAlignment.Right;nav.Children.Add(right);}else{DockPanel.SetDock(right,Dock.Right);nav.Children.Add(right);nav.Children.Add(left);}DockPanel.SetDock(nav,Dock.Top);main.Children.Add(nav);
         Grid grid=new();for(int c=0;c<7;c++)grid.ColumnDefinitions.Add(new());grid.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        grid.AddHandler(UIElement.PreviewMouseMoveEvent,new System.Windows.Input.MouseEventHandler((_,e)=>ContinueCalendarDrag(grid,e)),true);
+        grid.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent,new System.Windows.Input.MouseButtonEventHandler((_,e)=>EndCalendarDrag(e)),true);
         for(int c=0;c<7;c++){var t=Text("周"+"一二三四五六日"[c],13,FontWeights.SemiBold,PlannerTheme.Muted);t.TextAlignment=TextAlignment.Center;t.Margin=new Thickness(0,8,0,8);Grid.SetColumn(t,c);grid.Children.Add(t);}
         DateTime first=week?WeekStart(_date):WeekStart(new DateTime(_date.Year,_date.Month,1));int count=week?7:((int)(new DateTime(_date.Year,_date.Month,DateTime.DaysInMonth(_date.Year,_date.Month))-first).TotalDays/7+1)*7;
         for(int r=0;r<count/7;r++)grid.RowDefinitions.Add(new());
@@ -143,14 +148,17 @@ internal sealed partial class PlannerWindow : Window
             DateTime day=first.AddDays(n);string dayKey=day.ToString("yyyy-MM-dd");bool overrideExists=_service.Book.RestOverrides.ContainsKey(dayKey);bool isRest=_service.Book.IsRest(day);var items=DayItems(day).ToList();DockPanel cell=new();
             StackPanel dates=new();DockPanel heading=new();var number=Text(week?day.ToString("M月d日"):day.Month==_date.Month?day.Day.ToString():day.ToString("M/d"),week?16:15,FontWeights.SemiBold);
             if(day==DateTime.Today){number.Foreground=PlannerTheme.Accent;number.TextDecorations=TextDecorations.Underline;}
-            var badge=Text(isRest?"休":"班",11,foreground:isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground);badge.TextAlignment=TextAlignment.Center;badge.Margin=new Thickness(0);Border badgeBox=new(){Child=badge,Width=22,Height=22,Background=isRest?PlannerTheme.RestBackground:PlannerTheme.WorkBackground,CornerRadius=new CornerRadius(4),Margin=new Thickness(1)};
-            if(week||overrideExists)heading.Children.Add(badgeBox);heading.Children.Add(number);dates.Children.Add(heading);
+            bool explicitRest=overrideExists;
+            Brush badgeBackground=explicitRest?(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):(isRest?PlannerTheme.RestBackground:PlannerTheme.WorkBackground);
+            Brush badgeForeground=explicitRest?Brushes.White:(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground);
+            var badge=Text(isRest?"休":"班",11,foreground:badgeForeground);badge.TextAlignment=TextAlignment.Center;badge.Margin=new Thickness(0);Border badgeBox=new(){Child=badge,Width=22,Height=22,Background=badgeBackground,CornerRadius=new CornerRadius(4),Margin=new Thickness(1)};
+            heading.Children.Add(badgeBox);heading.Children.Add(number);dates.Children.Add(heading);
             var lunar=Text(CalendarLabels.LunarDay(day),12);dates.Children.Add(lunar);
             dates.Children.Add(HolidayText(day));
             if(!week&&items.Count>0){StackPanel dots=Row();dots.Margin=new Thickness(2,1,2,0);for(int d=0;d<Math.Min(3,items.Count);d++)dots.Children.Add(new Ellipse{Width=6,Height=6,Fill=PlannerTheme.Accent,Margin=new Thickness(0,0,3,0)});dates.Children.Add(dots);}
             foreach(var label in dates.Children.OfType<TextBlock>())label.Margin=new Thickness(2,0,2,0);
             Button dateButton=Action("",()=>OnCalendarDateClick(day));dateButton.Name="Day"+day.ToString("yyyyMMdd");dateButton.Content=dates;dateButton.Padding=new Thickness(0);dateButton.Margin=new Thickness(0);dateButton.BorderThickness=new Thickness(0);dateButton.Background=Brushes.Transparent;dateButton.HorizontalContentAlignment=HorizontalAlignment.Stretch;dateButton.VerticalAlignment=VerticalAlignment.Stretch;dateButton.VerticalContentAlignment=VerticalAlignment.Top;
-            dateButton.ToolTip=overrideExists?$"单独设置：{(isRest?"休息日":"工作日")}":"未单独设置，跟随每周规则";
+            dateButton.ToolTip=overrideExists?$"单独设置：{(isRest?"休息日":"工作日")}":$"跟随每周规则：{(isRest?"休息日":"工作日")}";
             dateButton.IsEnabled=day>=ReminderSchedule.MinimumDate&&day<=ReminderSchedule.MaximumDate;
             if(_batch&&!week)AttachCalendarDragHandlers(dateButton,grid,day);
             dateButton.MouseDoubleClick+=(_,_)=>{if(!_batch){_date=day;_occurrenceDate=null;Edit(null,true);}};
@@ -165,6 +173,7 @@ internal sealed partial class PlannerWindow : Window
         StackPanel dotLegend=Row();dotLegend.Children.Add(new Ellipse{Width=8,Height=8,Fill=PlannerTheme.Accent,Margin=new Thickness(3,0,6,0),VerticalAlignment=VerticalAlignment.Center});dotLegend.Children.Add(Text("有事项",11));foot.Children.Add(dotLegend);
         foot.Children.Add(LegendBadge("休","休息日",PlannerTheme.RestBackground,PlannerTheme.RestForeground));
         foot.Children.Add(LegendBadge("班","工作日",PlannerTheme.WorkBackground,PlannerTheme.WorkForeground));
+        if(!week)foot.Children.Add(Text("浅色=每周规则 · 深色=单独设置",11,foreground:PlannerTheme.Muted));
         _footer.Children.Add(foot);
     }
     private static TextBlock HolidayText(DateTime day)
@@ -196,10 +205,11 @@ internal sealed partial class PlannerWindow : Window
     }
     private UIElement DayDetails()
     {
-        DockPanel panel=new(){Margin=new Thickness(14,0,2,0)};DockPanel title=new();var close=IconButton("close",()=>{_details=false;Render();},"收起当天事项");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);title.Children.Add(Text(_date.ToString("M月d日 dddd"),18,FontWeights.SemiBold));DockPanel.SetDock(title,Dock.Top);panel.Children.Add(title);
-        var lunar=Text(CalendarLabels.FullLunar(_date)+" "+CalendarLabels.Get(_date),12);DockPanel.SetDock(lunar,Dock.Top);panel.Children.Add(lunar);
+        DateTime detailDay=_date;string detailKey=detailDay.ToString("yyyy-MM-dd");bool overrideExists=_service.Book.RestOverrides.ContainsKey(detailKey);bool isRest=_service.Book.IsRest(detailDay);
+        DockPanel panel=new(){Margin=new Thickness(14,0,2,0)};DockPanel title=new();var close=IconButton("close",()=>{_details=false;Render();},"收起当天事项");DockPanel.SetDock(close,Dock.Right);title.Children.Add(close);var effectiveStatus=Text((isRest?"休息日":"工作日")+(overrideExists?" · 单独设置":" · 跟随每周规则"),12,FontWeights.SemiBold,overrideExists?(isRest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground):PlannerTheme.Muted);effectiveStatus.Name="EffectiveRestStatus";effectiveStatus.Margin=new Thickness(4,0,8,0);DockPanel.SetDock(effectiveStatus,Dock.Right);title.Children.Add(effectiveStatus);title.Children.Add(Text(detailDay.ToString("M月d日 dddd"),18,FontWeights.SemiBold));DockPanel.SetDock(title,Dock.Top);panel.Children.Add(title);
+        var lunar=Text(CalendarLabels.FullLunar(detailDay)+" "+CalendarLabels.Get(detailDay),12);DockPanel.SetDock(lunar,Dock.Top);panel.Children.Add(lunar);
         var add=Chip("＋ 添加当天事项",()=>{_occurrenceDate=null;Edit(null,true);});add.Name="AddSelectedDay";add.Height=38;add.HorizontalAlignment=HorizontalAlignment.Stretch;DockPanel.SetDock(add,Dock.Bottom);panel.Children.Add(add);
-        StackPanel list=new();foreach(var item in DayItems(_date))list.Children.Add(EventCard(item,_date,false));if(list.Children.Count==0)list.Children.Add(Text("当天暂无事项",14));panel.Children.Add(new ScrollViewer{Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return panel;
+        StackPanel list=new();foreach(var item in DayItems(detailDay))list.Children.Add(EventCard(item,detailDay,false));if(list.Children.Count==0)list.Children.Add(Text("当天暂无事项",14));panel.Children.Add(new ScrollViewer{Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return panel;
     }
     private void ItemMenu(ReminderItem item,DateTime day)
     {
@@ -230,7 +240,7 @@ internal sealed partial class PlannerWindow : Window
             btn.Margin=new Thickness(0,0,6,6);days.Children.Add(btn);
         }
         Grid.SetRow(days,2);inner.Children.Add(days);
-        var priorityHint=Text("指定日期会覆盖每周设置；清除指定设置后不再单独指定。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
+        var priorityHint=Text("月历浅色表示跟随每周规则，深色表示单独设置；指定日期优先。",11,foreground:PlannerTheme.Muted);priorityHint.Margin=new Thickness(3,0,3,6);Grid.SetRow(priorityHint,3);inner.Children.Add(priorityHint);
         DockPanel head=new(){LastChildFill=false};
         head.Children.Add(Text("指定日期",13,FontWeights.SemiBold));
         head.Children.Add(Text($"已选 {_selected.Count} 天",12));
@@ -256,7 +266,7 @@ internal sealed partial class PlannerWindow : Window
         Button[] batchActions=[
             Primary(AsyncAction("设为休息日",()=>SetRest(true))),
             AsyncAction("设为工作日",()=>SetRest(false)),
-            AsyncAction("清除指定设置",()=>SetRest(null))
+            AsyncAction("恢复每周安排",()=>SetRest(null))
         ];
         batchActions[0].Name="SetSelectedRestDays";
         batchActions[1].Name="SetSelectedWorkdays";
@@ -266,7 +276,7 @@ internal sealed partial class PlannerWindow : Window
             b.IsEnabled=_selected.Count>0;
             b.HorizontalAlignment=HorizontalAlignment.Stretch;
             b.Margin=new Thickness(0,4,0,4);
-            if(b==batchActions[2])b.ToolTip="清除该日期的单独设置，回到未单独指定状态";
+            if(b==batchActions[2])b.ToolTip="取消所选日期的单独设置，恢复跟随每周规则。";
         }
         StackPanel actions=new();foreach(var b in batchActions)actions.Children.Add(b);Grid.SetRow(actions,6);inner.Children.Add(actions);
         return new Border{Child=inner,Background=Brushes.White,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(14),Margin=new Thickness(14,0,2,0)};
@@ -278,7 +288,7 @@ internal sealed partial class PlannerWindow : Window
         await Execute(b=>{foreach(var d in selected)ReminderSchedule.SetRestOverride(b,d,rest,DateTime.Now);});
         _selected.Clear();
         Render();
-        if(rest==null)_status.Text="已清除指定设置，当前日期恢复为未单独设置。";
+        if(rest==null)_status.Text="已恢复每周安排，所选日期将跟随每周规则。";
     }
 
     private void OnCalendarDateClick(DateTime day)
@@ -308,34 +318,41 @@ internal sealed partial class PlannerWindow : Window
             if(!_batch||e.ChangedButton!=System.Windows.Input.MouseButton.Left||!dateButton.IsEnabled)return;
             _calendarDragActive=true;
             _calendarDragMoved=false;
-            _calendarDragTargetSelected=!_selected.Contains(day);
             _calendarDragStartDay=day;
+            _calendarDragLastDay=null;
             _calendarDragLastPoint=System.Windows.Input.Mouse.GetPosition(grid);
+            _calendarDragLastDirection=null;
             System.Windows.Input.Mouse.Capture(dateButton,System.Windows.Input.CaptureMode.Element);
         };
-        dateButton.PreviewMouseMove+=(_,e)=>
-        {
-            if(!_calendarDragActive||!_batch||e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
-            Point point=System.Windows.Input.Mouse.GetPosition(grid);
-            if((point-_calendarDragLastPoint).Length<1)return;
-            AddCalendarDragPath(grid,_calendarDragLastPoint,point);
-            _calendarDragLastPoint=point;
-        };
-        dateButton.PreviewMouseLeftButtonUp+=(_,e)=>
-        {
-            if(!_calendarDragActive||e.ChangedButton!=System.Windows.Input.MouseButton.Left)return;
-            bool moved=_calendarDragMoved;
-            _calendarDragActive=false;
-            _calendarDragMoved=false;
-            _calendarDragTargetSelected=false;
-            _calendarDragStartDay=null;
-            System.Windows.Input.Mouse.Capture(null);
-            if(!moved)return;
-            _suppressCalendarClick=true;
-            e.Handled=true;
-            Render();
-            Dispatcher.BeginInvoke(new Action(()=>_suppressCalendarClick=false),System.Windows.Threading.DispatcherPriority.Input);
-        };
+    }
+
+    private void ContinueCalendarDrag(Grid grid,System.Windows.Input.MouseEventArgs e)
+    {
+        if(!_calendarDragActive||!_batch||e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
+        Point point=System.Windows.Input.Mouse.GetPosition(grid);
+        if((point-_calendarDragLastPoint).Length<1)return;
+        Vector direction=point-_calendarDragLastPoint;
+        if(_calendarDragLastDirection is Vector previousDirection&&previousDirection.X*direction.X+previousDirection.Y*direction.Y<0)_calendarDragLastDay=null;
+        _calendarDragLastDirection=direction;
+        AddCalendarDragPath(grid,_calendarDragLastPoint,point);
+        _calendarDragLastPoint=point;
+    }
+
+    private void EndCalendarDrag(System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if(!_calendarDragActive||e.ChangedButton!=System.Windows.Input.MouseButton.Left)return;
+        bool moved=_calendarDragMoved;
+        _calendarDragActive=false;
+        _calendarDragMoved=false;
+        _calendarDragStartDay=null;
+        _calendarDragLastDay=null;
+        _calendarDragLastDirection=null;
+        if(!moved)return;
+        System.Windows.Input.Mouse.Capture(null);
+        _suppressCalendarClick=true;
+        e.Handled=true;
+        Render();
+        Dispatcher.BeginInvoke(new Action(()=>_suppressCalendarClick=false),System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void AddCalendarDragPath(Grid grid,Point from,Point to)
@@ -349,7 +366,9 @@ internal sealed partial class PlannerWindow : Window
             if(TryGetCalendarDate(grid,point,out DateTime day))
             {
                 if(_calendarDragStartDay is DateTime start&&day!=start)_calendarDragMoved=true;
-                if(_calendarDragTargetSelected)_selected.Add(day);else _selected.Remove(day);
+                if(_calendarDragLastDay==day)continue;
+                _calendarDragLastDay=day;
+                if(!_selected.Add(day))_selected.Remove(day);
             }
         }
         UpdateCalendarDateSelectionVisuals();
