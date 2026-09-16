@@ -63,7 +63,8 @@ public partial class MainWindow
                     double contactGap = edge.Contains("right") ? area.Right - contact.Right :
                         edge.Contains("left") ? contact.Left - area.Left :
                         edge == "top" ? contact.Top - area.Top : area.Bottom - contact.Bottom;
-                    Check(Math.Abs(contactGap) < 1, $"{label}: pointer reaches visible edge");
+                    Check(Math.Abs(contactGap) < 1,
+                        $"{label}: pointer reaches visible edge; gap={contactGap:F2}");
                     if (appearance == AppearanceOptionIds.FullBodyClassicCatEars && scale == 200 && edge == "right")
                         CaptureQuickActionsQa(this, Path.Combine(directory, "right-before.png"));
                     EndWindowDrag();

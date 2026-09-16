@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private const int CrystalDuckSitLastFrame = 216;
     private const double GenshinCameoSafeMargin = 24;
     private const double MediaControlsReservedHeight = 86;
+    private const double FeedbackBubbleAnchorOffset = 92;
     private const double TrackInfoReservedHeight = 86;
     private static readonly TimeSpan AccessoryMouseLeaveDelay = TimeSpan.FromSeconds(5);
     private const double EdgeDockActivationFraction = 0.25;
@@ -234,6 +235,8 @@ public partial class MainWindow : Window
     private Guid? _genshinCameoReactionToken;
     private Guid? _genshinCameoTopmostToken;
     private Point? _genshinCameoRestorePosition;
+    private bool _genshinHiddenPresentationActive;
+    private string? _genshinHiddenPresentationAnimationId;
     private bool _pendingGenshinLaunch;
     private bool _systemSessionUnavailable;
     private bool _messageNotificationSubscribed;
@@ -279,6 +282,13 @@ public partial class MainWindow : Window
     private bool _crystalLongIdleHolding;
     private bool _crystalLongIdleWaking;
     private bool _crystalLongIdleWakeRequested;
+
+    private bool IsEdgeDockHidden =>
+        _edgeDockSide != EdgeDockSide.None &&
+        !_edgeDockRevealed &&
+        EdgeDockHandle.Visibility == Visibility.Visible;
+
+    private bool IsGenshinPresentationLocked => _genshinHiddenPresentationActive;
 
     public MainWindow(
         AppSettings settings,
@@ -775,6 +785,7 @@ public partial class MainWindow : Window
         DateTimeOffset now = DateTimeOffset.Now;
         if (_pendingTimeGreetingDecision is not StartupTimeSceneDecision decision ||
             _timeGreetingPresentationInFlight ||
+            IsEdgeDockHidden ||
             _classicSpinDanceActive ||
             IsMusicPlaybackActive ||
             _pendingTimeGreetingEligibleAt is not DateTimeOffset eligibleAt ||
@@ -804,7 +815,7 @@ public partial class MainWindow : Window
         StartupTimeSceneDecision decision,
         string eventName)
     {
-        if (IsMusicPlaybackActive || _classicSpinDanceActive)
+        if (IsEdgeDockHidden || IsMusicPlaybackActive || _classicSpinDanceActive)
         {
             return false;
         }
@@ -1126,7 +1137,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        bool windowAvailable = _edgeDockSide == EdgeDockSide.None &&
+        bool windowAvailable = (_edgeDockSide == EdgeDockSide.None || IsEdgeDockHidden) &&
             !_isWindowDragging &&
             _stateMachine.CurrentContinuousState is not
                 (PetContinuousState.Sleeping or PetContinuousState.HiddenForSafety);
@@ -1154,6 +1165,15 @@ public partial class MainWindow : Window
     {
         if (_isClosing || _genshinLaunchReactionToken is not null)
         {
+            return;
+        }
+
+        if (IsEdgeDockHidden)
+        {
+            BeginHiddenGenshinPresentation(
+                GenshinLaunchAnimation,
+                isLaunchReaction: true,
+                retryOnFailure: retryOnFailure);
             return;
         }
 
@@ -1229,7 +1249,21 @@ public partial class MainWindow : Window
 
     private async Task BeginGenshinCameoAsync()
     {
-        if (_isClosing || _genshinCameoReactionToken is not null || _edgeDockSide != EdgeDockSide.None)
+        if (_isClosing || _genshinCameoReactionToken is not null)
+        {
+            return;
+        }
+
+        if (IsEdgeDockHidden)
+        {
+            BeginHiddenGenshinPresentation(
+                GenshinCameoAnimation,
+                isLaunchReaction: false,
+                retryOnFailure: false);
+            return;
+        }
+
+        if (_edgeDockSide != EdgeDockSide.None)
         {
             return;
         }
@@ -1276,6 +1310,120 @@ public partial class MainWindow : Window
         _logger.Info("genshin.cameo_started", "Background cameo started at a safe random work-area position.");
     }
 
+    private void BeginHiddenGenshinPresentation(
+        string animationId,
+        bool isLaunchReaction,
+        bool retryOnFailure)
+    {
+        if (_isClosing || !IsEdgeDockHidden || _genshinHiddenPresentationActive)
+        {
+            return;
+        }
+
+        DateTimeOffset startedAt = DateTimeOffset.Now;
+        ReactionStartOutcome outcome = _stateMachine.TryStartReaction(
+            new ReactionRequest(
+                animationId,
+                ReactionPriority.Genshin,
+                startedAt.AddSeconds(30),
+                BlocksDisplayModeToggle: true,
+                InterruptibleByDrag: false),
+            startedAt);
+        if (outcome.Token is not Guid token)
+        {
+            if (isLaunchReaction && retryOnFailure && _protectedGameMonitor?.IsRunning == true)
+            {
+                _pendingGenshinLaunch = true;
+            }
+
+            _logger.Info("genshin.hidden_presentation_skipped", outcome.Result.ToString());
+            return;
+        }
+
+        if (outcome.Result == ReactionStartResult.Replaced)
+        {
+            CleanupReplacedGenshinPresentation();
+            CleanupReplacedMessageNotificationPresentation();
+        }
+
+        Guid topmostToken = AcquireTransientTopmost();
+        if (isLaunchReaction)
+        {
+            _genshinLaunchReactionToken = token;
+            _genshinLaunchTopmostToken = topmostToken;
+        }
+        else
+        {
+            _genshinCameoReactionToken = token;
+            _genshinCameoTopmostToken = topmostToken;
+        }
+
+        _genshinHiddenPresentationActive = true;
+        _genshinHiddenPresentationAnimationId = animationId;
+        HideAccessorySurfacesForGenshinPresentation();
+        RevealEdgeDock(() => BeginHiddenGenshinAnimation(token, animationId));
+        _logger.Info(
+            "genshin.hidden_presentation_started",
+            $"Animation={animationId}; Side={_edgeDockSide}; Phase=Reveal.");
+    }
+
+    private void BeginHiddenGenshinAnimation(Guid token, string animationId)
+    {
+        if (!_genshinHiddenPresentationActive ||
+            _stateMachine.ActiveReactionToken != token ||
+            _edgeDockSide == EdgeDockSide.None ||
+            !_edgeDockRevealed)
+        {
+            return;
+        }
+
+        PlayAnimation(
+            animationId,
+            () => BeginHiddenGenshinHide(token));
+        PositionEdgeDock(hidden: false);
+        _logger.Info(
+            "genshin.hidden_presentation_revealed",
+            $"Animation={animationId}; Side={_edgeDockSide}; Phase=Cameo.");
+    }
+
+    private void BeginHiddenGenshinHide(Guid token)
+    {
+        if (!_genshinHiddenPresentationActive ||
+            _stateMachine.ActiveReactionToken != token ||
+            _edgeDockSide == EdgeDockSide.None)
+        {
+            return;
+        }
+
+        HideEdgeDock(() => CompleteHiddenGenshinPresentation(token));
+        _logger.Info("genshin.hidden_presentation_hiding", "Phase=Hide.");
+    }
+
+    private void CompleteHiddenGenshinPresentation(Guid token)
+    {
+        if (!_genshinHiddenPresentationActive ||
+            _stateMachine.ActiveReactionToken != token)
+        {
+            return;
+        }
+
+        _genshinHiddenPresentationActive = false;
+        _genshinHiddenPresentationAnimationId = null;
+        CompleteReaction(token, suppressBodyAfter: false);
+        _logger.Info("genshin.hidden_presentation_completed", "Phase=Hidden.");
+    }
+
+    private void HideAccessorySurfacesForGenshinPresentation()
+    {
+        _mediaControlsHideTimer.Stop();
+        _trackInfoHideTimer.Stop();
+        _feedbackBubbleTimer.Stop();
+        CloudMusicVolumePopup.IsOpen = false;
+        HideMusicIslands();
+        HideFeedbackBubble(restoreTrackInfo: false);
+        HideMessageNotification();
+    }
+
     private async Task BeginGenshinLaunchPreviewAsync()
     {
         await Task.Delay(700);
@@ -1296,8 +1444,12 @@ public partial class MainWindow : Window
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Left || _isClosing)
+        if (e.ChangedButton != MouseButton.Left || _isClosing || IsGenshinPresentationLocked)
         {
+            if (IsGenshinPresentationLocked)
+            {
+                e.Handled = true;
+            }
             return;
         }
 
@@ -1535,7 +1687,7 @@ public partial class MainWindow : Window
 
     private void BeginWindowDrag()
     {
-        if (_settings.Window.LockPosition)
+        if (_settings.Window.LockPosition || IsGenshinPresentationLocked)
         {
             _pointerGesture.Cancel();
             _singleClickTimer.Stop();
@@ -1730,7 +1882,7 @@ public partial class MainWindow : Window
 
     private void HandleSingleClick(PointerPoint windowPoint)
     {
-        if (_edgeDockSide != EdgeDockSide.None)
+        if (_edgeDockSide != EdgeDockSide.None || IsGenshinPresentationLocked)
         {
             return;
         }
@@ -1836,6 +1988,8 @@ public partial class MainWindow : Window
     {
         if (_timeGreetingPresentationInFlight)
         {
+            _pendingTimeGreetingDecision = null;
+            _pendingTimeGreetingEligibleAt = null;
             CancelTimeGreetingPresentation(false, "Interrupted by drag.");
         }
 
@@ -1871,6 +2025,14 @@ public partial class MainWindow : Window
         bool cancelOnDrag = false,
         bool interruptibleByDrag = true)
     {
+        if (IsEdgeDockHidden || IsGenshinPresentationLocked)
+        {
+            _logger.Info(
+                "animation.reaction_skipped_while_hidden",
+                $"Animation={animationId}; Priority={priority}.");
+            return null;
+        }
+
         double playbackRate = BodyInteractionResolver.ResolvePlaybackRate(animationId);
         DateTimeOffset now = DateTimeOffset.Now;
         TimeSpan reactionLifetime = minimumDisplayDuration is TimeSpan minimumDuration
@@ -2844,6 +3006,11 @@ public partial class MainWindow : Window
 
     private void PlayResolvedContinuousAnimation(bool preserveVisualTransition = false)
     {
+        if (IsEdgeDockHidden || IsGenshinPresentationLocked)
+        {
+            return;
+        }
+
         if (_stateMachine.CurrentContinuousState != PetContinuousState.Sleeping &&
             IsCrystalLongIdleActive)
         {
@@ -2871,6 +3038,12 @@ public partial class MainWindow : Window
         Action? afterTransition = null,
         DesktopRectangle? dragReleaseBounds = null)
     {
+        if (IsEdgeDockHidden || IsGenshinPresentationLocked)
+        {
+            afterTransition?.Invoke();
+            return;
+        }
+
         if (_animationPlayer is null || _animationCatalog is null || _isClosing)
         {
             PlayResolvedContinuousAnimation();
@@ -2979,9 +3152,10 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void RevealEdgeDock()
+    private void RevealEdgeDock(Action? completed = null)
     {
-        if (_edgeDockSide == EdgeDockSide.None || _edgeDockRevealed)
+        if (_edgeDockSide == EdgeDockSide.None || _edgeDockRevealed ||
+            (IsGenshinPresentationLocked && completed is null))
         {
             return;
         }
@@ -2990,14 +3164,25 @@ public partial class MainWindow : Window
         ++_edgeDockAnimationGeneration;
         EdgeDockHandle.Visibility = Visibility.Collapsed;
         PetImage.IsHitTestVisible = true;
-        PlayEdgeDockToward(revealed: true);
+        PlayEdgeDockToward(
+            revealed: true,
+            completed ?? (() =>
+            {
+                if (!_isClosing && _edgeDockSide != EdgeDockSide.None &&
+                    _edgeDockRevealed && !IsGenshinPresentationLocked)
+                {
+                    _ = TransitionToResolvedContinuousAnimationAsync(
+                        "window.edge_dock_reveal_completed");
+                }
+            }));
         PositionEdgeDock(hidden: false);
         _logger.Info("window.edge_dock_revealed", _edgeDockSide.ToString());
     }
 
-    private void HideEdgeDock()
+    private void HideEdgeDock(Action? completed = null)
     {
-        if (_edgeDockSide == EdgeDockSide.None || !_edgeDockRevealed)
+        if (_edgeDockSide == EdgeDockSide.None || !_edgeDockRevealed ||
+            (IsGenshinPresentationLocked && completed is null))
         {
             return;
         }
@@ -3012,6 +3197,7 @@ public partial class MainWindow : Window
                 if (generation == _edgeDockAnimationGeneration && !_edgeDockRevealed)
                 {
                     PositionEdgeDock(hidden: true);
+                    completed?.Invoke();
                 }
             });
         PositionEdgeDock(hidden: false);
@@ -3163,6 +3349,9 @@ public partial class MainWindow : Window
 
     private void CleanupReplacedGenshinPresentation()
     {
+        bool hiddenPresentationWasActive = _genshinHiddenPresentationActive;
+        _genshinHiddenPresentationActive = false;
+        _genshinHiddenPresentationAnimationId = null;
         Point? restorePosition = null;
         if (_genshinLaunchReactionToken is not null)
         {
@@ -3182,6 +3371,18 @@ public partial class MainWindow : Window
         if (restorePosition is Point point)
         {
             RestoreWindowPosition(point);
+        }
+
+        if (hiddenPresentationWasActive && _edgeDockSide != EdgeDockSide.None)
+        {
+            if (_edgeDockRevealed)
+            {
+                HideEdgeDock();
+            }
+            else
+            {
+                PositionEdgeDock(hidden: true);
+            }
         }
     }
 
@@ -3259,6 +3460,7 @@ public partial class MainWindow : Window
 
     private void CancelGenshinPresentations(bool restoreContinuousAnimation)
     {
+        bool hiddenPresentationWasActive = _genshinHiddenPresentationActive;
         bool canceledActiveReaction =
             _stateMachine.ActiveReactionToken == _genshinLaunchReactionToken ||
             _stateMachine.ActiveReactionToken == _genshinCameoReactionToken;
@@ -3275,9 +3477,23 @@ public partial class MainWindow : Window
         _genshinCameoReactionToken = null;
         _genshinCameoTopmostToken = null;
         _genshinCameoRestorePosition = null;
+        _genshinHiddenPresentationActive = false;
+        _genshinHiddenPresentationAnimationId = null;
         if (restorePosition is Point point)
         {
             RestoreWindowPosition(point);
+        }
+
+        if (hiddenPresentationWasActive && _edgeDockSide != EdgeDockSide.None)
+        {
+            if (_edgeDockRevealed)
+            {
+                HideEdgeDock();
+            }
+            else
+            {
+                PositionEdgeDock(hidden: true);
+            }
         }
 
         if (canceledActiveReaction && restoreContinuousAnimation && !_isClosing)
@@ -3337,13 +3553,19 @@ public partial class MainWindow : Window
         }
 
         UpdateLayout();
-        double petBottomBefore = Top + GetStableStageBoundsInWindow().Bottom;
+        DesktopRectangle? alphaBoundsBefore = _isWindowDragging
+            ? GetPetImageAlphaBoundsInWindow()
+            : null;
+        DesktopRectangle petBoundsBefore = GetStableStageBoundsInWindow();
+        double petTopBefore = Top + petBoundsBefore.Top;
+        double petBottomBefore = Top + petBoundsBefore.Bottom;
+        double edgeReservation = GetEdgeAccessoryReservation();
         _accessoryLayout = layout;
-        Height = GetAnimationStageSizing().Height;
+        Height = GetAccessoryLayoutStageHeight(layout);
         switch (layout)
         {
             case AccessoryLayout.AbovePet:
-                PetVisual.Margin = new Thickness(8, 118 + _feedbackSlotHeight, 8, 8);
+                PetVisual.Margin = new Thickness(8, edgeReservation, 8, 8);
                 MusicTransitionFlash.Margin = PetVisual.Margin;
                 MediaControls.VerticalAlignment = VerticalAlignment.Top;
                 MediaControls.Margin = new Thickness(0, 7, 0, 0);
@@ -3351,7 +3573,7 @@ public partial class MainWindow : Window
                 FeedbackBubble.Margin = new Thickness(5, 92, 5, 0);
                 break;
             case AccessoryLayout.BelowPet:
-                PetVisual.Margin = new Thickness(8, 8, 8, 118 + _feedbackSlotHeight);
+                PetVisual.Margin = new Thickness(8, 8, 8, edgeReservation);
                 MusicTransitionFlash.Margin = PetVisual.Margin;
                 MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
                 MediaControls.Margin = new Thickness(0, 0, 0, 7);
@@ -3373,12 +3595,31 @@ public partial class MainWindow : Window
         UpdateLayout();
         if (preservePetPosition)
         {
-            double petBottomAfter = Top + GetStableStageBoundsInWindow().Bottom;
-            double topAdjustment = petBottomBefore - petBottomAfter;
-            Top += topAdjustment;
-            if (_isWindowDragging)
+            DesktopRectangle petBoundsAfter = GetStableStageBoundsInWindow();
+            if (alphaBoundsBefore is DesktopRectangle alphaBefore)
             {
-                _dragStartTop += topAdjustment;
+                DesktopRectangle alphaAfter = GetPetImageAlphaBoundsInWindow();
+                double dragTopAdjustment = alphaBefore.Top - alphaAfter.Top;
+                Top += dragTopAdjustment;
+                _dragStartTop += dragTopAdjustment;
+            }
+            else
+            {
+                // Edge layouts keep the artwork attached to the nearest
+                // screen edge: the top layout anchors the bottom of the pet,
+                // while the bottom layout anchors its top. Split layout keeps
+                // the existing bottom anchor used during ordinary resizing.
+                bool anchorTop = layout == AccessoryLayout.BelowPet;
+                double anchoredBefore = anchorTop ? petTopBefore : petBottomBefore;
+                double anchoredAfter = Top + (anchorTop
+                    ? petBoundsAfter.Top
+                    : petBoundsAfter.Bottom);
+                double topAdjustment = anchoredBefore - anchoredAfter;
+                Top += topAdjustment;
+                if (_isWindowDragging)
+                {
+                    _dragStartTop += topAdjustment;
+                }
             }
         }
 
@@ -3885,6 +4126,11 @@ public partial class MainWindow : Window
 
     private void OnRootMouseEnter(object sender, MouseEventArgs e)
     {
+        if (IsGenshinPresentationLocked)
+        {
+            return;
+        }
+
         if (!_isClosing)
         {
             UpdatePetCursor(ToPointerPoint(e.GetPosition(this)));
@@ -3930,7 +4176,7 @@ public partial class MainWindow : Window
 
     private void OnEdgeDockHandleMouseEnter(object sender, MouseEventArgs e)
     {
-        if (_edgeDockSide != EdgeDockSide.None)
+        if (_edgeDockSide != EdgeDockSide.None && !IsGenshinPresentationLocked)
         {
             RevealEdgeDock();
             e.Handled = true;
@@ -3939,6 +4185,11 @@ public partial class MainWindow : Window
 
     private void OnRootMouseLeave(object sender, MouseEventArgs e)
     {
+        if (IsGenshinPresentationLocked)
+        {
+            return;
+        }
+
         PetImage.Cursor = null;
         if (_edgeDockSide != EdgeDockSide.None)
         {
@@ -4307,7 +4558,7 @@ public partial class MainWindow : Window
 
     private void ShowFeedbackBubble(string message)
     {
-        if (_bunChaseActive)
+        if (_bunChaseActive || IsEdgeDockHidden || IsGenshinPresentationLocked)
         {
             return;
         }
@@ -4320,7 +4571,7 @@ public partial class MainWindow : Window
 
     private void ShowPersistentFeedbackBubble(string message)
     {
-        if (_bunChaseActive)
+        if (_bunChaseActive || IsEdgeDockHidden || IsGenshinPresentationLocked)
         {
             return;
         }
@@ -4370,7 +4621,8 @@ public partial class MainWindow : Window
 
     private void BeginBunChase()
     {
-        if (_bunTargets.Count == 0 || _isClosing ||
+        if (_bunTargets.Count == 0 || _isClosing || IsEdgeDockHidden ||
+            IsGenshinPresentationLocked ||
             (!_previewBunChase && !IsBunChaseEnvironmentSafe()))
         {
             return;
@@ -5008,7 +5260,8 @@ public partial class MainWindow : Window
 
     private bool IsFileDropEnvironmentSafe()
     {
-        if (_isClosing || _systemSessionUnavailable || _edgeDockSide != EdgeDockSide.None ||
+        if (_isClosing || IsEdgeDockHidden || IsGenshinPresentationLocked ||
+            _systemSessionUnavailable || _edgeDockSide != EdgeDockSide.None ||
             _isWindowDragging || _foregroundApplicationProbe is null)
         {
             return false;
@@ -5081,7 +5334,7 @@ public partial class MainWindow : Window
 
     private void StartFileDragPresentation()
     {
-        if (_isClosing)
+        if (_isClosing || IsEdgeDockHidden || IsGenshinPresentationLocked)
         {
             return;
         }
@@ -5179,7 +5432,7 @@ public partial class MainWindow : Window
 
     private void ShowMessageNotification(MessageNotificationSummary notification)
     {
-        if (_bunChaseActive)
+        if (_bunChaseActive || IsEdgeDockHidden || IsGenshinPresentationLocked)
         {
             return;
         }

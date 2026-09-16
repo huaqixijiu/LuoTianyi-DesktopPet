@@ -126,6 +126,7 @@ public partial class MainWindow
         return !_hiddenByUser && foreground.Succeeded &&
             !foreground.IsFullscreen &&
             !_systemSessionUnavailable &&
+            !IsEdgeDockHidden && !IsGenshinPresentationLocked &&
             _edgeDockSide == EdgeDockSide.None &&
             !_isWindowDragging &&
             _stateMachine.CurrentContinuousState is not
@@ -135,7 +136,8 @@ public partial class MainWindow
 
     private Task BeginMessageNotificationAsync(MessageNotificationSummary notification)
     {
-        if (!CanPresentWeChatReminder(notification)) return Task.CompletedTask;
+        if (IsEdgeDockHidden || IsGenshinPresentationLocked ||
+            !CanPresentWeChatReminder(notification)) return Task.CompletedTask;
         _messageInbox.Add(notification.ForDisplay(
             _settings.Notifications.EnableQqDetailedReminders,
             _settings.Notifications.EnableWeChatDetailedReminders));

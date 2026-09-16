@@ -39,6 +39,7 @@ public partial class MainWindow
     private bool IsInboxDisplaySafe(ForegroundApplicationSnapshot foreground) =>
         !_isClosing && !_hiddenByUser && _settings.Notifications.EnableMessageReminders &&
         foreground.Succeeded && !foreground.IsFullscreen && !_systemSessionUnavailable &&
+        !IsEdgeDockHidden && !IsGenshinPresentationLocked &&
         _edgeDockSide == EdgeDockSide.None &&
         _stateMachine.VisualState.ContinuousState != PetContinuousState.HiddenForSafety &&
         (_stateMachine.VisualState.ContinuousState != PetContinuousState.Sleeping ||

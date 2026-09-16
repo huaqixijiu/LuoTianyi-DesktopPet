@@ -81,7 +81,10 @@ public partial class MainWindow
                         await Task.Delay(20);
                         Check(Near(Left, x) && Near(Top, y) && Near(Width, width) && Near(Height, height) &&
                             Near(island, MediaControls.Width) && Near(controls, MediaControlsLayoutScale.ScaleX) && layout == _accessoryLayout,
-                            $"{scale}% {corner} round {repeat} {id}: stable window, islands and attachment side");
+                            $"{scale}% {corner} round {repeat} {id}: stable window, islands and attachment side " +
+                            $"(expected={x:0.0},{y:0.0},{width:0.0},{height:0.0}; " +
+                            $"actual={Left:0.0},{Top:0.0},{Width:0.0},{Height:0.0}; " +
+                            $"layout={layout}/{_accessoryLayout})");
                         var frame = GetPetImageBoundsInWindow();
                         Check(Left + frame.Left >= work.Left - .1 && Left + frame.Right <= work.Right + .1 &&
                             Top + frame.Top >= work.Top - .1 && Top + frame.Bottom <= work.Bottom + .1,

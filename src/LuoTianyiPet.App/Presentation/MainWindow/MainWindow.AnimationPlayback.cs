@@ -127,19 +127,30 @@ public partial class MainWindow
     {
         AnimationStageSizing stage = GetAnimationStageSizing();
         double width = stage.Width;
-        double height = stage.Height;
+        double height = GetAccessoryLayoutStageHeight(_accessoryLayout);
         ApplyAccessorySizing(stage.Accessories);
         if (Math.Abs(Width - width) < 0.01 && Math.Abs(Height - height) < 0.01) return;
         DesktopRectangle workArea = GetCurrentWorkArea();
+        DesktopRectangle stableBefore = GetStableStageBoundsInWindow();
+        double petTopBefore = Top + stableBefore.Top;
+        double petBottomBefore = Top + stableBefore.Bottom;
         double oldWidth = ActualWidth > 0 ? ActualWidth : Width;
-        double oldHeight = ActualHeight > 0 ? ActualHeight : Height;
         double center = Left + oldWidth / 2;
-        double bottom = Top + oldHeight;
         Width = width;
         Height = height;
         Left = Clamp(center - width / 2, workArea.Left - 8, workArea.Right - width + 8);
         double minimumTop = workArea.Top - PetVisual.Margin.Top;
-        Top = Clamp(bottom - height, minimumTop, workArea.Bottom - height + PetVisual.Margin.Bottom);
+        double maximumTop = workArea.Bottom - height + PetVisual.Margin.Bottom;
+        Top = Clamp(Top, minimumTop, maximumTop);
+        UpdateLayout();
+        DesktopRectangle stableAfter = GetStableStageBoundsInWindow();
+        bool anchorTop = _accessoryLayout == AccessoryLayout.BelowPet;
+        double anchoredBefore = anchorTop ? petTopBefore : petBottomBefore;
+        double anchoredAfter = Top + (anchorTop ? stableAfter.Top : stableAfter.Bottom);
+        Top = Clamp(
+            Top + anchoredBefore - anchoredAfter,
+            minimumTop,
+            maximumTop);
         UpdateFeedbackLayout();
     }
 

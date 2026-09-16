@@ -13,11 +13,13 @@ public partial class MainWindow
 
     private bool CanShowMusicIslands => _settings.Media.ShowMusicIslands &&
         !_isClosing && !_hiddenByUser && !_bunChaseActive &&
+        !IsGenshinPresentationLocked &&
         _edgeDockSide == EdgeDockSide.None && _petQuickPanel?.IsVisible != true;
 
     private void OnPetMouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_isClosing || _isWindowDragging || _fileDropInProgress || _bunChaseActive)
+        if (_isClosing || IsGenshinPresentationLocked || _isWindowDragging ||
+            _fileDropInProgress || _bunChaseActive)
         {
             return;
         }
@@ -113,6 +115,12 @@ public partial class MainWindow
     {
         if (_isClosing) return;
         _petQuickPanel?.Hide();
+        if (IsGenshinPresentationLocked ||
+            _genshinLaunchReactionToken is not null ||
+            _genshinCameoReactionToken is not null)
+        {
+            CancelGenshinPresentations(restoreContinuousAnimation: false);
+        }
         _hiddenByUser = false;
         if (_edgeDockSide != EdgeDockSide.None)
         {
