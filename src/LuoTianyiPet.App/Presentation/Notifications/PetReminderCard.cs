@@ -35,7 +35,7 @@ internal sealed class PetReminderCard : Window
         Header.Click+=(_,_)=>ToggleRequested?.Invoke();
         DockPanel content=new();DockPanel.SetDock(Header,Dock.Top);content.Children.Add(Header);content.Children.Add(_viewport);
         content.SizeChanged+=(_,_)=>content.Clip=new RectangleGeometry(new Rect(0,0,content.ActualWidth,content.ActualHeight),15,15);
-        Surface=new(){CornerRadius=new CornerRadius(16),Background=new SolidColorBrush(Color.FromRgb(248,252,255)),BorderBrush=Brushes.White,BorderThickness=new Thickness(1),Child=content,ClipToBounds=true,
+        Surface=new(){CornerRadius=new CornerRadius(16),Background=Brushes.White,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Child=content,ClipToBounds=true,
             Effect=new DropShadowEffect{BlurRadius=12,ShadowDepth=3,Opacity=.16,Color=Color.FromRgb(41,90,135)}};
         Content=new Border{Padding=new Thickness(8),Child=Surface};
         SizeChanged+=(_,_)=>GeometryChanged?.Invoke();

@@ -13,6 +13,17 @@ public partial class MainWindow
     private MessageInboxWindow? _inboxWindow;
     private MessageRailSide? _inboxSide;
     private bool _inboxSafe;
+
+    // The sleep hold frame has a large transparent canvas, so its manifest-wide
+    // alpha bounds cannot be used as the notification rail anchor. These are
+    // the audited visible bounds of crystal-long-idle-sleep frame 220.
+    private static readonly Int32Rect CrystalSleepHoldAlphaBounds =
+        new(60, 196, 454, 261);
+
+    private bool IsHeldCrystalSleep =>
+        _crystalLongIdleHolding &&
+        _crystalLongIdleVariant == CrystalLongIdleVariant.Sleep &&
+        _animationPlayer?.CurrentAnimationId == CrystalLongIdleSleepAnimation;
     private void RefreshMessageInbox()
     {
         if (_isClosing) return;
@@ -28,8 +39,10 @@ public partial class MainWindow
     private bool IsInboxDisplaySafe(ForegroundApplicationSnapshot foreground) =>
         !_isClosing && !_hiddenByUser && _settings.Notifications.EnableMessageReminders &&
         foreground.Succeeded && !foreground.IsFullscreen && !_systemSessionUnavailable &&
-        _edgeDockSide == EdgeDockSide.None && _stateMachine.VisualState.ContinuousState is not
-            (PetContinuousState.Sleeping or PetContinuousState.HiddenForSafety);
+        _edgeDockSide == EdgeDockSide.None &&
+        _stateMachine.VisualState.ContinuousState != PetContinuousState.HiddenForSafety &&
+        (_stateMachine.VisualState.ContinuousState != PetContinuousState.Sleeping ||
+            IsHeldCrystalSleep);
 
     private void PruneMessageInbox()
     {
@@ -51,7 +64,8 @@ public partial class MainWindow
         var local = GetPetImageAlphaBoundsInWindow();
         Point top = PointToScreen(new(local.Left,local.Top)), bottom = PointToScreen(new(local.Right,local.Bottom));
         var silhouette = new DesktopRectangle(top.X,top.Y,bottom.X-top.X,bottom.Y-top.Y);
-        double ratio = _settings.Appearance.FullBodyStyle == AppearanceOptionIds.FullBodyClassicCatEars ? .23 :
+        double ratio = IsHeldCrystalSleep ? .06 :
+            _settings.Appearance.FullBodyStyle == AppearanceOptionIds.FullBodyClassicCatEars ? .23 :
             _settings.Appearance.FullBodyStyle == AppearanceOptionIds.FullBodyCrystalDress ? .25 : .05;
         double earY = top.Y + silhouette.Height * ratio;
         double scale = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice.M11 ?? 1;

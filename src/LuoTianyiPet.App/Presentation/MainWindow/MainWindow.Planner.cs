@@ -18,6 +18,8 @@ public partial class MainWindow
     private readonly DispatcherTimer _reminderDisplayTimer = new() { Interval = TimeSpan.FromSeconds(10) };
     private readonly HashSet<string> _shownReminders = [];
     private bool _quickReminderExpanded;
+    private bool _quickReminderSuppressed;
+    private DateTime _quickDismissFeedbackUntil;
     private ReminderBook? _presentedReminderBook;
     private string _reminderCardKey = "";
     private string? _reminderStorageNotice;
@@ -87,9 +89,16 @@ public partial class MainWindow
         var book=_reminders.Book;DateTime now=DateTime.Now;
         var pending=book.Occurrences.Where(o=>o.Phase is ReminderPhase.Early or ReminderPhase.Due).OrderBy(o=>o.At).ToList();
         var capsules=book.Occurrences.Where(o=>o.Phase==ReminderPhase.AcknowledgedEarly&&o.At>now).OrderBy(o=>o.At).ToList();
+        if(pending.Count>0||capsules.Count==0)_quickReminderSuppressed=false;
         if(!safe||pending.Count+capsules.Count==0||_isWindowDragging&&pending.Count>0)
         { _reminderCard?.Hide();StopPlannerPresentation();if(pending.Count+capsules.Count==0)_quickReminderExpanded=false;return; }
         bool quick=pending.Count==0;
+        if(quick&&_quickReminderSuppressed)
+        {
+            if(now>=_quickDismissFeedbackUntil)_reminderCard?.Hide();
+            StopPlannerPresentation();
+            return;
+        }
         if(quick)StopPlannerPresentation();else _quickReminderExpanded=false;
         _reminderDisplayTimer.Interval=TimeSpan.FromSeconds(quick&&!_quickReminderExpanded?10:1);
         string key=string.Join("|",pending.Concat(capsules).Select(o=>$"{o.RuleId}:{o.At.Ticks}:{o.Phase}:{o.Revision}"));
@@ -107,7 +116,7 @@ public partial class MainWindow
             _reminderCard.GeometryChanged+=PositionReminderCard;
         }
         var work=GetQuickActionsWorkArea();var alpha=GetPetImageAlphaBoundsInWindow();
-        double width=Math.Min(work.Width,quick?Numeric.Clamp(alpha.Width*1.35+16,316,376):440);
+        double width=Math.Min(work.Width,quick?Numeric.Clamp(alpha.Width*1.35+16,360,376):440);
         if(Math.Abs(_reminderCard.Width-width)>1){_reminderCard.Width=width;_reminderCardKey="";}
         bool fresh=false;
         var validKeys=new HashSet<string>(pending.Select(o=>$"{o.RuleId}:{o.At.Ticks}:{o.Phase}:{o.Revision}"));_shownReminders.IntersectWith(validKeys);
@@ -124,18 +133,18 @@ public partial class MainWindow
                 TextBlock time=new(){Text=early||quick?"":"时间到了",Tag=quick,FontSize=quick?14:30,FontWeight=quick?FontWeights.Normal:FontWeights.SemiBold,Foreground=quick?PlannerTheme.Muted:new SolidColorBrush(Color.FromRgb(62,137,231)),Margin=new Thickness(0,0,0,14)};
                 list.Children.Add(time);if(early||quick)_capsuleRemaining.Add((time,o.At));
                 if(!quick&&!string.IsNullOrWhiteSpace(item.Notes))list.Children.Add(new TextBlock{Text=item.Notes,TextWrapping=TextWrapping.Wrap,MaxHeight=64,Foreground=PlannerTheme.Muted,Margin=new Thickness(0,0,0,16)});
-                Grid actions=new();var labels=quick?new[]{"关闭本次提醒","查看详情"}:early?new[]{"知道了","稍后10分钟","本次不再提醒"}:new[]{"知道了","稍后10分钟"};
+                Grid actions=new();var labels=quick?new[]{"本次不再提醒","关闭提醒"}:early?new[]{"知道了","稍后10分钟","本次不再提醒"}:new[]{"知道了","稍后10分钟"};
                 for(int n=0;n<labels.Length;n++)
                 {
                     string label=labels[n];actions.ColumnDefinitions.Add(new());
-                    Button button=new(){Content=label,MinHeight=42,FontSize=13,Margin=new Thickness(n==0?0:6,0,0,0),Padding=new Thickness(5),Name=label=="知道了"?"AcknowledgeReminder":label=="稍后10分钟"?"SnoozeReminder":label=="查看详情"?"ViewReminder":"CancelOccurrence"};
-                    bool primary=quick?label=="查看详情":label=="知道了";
-                    if(primary){button.Background=new SolidColorBrush(Color.FromRgb(64,150,250));button.Foreground=Brushes.White;button.BorderThickness=new Thickness(0);}
+                    Button button=new(){Content=label,MinHeight=42,FontSize=13,Margin=new Thickness(n==0?0:6,0,0,0),Padding=new Thickness(5),Name=label=="知道了"?"AcknowledgeReminder":label=="稍后10分钟"?"SnoozeReminder":label=="关闭提醒"?"DismissQuickReminder":"CancelOccurrence"};
+                    bool primary=quick?label=="本次不再提醒":label=="知道了";
+                    if(primary){button.Background=new SolidColorBrush(Color.FromRgb(16,139,171));button.Foreground=Brushes.White;button.BorderThickness=new Thickness(0);}
                     button.Click+=async(_,_)=>
                     {
                         try
                         {
-                            if(label=="查看详情") { OpenPlanner(!item.Calendar);_plannerWindow?.OpenItem(item.Id,o.At);return; }
+                            if(label=="关闭提醒") { _quickReminderSuppressed=true;_quickReminderExpanded=false;_reminderCardKey="";ShowQuickDismissFeedback();return; }
                             button.IsEnabled=false;
                             await _reminders.ChangeAsync(b=>{if(label=="知道了")ReminderEngine.Acknowledge(b,o.RuleId,o.At,o.Phase);else if(label=="稍后10分钟")ReminderEngine.Snooze(b,o.RuleId,o.At,o.Phase,DateTime.Now);else ReminderEngine.Cancel(b,o.RuleId,o.At);});
                             _reminderCardKey="";RefreshReminderCard();
@@ -145,6 +154,7 @@ public partial class MainWindow
                     Grid.SetColumn(button,n);actions.Children.Add(button);
                 }
                 list.Children.Add(actions);
+                if(quick)list.Children.Add(new TextBlock{Text="到点仍提醒",FontSize=12,Foreground=PlannerTheme.Muted,HorizontalAlignment=System.Windows.HorizontalAlignment.Right,Margin=new Thickness(0,6,2,0)});
                 if((quick?capsules.Count:pending.Count)>1)list.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(0,14,0,14)});
             }
             var first=capsules.FirstOrDefault();var firstItem=book.Items.FirstOrDefault(i=>i.Id==first?.RuleId);
@@ -160,6 +170,24 @@ public partial class MainWindow
             if(!book.Preferences.Sound)ReminderAudio.Stop();
             if(book.Preferences.Animation)PlayPlannerAnimation();else StopPlannerAnimation();
         }
+    }
+    private void ShowQuickDismissFeedback()
+    {
+        if(_reminderCard==null)return;
+        _quickDismissFeedbackUntil=DateTime.Now.AddSeconds(6);
+        _reminderDisplayTimer.Interval=TimeSpan.FromSeconds(1);
+        Grid feedback=new(){Margin=new Thickness(16,12,16,12)};
+        feedback.ColumnDefinitions.Add(new(){Width=new GridLength(28)});
+        feedback.ColumnDefinitions.Add(new());
+        feedback.ColumnDefinitions.Add(new(){Width=new GridLength(1)});
+        feedback.ColumnDefinitions.Add(new(){Width=new GridLength(58)});
+        Border check=new(){Width=23,Height=23,CornerRadius=new CornerRadius(12),BorderBrush=new SolidColorBrush(Color.FromRgb(16,139,171)),BorderThickness=new Thickness(1.5),Child=new TextBlock{Text="✓",Foreground=new SolidColorBrush(Color.FromRgb(16,139,171)),HorizontalAlignment=System.Windows.HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center}};
+        feedback.Children.Add(check);
+        TextBlock message=new(){Text="本次提醒已关闭",FontSize=15,FontWeight=FontWeights.SemiBold,VerticalAlignment=System.Windows.VerticalAlignment.Center};Grid.SetColumn(message,1);feedback.Children.Add(message);
+        Border divider=new(){Background=PlannerTheme.Line,Margin=new Thickness(0,4,0,4)};Grid.SetColumn(divider,2);feedback.Children.Add(divider);
+        Button undo=new(){Name="UndoQuickDismiss",Content="撤销",Foreground=new SolidColorBrush(Color.FromRgb(16,139,171)),Background=Brushes.Transparent,BorderThickness=new Thickness(0),Padding=new Thickness(3),FontSize=14};Grid.SetColumn(undo,3);feedback.Children.Add(undo);
+        undo.Click+=(_,_)=>{_quickReminderSuppressed=false;_quickReminderExpanded=true;_quickDismissFeedbackUntil=DateTime.MinValue;RefreshReminderCard();};
+        _reminderCard.Present("",feedback,false,true);PositionReminderCard();_reminderCard.Show();_reminderCard.UpdateLayout();PositionReminderCard();
     }
     private void UpdateQuickReminderTimes()
     {

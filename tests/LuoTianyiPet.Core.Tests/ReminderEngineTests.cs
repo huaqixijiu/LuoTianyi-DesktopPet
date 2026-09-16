@@ -50,6 +50,24 @@ public sealed class ReminderEngineTests
         var(b,i)=Setup();ReminderEngine.Advance(b,Day.AddHours(13.5));ReminderEngine.SetEnabled(b,i.Id,false,Day.AddHours(13.6));Assert.Empty(b.Occurrences);Assert.Single(b.Items);
         ReminderEngine.SetEnabled(b,i.Id,true,Day.AddHours(13.7));Assert.False(ReminderEngine.Advance(b,Day.AddHours(13.8)));b.Items.Clear();ReminderEngine.Reconcile(b);Assert.Empty(b.Occurrences);
     }
+    [Fact]public void CompletedManualOnceClosesButRemainsStored()
+    {
+        ReminderItem item=new(){Title="一次提醒",Calendar=false,Start=Day.AddHours(14),CheckedThrough=Day.AddHours(13),Repeat=ReminderRepeat.Once};ReminderBook book=new(){EngineVersion=1,Items=[item]};
+        Assert.True(ReminderEngine.Advance(book,item.Start));ReminderEngine.Acknowledge(book,item.Id,item.Start,ReminderPhase.Due);
+        Assert.False(item.Enabled);Assert.Contains(item,book.Items);Assert.Null(ReminderSchedule.Next(item,book,item.Start));
+    }
+    [Fact]public void CompletedSnoozedManualOnceAlsoClosesButRemainsStored()
+    {
+        ReminderItem item=new(){Title="稍后的一次提醒",Calendar=false,Start=Day.AddHours(14),CheckedThrough=Day.AddHours(13),Repeat=ReminderRepeat.Once};ReminderBook book=new(){EngineVersion=1,Items=[item]};
+        Assert.True(ReminderEngine.Advance(book,item.Start));ReminderEngine.Snooze(book,item.Id,item.Start,ReminderPhase.Due,item.Start);ReminderEngine.Acknowledge(book,item.Id,item.Start,ReminderPhase.DueSnoozed);
+        Assert.False(item.Enabled);Assert.Contains(item,book.Items);
+    }
+    [Fact]public void ManualDatesCloseOnlyAfterTheirLastOccurrenceAndRemainStored()
+    {
+        DateTime first=Day.AddHours(9),last=Day.AddDays(2).AddHours(9);ReminderItem item=new(){Title="指定日期提醒",Calendar=false,Start=first,CheckedThrough=first.AddMinutes(-1),Repeat=ReminderRepeat.Dates,Dates=[first.Date,last.Date]};ReminderBook book=new(){EngineVersion=1,Items=[item]};
+        Assert.True(ReminderEngine.Advance(book,first));ReminderEngine.Acknowledge(book,item.Id,first,ReminderPhase.Due);Assert.True(item.Enabled);Assert.Equal(last,ReminderSchedule.Next(item,book,first));
+        Assert.True(ReminderEngine.Advance(book,last));ReminderEngine.Acknowledge(book,item.Id,last,ReminderPhase.Due);Assert.False(item.Enabled);Assert.Contains(item,book.Items);
+    }
     [Fact]public void TimeEditAndDateDeleteRemoveStaleInstances()
     {
         var(b,i)=Setup();ReminderEngine.Advance(b,Day.AddHours(13.5));i.Start=i.Start.AddHours(1);ReminderEngine.Reconcile(b);Assert.Empty(b.Occurrences);

@@ -8,14 +8,15 @@ namespace LuoTianyiPet.App;
 internal sealed partial class PlannerWindow
 {
     private static string GroupLabel(ReminderItem item) => item.Repeat == ReminderRepeat.Dates
-        ? $"同一组行程 · {item.Dates.Distinct().Count()} 个日期"
-        : item.Repeat == ReminderRepeat.Once ? "单次行程" : "重复行程 · " + Repeats[(int)item.Repeat];
+        ? $"同一组日程 · {item.Dates.Distinct().Count()} 个日期"
+        : item.Repeat == ReminderRepeat.Once ? "单次日程" : "重复日程 · " + Repeats[(int)item.Repeat];
 
-    private void ShowOverlay(UIElement content)
+    private void ShowOverlay(UIElement content,bool editor=false)
     {
         Grid overlay = new() { Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(95, 47, 72, 88)) };
-        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
-        ScrollViewer scroll = new() { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = Math.Max(250, ActualHeight - 130) }; card.Child = scroll; overlay.Children.Add(card);
+        bool calendarEditor=editor&&content is FrameworkElement element&&Equals(element.Tag,"CalendarEditor");
+        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(calendarEditor?32:editor?16:24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        if(editor)card.Child=content;else{ScrollViewer scroll = new() { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = Math.Max(250, ActualHeight - 130) };card.Child=scroll;}overlay.Children.Add(card);
         _root.IsEnabled = false;
         if (_shell.Children.Count > 1) _shell.Children[_shell.Children.Count - 1].IsEnabled = false;
         _shell.Children.Add(overlay);
@@ -34,10 +35,10 @@ internal sealed partial class PlannerWindow
         bool alarmOnly=items.All(i=>!i.Calendar);
         StackPanel titleRow=Row();
         titleRow.Children.Add(new Border{Child=new TextBlock{Text="!",FontSize=16,FontWeight=FontWeights.SemiBold,Foreground=Brushes.White,HorizontalAlignment=System.Windows.HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center},Width=30,Height=30,Background=PlannerTheme.Danger,CornerRadius=new CornerRadius(15),Margin=new Thickness(0,2,10,2),VerticalAlignment=VerticalAlignment.Center});
-        titleRow.Children.Add(Text(alarmOnly?"删除提醒？":day == null ? "删除整组行程？" : "仅删除这一天？", 20, FontWeights.SemiBold));
+        titleRow.Children.Add(Text(alarmOnly?"删除提醒？":day == null ? "删除整组日程？" : "仅删除这一天？", 20, FontWeights.SemiBold));
         panel.Children.Add(titleRow);
-        string impact = day is DateTime date ? $"仅移除 {date:M月d日} 的行程及提醒，其他日期保持不变。"
-            : alarmOnly ? "将删除提醒及其全部待处理提示。" : $"将删除 {items.Count} 组行程，以及它们关联的全部日期和提醒。";
+        string impact = day is DateTime date ? $"仅移除 {date:M月d日} 的日程及提醒，其他日期保持不变。"
+            : alarmOnly ? "将删除提醒及其全部待处理提示。" : $"将删除 {items.Count} 组日程，以及它们关联的全部日期和提醒。";
         panel.Children.Add(Text(impact));
         if (items.Count == 1 && !alarmOnly) panel.Children.Add(Text(GroupLabel(items[0]), 13));
         StackPanel actions = Row(); actions.HorizontalAlignment = System.Windows.HorizontalAlignment.Right;
@@ -54,15 +55,17 @@ internal sealed partial class PlannerWindow
         var groups = _service.Book.Items.Where(i => i.Calendar).OrderBy(i => i.Start).ToList();
         _selectedGroups.IntersectWith(groups.Select(i => i.Id));
         StackPanel list = new();
-        DockPanel tools = new() { Margin = new Thickness(2, 2, 2, 2) };
-        var back = Chip("← 返回日历", () => { _manage = false; Render(); }); back.Name = "BackToCalendar"; tools.Children.Add(back);
-        tools.Children.Add(Text($"共 {groups.Count} 组 · 已选 {_selectedGroups.Count} 组", 13));
+        DockPanel tools = new() { LastChildFill=false,Margin = new Thickness(2, 2, 2, 2) };
+        var back = Chip("← 返回日历", () => { _manage = false; Render(); }); back.Name = "BackToCalendar";back.Height=40;back.Margin=new Thickness(0,0,12,0);tools.Children.Add(back);
+        tools.Children.Add(new Border{Width=1,Background=PlannerTheme.Line,Margin=new Thickness(0,4,14,4)});
+        var heading=Text("管理日程",20,FontWeights.SemiBold);heading.Margin=new Thickness(0,0,14,0);heading.VerticalAlignment=VerticalAlignment.Center;tools.Children.Add(heading);
+        var count=Text($"共 {groups.Count} 组 · 已选 {_selectedGroups.Count} 组",13);count.VerticalAlignment=VerticalAlignment.Center;tools.Children.Add(count);
         StackPanel toolActions = Row();
         toolActions.Children.Add(Chip("全选", () => { foreach(var item in groups) _selectedGroups.Add(item.Id); Render(); }));
         toolActions.Children.Add(Chip("取消选择", () => { _selectedGroups.Clear(); Render(); }));
         var delete = Chip("删除选中组…", () => ConfirmDelete(_selectedGroups.ToArray(), null)); delete.IsEnabled = _selectedGroups.Count > 0; delete.Name = "DeleteSelectedGroups"; delete.Style = (Style)FindResource("PlannerDanger"); toolActions.Children.Add(delete);
         DockPanel.SetDock(toolActions, Dock.Right); tools.Children.Add(toolActions);
-        list.Children.Add(new Border { Child = tools, Background = Brushes.White, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 6, 0, 6) });
+        list.Children.Add(new Border { Child = tools, Background = Brushes.White, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 6, 0, 16) });
         list.Children.Add(Text("多个日期只列为一组，可统一修改日期或整组删除。", 12, foreground: PlannerTheme.Muted));
         foreach (ReminderItem item in groups)
         {
@@ -82,9 +85,9 @@ internal sealed partial class PlannerWindow
             }
             else info.Children.Add(Text(item.Start.ToString("yyyy/M/d HH:mm"),13));
             card.Children.Add(info);
-            list.Children.Add(new Border { Child = card, Background = Brushes.White, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 6, 0, 6) });
+            list.Children.Add(new Border { Child = card, Background = Brushes.White, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12),Padding=new Thickness(18,14,18,14),MinHeight=124, Margin = new Thickness(0, 10, 0, 10) });
         }
-        if(groups.Count == 0) list.Children.Add(Text("暂无行程。新建后可在这里按组管理。",16));
+        if(groups.Count == 0) list.Children.Add(Text("暂无日程。创建后可在这里按组管理。",16));
         _body.Content = list;
     }
 }

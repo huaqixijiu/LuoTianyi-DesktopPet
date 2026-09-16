@@ -16,6 +16,24 @@ public class ReminderTests
         Assert.True(b.IsRest(At(14)));
     }
     [Fact]
+    public void WorkdayAndRestdayAlarmsFollowWeeklyRulesAndDateOverrides()
+    {
+        ReminderBook book = new();
+        ReminderItem work = new() { Start = At(14), Repeat = ReminderRepeat.Workdays };
+        ReminderItem rest = new() { Start = At(14), Repeat = ReminderRepeat.RestDays };
+        ReminderSchedule.SetRestOverride(book, At(14), true, At(13));
+        ReminderSchedule.SetRestOverride(book, At(19), false, At(13));
+
+        Assert.False(ReminderSchedule.OccursOn(work, book, At(14)));
+        Assert.True(ReminderSchedule.OccursOn(rest, book, At(14)));
+        Assert.True(ReminderSchedule.OccursOn(work, book, At(19)));
+        Assert.False(ReminderSchedule.OccursOn(rest, book, At(19)));
+        Assert.Equal(At(15), ReminderSchedule.Next(work, book, At(13, 12)));
+        Assert.Equal(At(14), ReminderSchedule.Next(rest, book, At(13, 12)));
+        Assert.Equal(At(19), ReminderSchedule.Next(work, book, At(18, 12)));
+        Assert.Equal(At(20), ReminderSchedule.Next(rest, book, At(18, 12)));
+    }
+    [Fact]
     public void SleepCollapsesMissedOccurrencesAndDismissDoesNotReplay()
     {
         ReminderItem i = new() { Start = At(13), CheckedThrough = At(12), Repeat = ReminderRepeat.Daily };

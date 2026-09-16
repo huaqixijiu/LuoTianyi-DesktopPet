@@ -124,6 +124,34 @@ public partial class MainWindow
             Check(_animationPlayer?.CurrentAnimationId==music && _stateMachine.VisualState.ContinuousState==PetContinuousState.MusicPlaying && _settings.Media==mediaSettings,
                 "Message arrival preserves music animation and media settings without media input");
             _inboxWindow.Interaction.Close();RefreshMessageInbox();CaptureInboxQa(directory,"music-reminder.png");
+
+            // Verify the special sleeping pose uses its visible body bounds for
+            // the ear rail, and that ZZZ remains visible after mist cleanup.
+            _messageInbox.Clear(MessageProvider.WeChat,DateTimeOffset.MinValue);
+            _messageInbox.Clear(MessageProvider.Qq,DateTimeOffset.MinValue);
+            ApplyAppearancePreferences(_settings.Appearance with {FullBodyStyle="full-body-crystal-dress",DisplayScalePercent=100},false);
+            _stateMachine.SetContinuousState(PetContinuousState.Sleeping);
+            BeginCrystalLongIdle(CrystalLongIdleVariant.Sleep);
+            await Task.Delay(12000);
+            Check(IsHeldCrystalSleep,"Sleeping rail uses the audited crystal sleep hold frame");
+            await BeginMessageNotificationAsync(Sample(MessageProvider.WeChat,"睡眠微信"));
+            await BeginMessageNotificationAsync(Sample(MessageProvider.Qq,"睡眠QQ"));
+            _inboxSide=null; _inboxWindow.Interaction.Close();
+            foreach(string side in new[]{"left","right"})
+            {
+                var work=GetCurrentWorkArea();
+                Left=work.Left+(side=="left" ? 70 : work.Width-Width-70);
+                Top=work.Top+(work.Height-Height)/2;
+                _inboxSide=null; RefreshMessageInbox(); await Task.Delay(180);
+                Check(_inboxWindow.IsVisible,$"sleep/{side}: pending reminders remain visible during sleep hold");
+                CaptureInboxQa(directory,$"sleep-crystal-{side}.png",includePetClip:false);
+            }
+            CancelCrystalLongIdle();
+            _stateMachine.SetContinuousState(PetContinuousState.Idle);
+            PlayResolvedContinuousAnimation();
+            _messageInbox.Clear(MessageProvider.WeChat,DateTimeOffset.MinValue);
+            _messageInbox.Clear(MessageProvider.Qq,DateTimeOffset.MinValue);
+            RefreshMessageInbox();
             File.WriteAllLines(Path.Combine(directory,"result.txt"),checks);
             if(Environment.GetCommandLineArgs().Contains("--qa-inbox-interactive"))
             {
@@ -137,7 +165,7 @@ public partial class MainWindow
         catch(Exception e){checks.Add("FAIL "+e);File.WriteAllLines(Path.Combine(directory,"result.txt"),checks);Application.Current.Shutdown(1);}
     }
 
-    private BitmapSource CaptureInboxQa(string directory,string name)
+    private BitmapSource CaptureInboxQa(string directory,string name,bool includePetClip=true)
     {
         UpdateLayout();_inboxWindow!.UpdateLayout();
         var alpha=GetPetImageAlphaBoundsInWindow(); var a=PointToScreen(new(alpha.Left,alpha.Top));var b=PointToScreen(new(alpha.Right,alpha.Bottom));
@@ -146,13 +174,21 @@ public partial class MainWindow
         Rect bounds=new(a,b);
         Point railOrigin=default;
         if(_inboxWindow.IsVisible){railOrigin=_inboxWindow.PointToScreen(new());bounds.Union(new Rect(railOrigin,new Size(_inboxWindow.ActualWidth*scale,_inboxWindow.ActualHeight*scale)));}
+        if(!includePetClip && CrystalLongIdleDecorationLayer.Visibility==Visibility.Visible)
+        {
+            Rect decoration=CrystalLongIdleDecorationImage.TransformToAncestor(this).TransformBounds(
+                new Rect(0,0,CrystalLongIdleDecorationImage.ActualWidth,CrystalLongIdleDecorationImage.ActualHeight));
+            Point decorationOrigin=PointToScreen(new(decoration.Left,decoration.Top));
+            bounds.Union(new Rect(decorationOrigin,new Size(decoration.Width*scale,decoration.Height*scale)));
+        }
         bounds.Inflate(12,12);
         DrawingVisual drawing=new();
         using(var dc=drawing.RenderOpen())
         {
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(0xED,0xF5,0xFC)),null,new Rect(0,0,bounds.Width,bounds.Height));
-            dc.PushClip(new RectangleGeometry(new Rect(a.X-bounds.Left,a.Y-bounds.Top,b.X-a.X,b.Y-a.Y)));
-            dc.DrawImage(RenderWindow(this),new Rect(origin.X-bounds.Left,origin.Y-bounds.Top,ActualWidth*scale,ActualHeight*scale));dc.Pop();
+            if(includePetClip) dc.PushClip(new RectangleGeometry(new Rect(a.X-bounds.Left,a.Y-bounds.Top,b.X-a.X,b.Y-a.Y)));
+            dc.DrawImage(RenderWindow(this),new Rect(origin.X-bounds.Left,origin.Y-bounds.Top,ActualWidth*scale,ActualHeight*scale));
+            if(includePetClip) dc.Pop();
             if(_inboxWindow.IsVisible)dc.DrawImage(RenderWindow(_inboxWindow),new Rect(railOrigin.X-bounds.Left,railOrigin.Y-bounds.Top,_inboxWindow.ActualWidth*scale,_inboxWindow.ActualHeight*scale));
         }
         RenderTargetBitmap bitmap=new((int)Math.Ceiling(bounds.Width),(int)Math.Ceiling(bounds.Height),96,96,PixelFormats.Pbgra32);bitmap.Render(drawing);

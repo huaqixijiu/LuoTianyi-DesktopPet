@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -69,7 +70,10 @@ internal static class AnimatedWebpFrameDecoder
                     new SKCodecOptions(encodedIndex, priorFrame));
                 ValidateDecodeResult(manifest, encodedIndex, result);
 
-                BitmapSource frame = CreateBitmapSource(bitmap, imageInfo);
+                BitmapSource frame = CreateBitmapSource(
+                    bitmap,
+                    imageInfo,
+                    suppressZzzMist: manifest.Id == "crystal-sleep-decoration-zzz");
                 for (int logicalIndex = 0;
                      logicalIndex < logicalToEncodedFrame.Length;
                      logicalIndex++)
@@ -189,7 +193,10 @@ internal static class AnimatedWebpFrameDecoder
             bitmap.GetPixels(),
             new SKCodecOptions(encodedFrameIndex));
         ValidateDecodeResult(manifest, encodedFrameIndex, result);
-        return CreateBitmapSource(bitmap, imageInfo);
+        return CreateBitmapSource(
+            bitmap,
+            imageInfo,
+            suppressZzzMist: manifest.Id == "crystal-sleep-decoration-zzz");
     }
 
     private static SKImageInfo CreateImageInfo(AnimationAssetManifest manifest) => new(
@@ -210,8 +217,29 @@ internal static class AnimatedWebpFrameDecoder
         }
     }
 
-    private static BitmapSource CreateBitmapSource(SKBitmap bitmap, SKImageInfo imageInfo)
+    private static BitmapSource CreateBitmapSource(
+        SKBitmap bitmap,
+        SKImageInfo imageInfo,
+        bool suppressZzzMist)
     {
+        if (suppressZzzMist)
+        {
+            byte[] pixels = new byte[bitmap.ByteCount];
+            Marshal.Copy(bitmap.GetPixels(), pixels, 0, pixels.Length);
+            SuppressZzzMist(pixels, imageInfo.Width, imageInfo.Height, bitmap.RowBytes);
+            BitmapSource cleanedFrame = BitmapSource.Create(
+                imageInfo.Width,
+                imageInfo.Height,
+                96,
+                96,
+                PixelFormats.Pbgra32,
+                null,
+                pixels,
+                bitmap.RowBytes);
+            cleanedFrame.Freeze();
+            return cleanedFrame;
+        }
+
         BitmapSource frame = BitmapSource.Create(
             imageInfo.Width,
             imageInfo.Height,
@@ -224,6 +252,42 @@ internal static class AnimatedWebpFrameDecoder
             bitmap.RowBytes);
         frame.Freeze();
         return frame;
+    }
+
+    private static void SuppressZzzMist(byte[] pixels, int width, int height, int stride)
+    {
+        // Skia gives us premultiplied BGRA. Un-premultiply only for the
+        // classification so the cleanup is limited to low-alpha, dark,
+        // nearly-neutral fog pixels; saturated blue Z glyph pixels survive.
+        for (int y = 0; y < height; y++)
+        {
+            int row = y * stride;
+            for (int x = 0; x < width; x++)
+            {
+                int offset = row + x * 4;
+                int blue = pixels[offset];
+                int green = pixels[offset + 1];
+                int red = pixels[offset + 2];
+                int alpha = pixels[offset + 3];
+                if (alpha == 0 || alpha > 96)
+                {
+                    continue;
+                }
+
+                int apparentMaximum = red;
+                if (green > apparentMaximum) apparentMaximum = green;
+                if (blue > apparentMaximum) apparentMaximum = blue;
+                apparentMaximum = apparentMaximum * 255 / alpha;
+                int apparentBlueRedDelta = (blue - red) * 255 / alpha;
+                if (apparentMaximum <= 96 && apparentBlueRedDelta < 48)
+                {
+                    pixels[offset] = 0;
+                    pixels[offset + 1] = 0;
+                    pixels[offset + 2] = 0;
+                    pixels[offset + 3] = 0;
+                }
+            }
+        }
     }
 
     internal sealed class ProgressiveBitmapFrames : IDisposable

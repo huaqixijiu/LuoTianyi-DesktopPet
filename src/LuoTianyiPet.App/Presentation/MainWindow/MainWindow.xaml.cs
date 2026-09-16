@@ -3511,6 +3511,11 @@ public partial class MainWindow : Window
                 return imageBounds;
             }
 
+            if (IsHeldCrystalSleep && animationId == CrystalLongIdleSleepAnimation)
+            {
+                alphaBounds = CrystalSleepHoldAlphaBounds;
+            }
+
             double imageWidth = PetImage.ActualWidth > 0 ? PetImage.ActualWidth : PetImage.Width;
             double imageHeight = PetImage.ActualHeight > 0 ? PetImage.ActualHeight : PetImage.Height;
             Rect sourceBounds = new(

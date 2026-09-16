@@ -85,6 +85,12 @@ public static class ReminderEngine
         var o=b.Occurrences.FirstOrDefault(x=>x.RuleId==id && x.At==at);
         if(o==null || o.Phase!=expected) return;
         o.Phase=expected==ReminderPhase.Early?ReminderPhase.AcknowledgedEarly:ReminderPhase.Done;o.SnoozeAt=null;o.RoundStartedAt=null;
+        if(expected is ReminderPhase.Due or ReminderPhase.DueSnoozed)
+        {
+            ReminderItem? item=b.Items.FirstOrDefault(i=>i.Id==id);
+            if(item is {Calendar:false,Relative:false,Enabled:true} && (item.Repeat is ReminderRepeat.Once or ReminderRepeat.Dates) && ReminderSchedule.Next(item,b,at)==null)
+                item.Enabled=false;
+        }
     }
     public static void Snooze(ReminderBook b,Guid id,DateTime at,ReminderPhase expected,DateTime now)
     {
