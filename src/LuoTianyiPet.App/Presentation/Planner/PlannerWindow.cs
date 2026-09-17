@@ -27,7 +27,9 @@ internal sealed partial class PlannerWindow : Window
     private readonly DispatcherTimer _clock=new(){Interval=TimeSpan.FromSeconds(1)};
     private readonly List<(TextBlock Text,ReminderItem Item)> _running=[];
     private readonly HashSet<DateTime> _selected=[];
-    private readonly HashSet<Guid> _selectedGroups=[];
+    private StackPanel? _manageCards;
+    private string _manageQuery = "";
+    private ManageFilter _manageFilter = ManageFilter.Active;
     private readonly Dictionary<DateTime, Border> _calendarDateBorders=[];
     private DateTime _date=DateTime.Today;
     private DateTime? _occurrenceDate;
@@ -55,7 +57,8 @@ internal sealed partial class PlannerWindow : Window
         _service.Changed+=OnChanged;_clock.Tick+=(_,_)=>UpdateRemaining();IsVisibleChanged+=(_,_)=>{if(IsVisible)_clock.Start();else _clock.Stop();};
         Closed+=(_,_)=>{_clock.Stop();_service.Changed-=OnChanged;};Render();
     }
-    public void Navigate(bool alarm){_alarm=alarm;_manage=false;_editing=false;if(!alarm)_details=false;Render();Show();Activate();}
+    public void Navigate(bool alarm){_alarm=alarm;_manage=false;_manageQuery="";_manageFilter=ManageFilter.Active;_editing=false;if(!alarm)_details=false;Render();Show();Activate();}
+    private void OpenManage(){_manage=true;_manageQuery="";_manageFilter=ManageFilter.Active;Render();}
     internal void OpenItem(Guid id,DateTime? occurrence=null){var item=_service.Book.Items.FirstOrDefault(i=>i.Id==id);if(item!=null){_date=(occurrence??item.Start).Date;_occurrenceDate=occurrence??item.Start;Navigate(!item.Calendar);_details=true;Render();Edit(item,item.Calendar);}}
     private void OnChanged(){if(!_editing)Render();}
     private async Task Execute(Action<ReminderBook> action){try{await _service.ChangeAsync(action);_status.Text="已保存到本机";}catch{_status.Text="保存失败，原数据保留。";throw;}}
@@ -162,7 +165,7 @@ internal sealed partial class PlannerWindow : Window
             bool target=entry.Item2;view.Click+=(_,_)=>SetView(target);views.Children.Add(view);
         }
         viewCapsule.Child=views;right.Children.Add(viewCapsule);
-        var manage=Chip("管理日程",()=>{_manage=true;Render();});manage.Name="ManageSchedules";manage.Height=40;manage.Margin=new Thickness(6,3,3,3);right.Children.Add(manage);
+        var manage=Chip("管理日程",OpenManage);manage.Name="ManageSchedules";manage.Height=40;manage.Margin=new Thickness(6,3,3,3);right.Children.Add(manage);
         var add=Primary(Action("",()=>{_occurrenceDate=null;Edit(null,true,null);}));StackPanel addLabel=Row();addLabel.Children.Add(PlannerTheme.Icon("plus",15,Brushes.White,6));addLabel.Children.Add(Text("创建日程",14,FontWeights.SemiBold,Brushes.White));add.Content=addLabel;right.Children.Add(add);
         if(Width<1000&&!week&&_details){DockPanel.SetDock(left,Dock.Top);nav.Children.Add(left);right.HorizontalAlignment=HorizontalAlignment.Right;nav.Children.Add(right);}else{DockPanel.SetDock(right,Dock.Right);nav.Children.Add(right);nav.Children.Add(left);}DockPanel.SetDock(nav,Dock.Top);main.Children.Add(nav);
         Grid grid=new();for(int c=0;c<7;c++)grid.ColumnDefinitions.Add(new());grid.RowDefinitions.Add(new(){Height=week?new GridLength(0):new GridLength(36)});
@@ -291,7 +294,7 @@ internal sealed partial class PlannerWindow : Window
     }
     private void ItemMenu(ReminderItem item,DateTime day)
     {
-        System.Windows.Controls.ContextMenu menu=new(){Style=(Style)FindResource("PlannerContextMenu")};foreach(var label in new[]{"编辑日程","仅删除当天","删除整组…","管理日程…"}){var entry=new System.Windows.Controls.MenuItem{Header=label,Style=(Style)FindResource("PlannerMenuItem")};entry.Click+=(_,_)=>{if(label=="编辑日程"){_occurrenceDate=day;Edit(item,true);}else if(label=="管理日程…"){_manage=true;Render();}else ConfirmDelete([item.Id],label=="仅删除当天"?day:null);};menu.Items.Add(entry);}menu.IsOpen=true;
+        System.Windows.Controls.ContextMenu menu=new(){Style=(Style)FindResource("PlannerContextMenu")};foreach(var label in new[]{"编辑日程","仅删除当天","删除整组…","管理日程…"}){var entry=new System.Windows.Controls.MenuItem{Header=label,Style=(Style)FindResource("PlannerMenuItem")};entry.Click+=(_,_)=>{if(label=="编辑日程"){_occurrenceDate=day;Edit(item,true);}else if(label=="管理日程…"){OpenManage();}else ConfirmDelete([item.Id],label=="仅删除当天"?day:null);};menu.Items.Add(entry);}menu.IsOpen=true;
     }
     private void SetView(bool week){if(week)_batch=false;else _details=false;_=Execute(b=>b.WeekView=week);}
     private static DateTime WeekStart(DateTime date)=>date.Date.AddDays(-((int)date.DayOfWeek+6)%7);
