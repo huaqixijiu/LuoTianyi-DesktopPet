@@ -12,8 +12,10 @@ internal static class PlannerTheme
     public static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(16, 52, 104));
     public static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(101, 128, 153));
     public static readonly Brush PrimaryFill = new SolidColorBrush(Color.FromRgb(0, 143, 217));
-    public static readonly Brush CalendarSelection = new SolidColorBrush(Color.FromRgb(224, 153, 58));
-    public static readonly Brush CalendarBatchSelectionSoft = new SolidColorBrush(Color.FromRgb(255, 250, 238));
+    public static readonly Brush CalendarSelection = Accent;
+    public static readonly Brush CalendarBatchSelectionSoft = new SolidColorBrush(Color.FromRgb(234, 248, 255));
+    public static readonly Brush CalendarRestSelectionSoft = new SolidColorBrush(Color.FromRgb(245, 239, 251));
+    public static readonly Brush SchedulePreview = new SolidColorBrush(Color.FromRgb(105, 197, 217));
     // Planner-only semantic tokens. Floating pet surfaces keep their own configured palette.
     public static readonly Brush Danger = new SolidColorBrush(Color.FromRgb(217, 83, 79));
     public static readonly Brush DangerSoft = new SolidColorBrush(Color.FromRgb(253, 236, 236));

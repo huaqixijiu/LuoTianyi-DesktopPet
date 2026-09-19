@@ -42,7 +42,8 @@ public static class ReminderEngine
     }
     public static void Reconcile(ReminderBook book)
     {
-        book.Occurrences.RemoveAll(o => !book.Items.Any(i => i.Id==o.RuleId && Active(i) && ReminderSchedule.OccursOn(i,book,o.At) && o.At.TimeOfDay==i.Start.TimeOfDay));
+        book.Occurrences.RemoveAll(o => !book.Items.Any(i => i.Id==o.RuleId && ReminderSchedule.OccursOn(i,book,o.At) &&
+            (i.Calendar && o.Phase is ReminderPhase.Done or ReminderPhase.Cancelled || Active(i) && o.At.TimeOfDay==i.Start.TimeOfDay)));
     }
     public static bool Advance(ReminderBook book, DateTime now)
     {

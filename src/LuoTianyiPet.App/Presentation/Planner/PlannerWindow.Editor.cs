@@ -16,6 +16,8 @@ internal sealed partial class PlannerWindow
 
     private void Edit(ReminderItem? original,bool calendar,DateTime? presetDate)
     {
+        // Preserve legacy recurring calendar records in the compatible editor.
+        if(calendar&&(original==null||original.Repeat is ReminderRepeat.Once or ReminderRepeat.Dates)){EditSchedule(original,presetDate);return;}
         _editing=true;
         StackPanel panel=new(){Width=calendar?574:620};
         DockPanel head=new();

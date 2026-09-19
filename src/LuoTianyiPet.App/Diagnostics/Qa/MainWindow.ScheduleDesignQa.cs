@@ -1,0 +1,71 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using LuoTianyiPet.Core;
+using Button = System.Windows.Controls.Button;
+using CheckBox = System.Windows.Controls.CheckBox;
+using TextBox = System.Windows.Controls.TextBox;
+
+namespace LuoTianyiPet.App;
+public partial class MainWindow
+{
+    private static async Task RunScheduleDesignQa(PlannerWindow window,ReminderService service,string path,List<string> checks,DateTime day)
+    {
+        IEnumerable<DependencyObject> Tree(DependencyObject d){yield return d;for(int n=0;n<VisualTreeHelper.GetChildrenCount(d);n++)foreach(var child in Tree(VisualTreeHelper.GetChild(d,n)))yield return child;}
+        FrameworkElement Named(string name)=>Tree(window).OfType<FrameworkElement>().First(x=>x.Name==name);
+        bool Has(string name)=>Tree(window).OfType<FrameworkElement>().Any(x=>x.Name==name);
+        void Check(bool value,string text){if(!value)throw new InvalidOperationException("new design: "+text);checks.Add("PASS new design: "+text);}
+        void Click(string name){((Button)Named(name)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.UpdateLayout();}
+        void Tick(string name,bool value){var control=(CheckBox)Named(name);control.IsChecked=value;control.RaiseEvent(new RoutedEventArgs(CheckBox.ClickEvent));window.UpdateLayout();}
+        void Edit(ReminderItem? item,DateTime? context=null){typeof(PlannerWindow).GetField("_occurrenceDate",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(window,context);typeof(PlannerWindow).GetMethod("Edit",BindingFlags.Instance|BindingFlags.NonPublic,null,new[]{typeof(ReminderItem),typeof(bool),typeof(DateTime?)},null)!.Invoke(window,new object?[]{item,true,context});window.UpdateLayout();}
+        string Summary()=>((TextBlock)Named("ScheduleDateSummary")).Text;
+        void Shot(string name)
+        {
+            window.UpdateLayout();foreach(double scale in new[]{1d,1.25,1.5})
+            {
+                var bitmap=new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth*scale),(int)Math.Ceiling(window.ActualHeight*scale),96*scale,96*scale,PixelFormats.Pbgra32);bitmap.Render(window);var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));using var file=File.Create(Path.Combine(path,name+"-"+(int)(scale*100)+".png"));png.Save(file);
+            }
+            checks.Add("PASS rendered "+name+" at 100/125/150 percent");
+        }
+        var baseline=service.Book.Items.Select(i=>i.Id).ToHashSet();
+        Edit(null);Check(Summary()=="选择日期","global create has no preselected date");Check(((TextBox)Named("ReminderTitle")).MaxLength==20&&((TextBox)Named("ReminderNotes")).MaxLength==200,"title 20 and notes 200");Check(!Named("CreateAlarm").IsVisible&&!Named("EarlyReminder").IsVisible&&!Named("ScheduleHour").IsVisible,"progressive empty state hides time and alarm fields");Shot("v4-01-new-schedule");
+        ((TextBox)Named("ReminderTitle")).Text="缺少日期";Click("SaveReminder");Check(((TextBlock)Named("EditorError")).Text.Contains("日期"),"zero-date submit blocked");
+        Click("ModifyDates");Check(Has("InlineDateSelector")&&!Application.Current.Windows.OfType<DateSelectionWindow>().Any(w=>w.IsVisible),"date selector is in editor, not a second window");Click("InlineDate"+day.ToString("yyyyMMdd"));Check(Summary().Contains(day.ToString("M月d日")),"selection synchronizes summary live");Click("InlineCancelDates");Check(Summary()=="选择日期","picker cancel rolls back only date draft");Check(((TextBox)Named("ReminderTitle")).Text=="缺少日期","picker cancel preserves title");
+        Click("ModifyDates");Click("InlineDate"+day.ToString("yyyyMMdd"));Click("InlineDate"+day.AddDays(1).ToString("yyyyMMdd"));Check(Summary().Contains("已选 2 天"),"multiple dates automatic without mode switch");Shot("v4-02-inline-dates");var selector=(Border)Named("InlineDateSelector");var layout=(Grid)Named("PlannerEditorLayout");var bounds=selector.TransformToAncestor(layout).TransformBounds(new Rect(0,0,selector.ActualWidth,selector.ActualHeight));Check(bounds.Left>=0&&bounds.Right<=layout.ActualWidth+.5&&bounds.Bottom<=layout.ActualHeight+.5,"selector stays within editor bounds");Click("InlineConfirmDates");Check(!Has("InlineDateSelector")&&Summary().Contains("已选 2 天"),"confirm keeps draft");
+        Click("ModifyDates");Click("InlineClearDates");Check(Summary()=="选择日期","clear synchronizes empty summary");Click("ModifyDates");Check(Summary()=="选择日期"&&!Has("InlineDateSelector"),"closing picker without cancel accepts empty state");Click("EditorClose");
+        Edit(null,day);Check(Summary().Contains(day.ToString("M月d日")),"date-context create preselects that day");Tick("SetSpecificTime",true);Check(((TextBox)Named("ScheduleHour")).Text==""&&((TextBox)Named("ScheduleMinute")).Text==""&&!Named("CreateAlarm").IsVisible,"time starts empty without invented default");
+        ((TextBox)Named("ReminderTitle")).Text="新规则验证";Click("SaveReminder");Check(((TextBlock)Named("EditorError")).Text.Contains("有效时间"),"enabled blank time blocked");((TextBox)Named("ScheduleHour")).Text="25:00";Click("SaveReminder");Check(Has("SaveReminder"),"invalid hour not clamped or saved");
+        ((TextBox)Named("ScheduleHour")).Text="830";((TextBox)Named("ScheduleMinute")).Text="";window.UpdateLayout();Check(Named("CreateAlarm").IsVisible,"valid compact input reveals alarm option");Tick("CreateAlarm",true);Check(Named("EarlyReminder").IsVisible&&!((TextBox)Named("EarlyMinutes")).IsEnabled,"advance row appears with off default thirty");
+        Tick("EarlyReminder",true);((TextBox)Named("EarlyMinutes")).Text="61";Click("SaveReminder");Check(((TextBlock)Named("EditorError")).Text.Contains("1～60"),"advance over sixty rejected");((TextBox)Named("EarlyMinutes")).Text="30";((TextBox)Named("ReminderNotes")).Text="备注可选；这条日程用于验证新编辑器。";Shot("v4-03-editor-time-alarm");Click("SaveReminder");await Task.Delay(150);var created=service.Book.Items.Single(i=>i.Title=="新规则验证");Check(created.Start==day.AddHours(8.5)&&created.Enabled&&created.EarlyMinutes==30,"compact time and reminder persisted");
+        Edit(created,day);Tick("SetSpecificTime",false);Check(Has("ConfirmScheduleAction"),"linked alarm removal requires confirmation");Click("CancelScheduleAction");Check(((CheckBox)Named("SetSpecificTime")).IsChecked==true,"rejecting time removal preserves input");Tick("SetSpecificTime",false);Click("ConfirmScheduleAction");Check(!Named("CreateAlarm").IsVisible&&!Named("ScheduleHour").IsVisible,"confirmed time clear hides dependent options");Click("SaveReminder");await Task.Delay(150);created=service.Book.Items.Single(i=>i.Id==created.Id);Check(!created.HasTime&&!created.Enabled&&created.ReminderCreated==false,"time clear removes linked alarm without removing schedule");
+        Edit(created,day);((TextBox)Named("ReminderTitle")).Text=new string('字',21);Click("SaveReminder");Check(Has("SaveReminder")&&((TextBlock)Named("EditorError")).Text.Contains("20"),"programmatic title overflow blocked");Click("EditorClose");
+        DateTime past=DateTime.Today.AddDays(-2);var group=new ReminderItem{Calendar=true,Title="历史与未来课程",Repeat=ReminderRepeat.Dates,Start=past.AddHours(9),HasTime=true,ReminderCreated=false,Enabled=false,Dates=new[]{past,DateTime.Today.AddDays(-1)}.Concat(Enumerable.Range(1,100).Select(n=>DateTime.Today.AddDays(n))).ToList()};await service.ChangeAsync(b=>b.Items.Add(group));
+        Edit(group,day);Click("ModifyDates");Check(!((Button)Named("InlineRemove"+past.ToString("yyyyMMdd"))).IsEnabled,"history date cannot be removed casually");var selectedScroll=(ScrollViewer)Named("InlineSelectedDates");Check(selectedScroll.ScrollableHeight>0&&((Border)Named("InlineDateSelector")).ActualHeight==292,"one hundred dates scroll without growing selector");Shot("v4-04-hundred-dates");Click("InlineClearDates");Check(Summary().Contains("已选 2 天"),"clear preserves both locked historical dates");Click("InlineCancelDates");Check(Summary().Contains("已选 102 天"),"cancel restores entire large draft");Check(Has("DeleteOccurrence")&&Has("DeleteFutureSchedules")&&Has("DeleteGroup"),"contextual mixed group has three scoped danger actions");Shot("v4-05-danger-actions");Click("DeleteFutureSchedules");Shot("v4-06-confirm-future");Click("CancelScheduleAction");Check(service.Book.Items.Single(i=>i.Id==group.Id).Dates.Count==102,"danger cancel leaves store unchanged");Click("DeleteFutureSchedules");Click("ConfirmScheduleAction");await Task.Delay(200);var kept=service.Book.Items.Single(i=>i.Id==group.Id);Check(kept.Dates.Count==2&&kept.Repeat==ReminderRepeat.Dates,"delete future retains past dates as original group");
+        Edit(kept);Check(!Has("DeleteOccurrence")&&!Has("DeleteFutureSchedules")&&Has("DeleteGroup"),"management context cannot delete arbitrary day or nonexistent future");Click("EditorClose");
+        Edit(new ReminderItem{Calendar=true,Title="跨年",Start=new DateTime(2026,12,31),Repeat=ReminderRepeat.Dates,Dates=[new DateTime(2026,12,31),new DateTime(2027,1,2)]});Click("ModifyDates");Check(Tree((Border)Named("InlineDateSelector")).OfType<TextBlock>().Any(t=>t.Text=="2026年")&&Tree((Border)Named("InlineDateSelector")).OfType<TextBlock>().Any(t=>t.Text=="2027年"),"cross-year list adds year group headings");Shot("v4-07-cross-year");Click("InlineCancelDates");Click("EditorClose");
+        await service.ChangeAsync(b=>b.Items.RemoveAll(i=>!baseline.Contains(i.Id)));
+        // Geometry/interaction checks for the shared selector (no real user data).
+        Edit(null,day);Click("ModifyDates");
+        Check(((ScrollViewer)Named("InlineSelectedDates")).ScrollableHeight==0,"one selected date needs no scrollbar");
+        Click("InlineNextMonth");Check(Summary().Contains(day.ToString("M月d日")),"browsing a different month does not change selected dates");Click("InlinePreviousMonth");
+        Click("InlineDate"+day.AddDays(1).ToString("yyyyMMdd"));
+        Named("ReminderTitle").RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0,System.Windows.Input.MouseButton.Left){RoutedEvent=UIElement.PreviewMouseDownEvent});window.UpdateLayout();
+        Check(!Has("InlineDateSelector")&&Summary().Contains("已选 2 天"),"actual outside-click routed event accepts draft and closes selector");
+        Click("ModifyDates");Click("InlineClearDates");Click("InlineConfirmDates");Check(Summary()=="选择日期","confirm permits a temporarily empty draft");
+        Click("SaveReminder");Check(Has("SaveReminder"),"empty title and date never persist a record");Click("EditorClose");
+        Edit(null,day);Tick("SetSpecificTime",true);((TextBox)Named("ScheduleHour")).Text="1830";((TextBox)Named("ReminderTitle")).Text="输入边界验证";Tick("CreateAlarm",true);Tick("EarlyReminder",true);((TextBox)Named("EarlyMinutes")).Text="0";Click("SaveReminder");Check(((TextBlock)Named("EditorError")).Text.Contains("1～60"),"zero advance rejected");
+        ((TextBox)Named("EarlyMinutes")).Text="60";
+        double toggleX=Named("SetSpecificTime").TransformToAncestor(window).Transform(new Point()).X;
+        Check(new[]{"CreateAlarm","EarlyReminder"}.All(n=>Math.Abs(Named(n).TransformToAncestor(window).Transform(new Point()).X-toggleX)<.5),"all three switch tracks share exactly one X position");
+        Check(Math.Abs(Named("EarlyMinutes").TransformToAncestor(window).Transform(new Point()).X-Named("ScheduleTimeField").TransformToAncestor(window).Transform(new Point()).X)<.5,"time and advance parameters stay in their shared parameter column");
+        Click("SaveReminder");await Task.Delay(120);var inputRecord=service.Book.Items.Single(i=>i.Title=="输入边界验证");Check(inputRecord.Start.TimeOfDay==new TimeSpan(18,30,0)&&inputRecord.EarlyMinutes==60,"four-digit time and sixty-minute inclusive boundary persist");
+        Edit(inputRecord,day);((TextBox)Named("ScheduleHour")).Text="9";((TextBox)Named("ScheduleMinute")).Text="3";Click("SaveReminder");await Task.Delay(120);Check(service.Book.Items.Single(i=>i.Id==inputRecord.Id).Start.TimeOfDay==new TimeSpan(9,30,0),"independent hour/minute edits normalize without spinner");
+        var futureGroup=new ReminderItem{Calendar=true,Title="只删除日期验证",HasTime=false,Enabled=false,Start=day,Repeat=ReminderRepeat.Dates,Dates=[day,day.AddDays(1),day.AddDays(2)]};await service.ChangeAsync(b=>b.Items.Add(futureGroup));
+        Edit(futureGroup,day);Click("DeleteOccurrence");Check(Tree(window).OfType<TextBlock>().Any(t=>t.Text.Contains(day.ToString("M月d日"))),"delete-today confirmation identifies the actual selected date");Click("ConfirmScheduleAction");await Task.Delay(120);Check(service.Book.Items.Single(i=>i.Id==futureGroup.Id).Dates.SequenceEqual(new[]{day.AddDays(1),day.AddDays(2)}),"delete-today removes only one occurrence and keeps group identity");
+        Edit(service.Book.Items.Single(i=>i.Id==futureGroup.Id));Check(!Has("DeleteFutureSchedules"),"all-future group has no misleading mixed-history action");Click("DeleteGroup");Click("CancelScheduleAction");Check(service.Book.Items.Any(i=>i.Id==futureGroup.Id),"cancel full deletion keeps group");Click("DeleteGroup");Click("ConfirmScheduleAction");await Task.Delay(120);Check(!service.Book.Items.Any(i=>i.Id==futureGroup.Id),"confirmed full deletion removes the selected group only");
+        await service.ChangeAsync(b=>b.Items.RemoveAll(i=>!baseline.Contains(i.Id)));
+    }
+}
