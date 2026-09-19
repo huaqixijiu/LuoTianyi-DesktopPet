@@ -3006,7 +3006,7 @@ public partial class MainWindow : Window
 
     private void PlayResolvedContinuousAnimation(bool preserveVisualTransition = false)
     {
-        if (IsEdgeDockHidden || IsGenshinPresentationLocked)
+        if (_edgeDockSide != EdgeDockSide.None || IsGenshinPresentationLocked)
         {
             return;
         }
@@ -3038,7 +3038,7 @@ public partial class MainWindow : Window
         Action? afterTransition = null,
         DesktopRectangle? dragReleaseBounds = null)
     {
-        if (IsEdgeDockHidden || IsGenshinPresentationLocked)
+        if (_edgeDockSide != EdgeDockSide.None || IsGenshinPresentationLocked)
         {
             afterTransition?.Invoke();
             return;
@@ -3164,17 +3164,8 @@ public partial class MainWindow : Window
         ++_edgeDockAnimationGeneration;
         EdgeDockHandle.Visibility = Visibility.Collapsed;
         PetImage.IsHitTestVisible = true;
-        PlayEdgeDockToward(
-            revealed: true,
-            completed ?? (() =>
-            {
-                if (!_isClosing && _edgeDockSide != EdgeDockSide.None &&
-                    _edgeDockRevealed && !IsGenshinPresentationLocked)
-                {
-                    _ = TransitionToResolvedContinuousAnimationAsync(
-                        "window.edge_dock_reveal_completed");
-                }
-            }));
+        // The range player holds its end frame until an explicit dock exit.
+        PlayEdgeDockToward(revealed: true, completed);
         PositionEdgeDock(hidden: false);
         _logger.Info("window.edge_dock_revealed", _edgeDockSide.ToString());
     }

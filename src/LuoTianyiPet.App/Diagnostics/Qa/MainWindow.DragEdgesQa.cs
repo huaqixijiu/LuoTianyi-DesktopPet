@@ -115,6 +115,48 @@ public partial class MainWindow
                 Check(_edgeDockSide == side, $"Actual overscan still docks on {side}");
                 ShowPetFromTray();
                 Check(_edgeDockSide == EdgeDockSide.None && IsVisible, $"Recall from {side} remains available");
+
+                _dragEdgeCandidate = side;
+                Check(TryEnterEdgeDock(), $"Dock again for hover test: {side}");
+                await Task.Delay(1200);
+                RevealEdgeDock();
+                int revealEndFrame = GetEdgeDockFrames(side).RevealEndFrame;
+                var dockAnimation = _animationCatalog.GetRequired(GetEdgeDockAnimation(side));
+                int revealMilliseconds = (int)(dockAnimation.FrameDurationsMilliseconds
+                    .Skip(GetEdgeDockFrames(side).HiddenFrame)
+                    .Take(revealEndFrame - GetEdgeDockFrames(side).HiddenFrame + 1)
+                    .Sum() / GetEdgeDockPlaybackRate(side, revealed: true)) + 350;
+                await Task.Delay(revealMilliseconds);
+                Check(_edgeDockSide == side && _edgeDockRevealed &&
+                    _animationPlayer?.CurrentAnimationId == dockAnimation.Id &&
+                    _animationPlayer.CurrentFrameIndex == revealEndFrame,
+                    $"Hover holds reveal end frame on {side}");
+                CaptureQuickActionsQa(this, Path.Combine(directory, $"hover-{side}.png"));
+                await Task.Delay(400);
+                Check(_animationPlayer?.CurrentAnimationId == dockAnimation.Id &&
+                    _animationPlayer.CurrentFrameIndex == revealEndFrame,
+                    $"Hover does not fall back to idle on {side}");
+
+                HideEdgeDock();
+                await Task.Delay(1200);
+                Check(IsEdgeDockHidden &&
+                    _animationPlayer?.CurrentFrameIndex == GetEdgeDockFrames(side).HiddenFrame,
+                    $"Mouse leave can hide again on {side}");
+                RevealEdgeDock();
+                await Task.Delay(revealMilliseconds);
+                _dragPressScreenPoint = new Point(600, 500);
+                BeginWindowDrag();
+                Check(_edgeDockSide == EdgeDockSide.None &&
+                    _animationPlayer?.CurrentAnimationId != dockAnimation.Id,
+                    $"Dragging out exits the docked frame on {side}");
+                DesktopRectangle dragArea = GetCurrentWorkArea();
+                MoveWindowWithPointer(new Point(
+                    600 + dragArea.Left + (dragArea.Width - Width) / 2 - Left,
+                    500 + dragArea.Top + (dragArea.Height - Height) / 2 - Top),
+                    DateTimeOffset.Now);
+                EndWindowDrag();
+                Check(_edgeDockSide == EdgeDockSide.None,
+                    $"Dragged pet remains out of the dock on {side}");
             }
             File.WriteAllLines(Path.Combine(directory, "result.txt"), checks);
             Application.Current.Shutdown(checks.Any(check => check.StartsWith("FAIL")) ? 1 : 0);
