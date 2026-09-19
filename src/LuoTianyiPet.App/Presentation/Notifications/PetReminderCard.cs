@@ -17,6 +17,9 @@ internal sealed class PetReminderCard : Window
     private readonly TextBlock _arrow=new(){Text="⌄",FontSize=20,Foreground=PlannerTheme.Muted,VerticalAlignment=VerticalAlignment.Center};
     private readonly ScrollViewer _viewport=new(){HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,ClipToBounds=true};
     private bool _quick;
+    private readonly Border _scaledContent;
+    private double _displayScale = 1;
+    private bool _expanded;
     internal double TargetHeight { get; private set; }
     internal event Action? ToggleRequested;
     internal event Action? GeometryChanged;
@@ -37,7 +40,8 @@ internal sealed class PetReminderCard : Window
         content.SizeChanged+=(_,_)=>content.Clip=new RectangleGeometry(new Rect(0,0,content.ActualWidth,content.ActualHeight),15,15);
         Surface=new(){CornerRadius=new CornerRadius(16),Background=Brushes.White,BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Child=content,ClipToBounds=true,
             Effect=new DropShadowEffect{BlurRadius=12,ShadowDepth=3,Opacity=.16,Color=Color.FromRgb(41,90,135)}};
-        Content=new Border{Padding=new Thickness(8),Child=Surface};
+        _scaledContent=new Border{Padding=new Thickness(8),Child=Surface,Width=360};
+        Content=_scaledContent;
         SizeChanged+=(_,_)=>GeometryChanged?.Invoke();
         DpiChanged+=(_,_)=>GeometryChanged?.Invoke();
     }
@@ -51,16 +55,17 @@ internal sealed class PetReminderCard : Window
 
     internal void SetExpanded(bool expanded,bool animate=true)
     {
+        _expanded=expanded;
         _arrow.Text=expanded?"⌃":"⌄";
         Header.ToolTip=expanded?"收起提醒":"展开提醒";
         _viewport.IsHitTestVisible=!_quick||expanded;
         var body=(UIElement)_viewport.Content;
-        body.Measure(new System.Windows.Size(Math.Max(80,Width-18),double.PositiveInfinity));
+        body.Measure(new System.Windows.Size(342,double.PositiveInfinity));
         double desired=Math.Min(340,body.DesiredSize.Height);
         double height=_quick&&!expanded?0:desired;
         double from=_viewport.ActualHeight;
         _viewport.BeginAnimation(HeightProperty,null);_viewport.Height=height;
-        TargetHeight=height+(_quick?48:0)+18;
+        TargetHeight=(height+(_quick?48:0)+18)*_displayScale;
         if(animate&&Math.Abs(from-height)>1)
             _viewport.BeginAnimation(HeightProperty,new DoubleAnimation(from,height,TimeSpan.FromMilliseconds(180)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut},FillBehavior=FillBehavior.Stop});
         GeometryChanged?.Invoke();
@@ -71,6 +76,16 @@ internal sealed class PetReminderCard : Window
         MaxHeight=Math.Max(18,available);
         // Constrain the scroll viewport itself, not only its transparent host;
         // otherwise a large pet can clip the lower buttons without a scrollbar.
-        _viewport.MaxHeight=Math.Max(0,MaxHeight-(_quick?48:0)-18);
+        _viewport.MaxHeight=Math.Max(0,MaxHeight/_displayScale-(_quick?48:0)-18);
+    }
+
+    internal void ScaleForPet(double percent,double availableWidth)
+    {
+        double scale=Math.Min(Math.Sqrt(Math.Max(.5,Math.Min(3,percent/100d)))*.85,Math.Max(1,availableWidth)/360);
+        if(Math.Abs(scale-_displayScale)<.001)return;
+        _displayScale=scale;
+        _scaledContent.LayoutTransform=new ScaleTransform(scale,scale);
+        Width=360*scale;
+        if(_viewport.Content is UIElement)SetExpanded(_expanded,false);
     }
 }

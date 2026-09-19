@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using FontFamily = System.Windows.Media.FontFamily;
 using System.Windows.Controls;
 using System.Windows.Markup;
@@ -81,12 +81,13 @@ internal sealed class DateSelectionWindow : Window
         DockPanel nav = new() { Margin = new Thickness(2, 2, 2, 6) }; var prev = NavButton("chevron-left", () => Move(-1), "上个月");prev.Name="PreviousDateMonth"; var next = NavButton("chevron-right", () => Move(1), "下个月");next.Name="NextDateMonth";
         DockPanel.SetDock(prev, Dock.Left); DockPanel.SetDock(next, Dock.Right); nav.Children.Add(prev); nav.Children.Add(next);
         nav.Children.Add(new TextBlock { Text = _month.ToString("yyyy年M月"), TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = PlannerTheme.Ink }); _panel.Children.Add(nav);
-        Grid grid = new(); for (int c = 0; c < 7; c++) grid.ColumnDefinitions.Add(new()); for (int r = 0; r < 7; r++) grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        int weeks = (((int)_month.DayOfWeek + 6) % 7 + DateTime.DaysInMonth(_month.Year,_month.Month) + 6) / 7;
+        Grid grid = new(); for (int c = 0; c < 7; c++) grid.ColumnDefinitions.Add(new()); for (int r = 0; r < weeks+1; r++) grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.AddHandler(UIElement.PreviewMouseMoveEvent, new System.Windows.Input.MouseEventHandler((_, e) => ContinueDrag(grid, e)), true);
         grid.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new System.Windows.Input.MouseButtonEventHandler((_, e) => EndDrag(e)), true);
         for (int c = 0; c < 7; c++) { TextBlock t = new() { Text = "一二三四五六日"[c].ToString(), TextAlignment = TextAlignment.Center, Margin = new Thickness(4, 10, 4, 8), FontSize = 12.5, Foreground = PlannerTheme.Muted }; Grid.SetColumn(t,c); grid.Children.Add(t); }
         DateTime start = _month.AddDays(-((int)_month.DayOfWeek + 6) % 7);
-        for (int i = 0; i < 42; i++)
+        for (int i = 0; i < weeks*7; i++)
         {
             DateTime day = start.AddDays(i); Button b = Make(day.Day.ToString(), () => { if (_suppressNextClick) { _suppressNextClick = false; return; } Toggle(day); });
             b.Name = "Date" + day.ToString("yyyyMMdd"); b.ToolTip = day.ToString("yyyy年M月d日") + " " + CalendarLabels.FullLunar(day);
@@ -97,7 +98,6 @@ internal sealed class DateSelectionWindow : Window
             {
                 StackPanel todayLabel=new(){VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=System.Windows.HorizontalAlignment.Center};
                 todayLabel.Children.Add(new TextBlock{Text=day.Day.ToString(),TextAlignment=TextAlignment.Center,FontSize=14});
-                todayLabel.Children.Add(new TextBlock{Text="今",TextAlignment=TextAlignment.Center,FontSize=8,Margin=new Thickness(0,-2,0,0)});
                 b.Content=todayLabel;
             }
             b.MouseEnter+=(_,_)=>{if(!Selection.Contains(day))b.Background=PlannerTheme.HoverBackground;};

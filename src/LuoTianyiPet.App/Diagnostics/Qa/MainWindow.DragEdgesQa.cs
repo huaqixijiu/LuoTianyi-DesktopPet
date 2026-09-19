@@ -13,6 +13,41 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         List<string> checks = [];
         void Check(bool condition, string label) => checks.Add((condition ? "PASS " : "FAIL ") + label);
+        async Task CheckMusicRestoreAsync(EdgeDockSide side, bool startWhileHidden)
+        {
+            _stateMachine.CancelActiveReaction();
+            _stateMachine.SetMusicAnimation("resonance-enjoy-music");
+            _stateMachine.SetContinuousState(startWhileHidden
+                ? PetContinuousState.Idle
+                : PetContinuousState.MusicPlaying);
+            PlayResolvedContinuousAnimation();
+            _dragEdgeCandidate = side;
+            Check(TryEnterEdgeDock(), $"Music restore docks on {side} ({(startWhileHidden ? "starts hidden" : "starts before")})");
+            await Task.Delay(850);
+            if (startWhileHidden)
+            {
+                _stateMachine.SetContinuousState(PetContinuousState.MusicPlaying);
+            }
+
+            RevealEdgeDock();
+            await Task.Delay(850);
+            _dragPressScreenPoint = new Point(600, 500);
+            BeginWindowDrag();
+            DesktopRectangle area = GetCurrentWorkArea();
+            MoveWindowWithPointer(new Point(
+                600 + area.Left + (area.Width - Width) / 2 - Left,
+                500 + area.Top + (area.Height - Height) / 2 - Top),
+                DateTimeOffset.Now);
+            EndWindowDrag();
+            await Task.Delay(700);
+            PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
+            Check(_stateMachine.CurrentContinuousState == PetContinuousState.MusicPlaying &&
+                plan.Source == PlaybackPlanSource.Continuous &&
+                _animationPlayer?.CurrentAnimationId == plan.AnimationId,
+                $"Dragging out restores music animation on {side} ({(startWhileHidden ? "starts hidden" : "starts before")})");
+            _stateMachine.SetContinuousState(PetContinuousState.Idle);
+            PlayResolvedContinuousAnimation();
+        }
         try
         {
             await Task.Delay(600);
@@ -157,6 +192,9 @@ public partial class MainWindow
                 EndWindowDrag();
                 Check(_edgeDockSide == EdgeDockSide.None,
                     $"Dragged pet remains out of the dock on {side}");
+
+                await CheckMusicRestoreAsync(side, startWhileHidden: false);
+                await CheckMusicRestoreAsync(side, startWhileHidden: true);
             }
             File.WriteAllLines(Path.Combine(directory, "result.txt"), checks);
             Application.Current.Shutdown(checks.Any(check => check.StartsWith("FAIL")) ? 1 : 0);

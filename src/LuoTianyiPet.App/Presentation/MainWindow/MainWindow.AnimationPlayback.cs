@@ -110,6 +110,7 @@ public partial class MainWindow
         PetImage.IsHitTestVisible = true;
         FallbackSurface.Visibility = System.Windows.Visibility.Collapsed;
         if (!preserveWindowBounds) ResizeAnimationStage();
+        PositionMusicIslandNearPet();
         UpdateBodyHitDebugOverlay();
     }
 

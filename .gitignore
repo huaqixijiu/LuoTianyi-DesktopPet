@@ -62,3 +62,20 @@ Desktop.ini
 # Crash dumps and local diagnostic output.
 *.dmp
 *.stackdump
+
+# Local development workspace; the repository delivers the runnable client.
+/.agents/
+/.github/
+/docs/
+/tools/
+/tests/
+/LuoTianyiPet.Development.sln
+/README.md
+/DEVELOPMENT.md
+/assets/README.md
+/assets/animations/processed/
+/config/animation-sources.json
+/config/scene-rules.example.json
+/packaging/
+/.codex-remote-attachments/
+/UserData/

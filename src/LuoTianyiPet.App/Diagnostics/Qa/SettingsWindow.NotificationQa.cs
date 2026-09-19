@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
@@ -25,10 +25,11 @@ public partial class SettingsWindow
             checks.Add("PASS " + label);
         }
         SettingsWindow? window = null;
-        SettingsWindow Create(IMessageNotificationSource? source, MediaPreferences? media = null) => new(
+        SettingsWindow Create(IMessageNotificationSource? source, MediaPreferences? media = null, ReminderPreferences? reminder = null) => new(
             new MessageNotificationPreferences { EnableMessageReminders = true, EnableQqDetailedReminders = true,
                 EnableWeChatDetailedReminders = true, WindowsNotificationAccessGranted = false },
-            new WindowPreferences(), new FileTreatPreferences(), new AppearancePreferences(), media ?? new MediaPreferences(), false, source);
+            new WindowPreferences(), new FileTreatPreferences(), new AppearancePreferences(), media ?? new MediaPreferences(), false, source,
+            reminder);
         try
         {
             foreach (MessageNotificationAccessStatus status in Enum.GetValues(typeof(MessageNotificationAccessStatus)))
@@ -131,7 +132,9 @@ public partial class SettingsWindow
                 modal.AlarmAnimationCheckBox.IsChecked=true;
                 modal.AlarmSoundCheckBox.IsChecked=false;
                 modal.AlarmVolumeSlider.Value=0.35;
+                modal.PlannerSizeSelector.SelectedIndex=2;
                 modal.OnSaveClick(modal, new RoutedEventArgs());
+                Check(modal.SelectedAppearancePreferences.PlannerSize=="comfortable","Planner size setting saves independently");
             }));
             Check(modal.ShowDialog() == true, "Save accepts the settings dialog");
             Check(modal.SelectedReminderPreferences.Animation&&!modal.SelectedReminderPreferences.Sound&&Math.Abs(modal.SelectedReminderPreferences.Volume-0.35)<0.001,"Save commits independent alarm animation sound and volume");
@@ -164,6 +167,43 @@ public partial class SettingsWindow
                 CaptureNotificationSettings(window, Path.Combine(directory, name + "-150.png"), 1.5);
             }
             window.Close();
+            window = null;
+            window = Create(null, reminder: new ReminderPreferences { Sound = true, Volume = 0.35 });
+            window.Show();
+            TaskCompletionSource<bool> firstPlayback = new();
+            void ObservePlayback(bool playing)
+            {
+                if (playing) firstPlayback.TrySetResult(true);
+            }
+            ReminderAudio.PlaybackStateChanged += ObservePlayback;
+            try
+            {
+                window.OnTestAlarmSound(window, new RoutedEventArgs());
+                await Task.WhenAny(firstPlayback.Task, Task.Delay(5000));
+                Check(firstPlayback.Task.Status == TaskStatus.RanToCompletion && ReminderAudio.IsPlaying &&
+                    Equals(window.TestAlarmSoundButton.Content, "停止试听"),
+                    "First preview waits for MediaOpened and enters the playing state");
+                window.AlarmVolumeSlider.Value=0.72;
+                Check(Math.Abs(ReminderAudio.ActiveVolume-0.72)<0.001,
+                    "Changing volume while previewing updates the active player");
+                ReminderAudio.StopAlarm();
+                Check(ReminderAudio.IsPlaying,
+                    "Planner alarm cleanup does not stop the settings preview");
+                window.OnTestAlarmSound(window, new RoutedEventArgs());
+                Check(!ReminderAudio.IsPlaying && Equals(window.TestAlarmSoundButton.Content, "试听音乐"),
+                    "Stopping preview releases the player and resets the button");
+                firstPlayback = new();
+                window.OnTestAlarmSound(window, new RoutedEventArgs());
+                await Task.WhenAny(firstPlayback.Task, Task.Delay(5000));
+                Check(firstPlayback.Task.Status == TaskStatus.RanToCompletion && ReminderAudio.IsPlaying,
+                    "A second preview can open the same MP3 after the first one stops");
+            }
+            finally
+            {
+                ReminderAudio.PlaybackStateChanged -= ObservePlayback;
+                ReminderAudio.Stop();
+                window.Close();
+            }
             window = null;
         }
         catch (Exception error) { checks.Add("FAIL " + error); }

@@ -50,7 +50,7 @@ public partial class MainWindow
             Set("_date",new DateTime(2027,1,31));typeof(PlannerWindow).GetMethod("Render",BindingFlags.NonPublic|BindingFlags.Instance,null,Type.EmptyTypes,null)!.Invoke(window,null);window.UpdateLayout();Click(window,"MonthJump");await Task.Delay(60);monthPopup=(System.Windows.Controls.Primitives.Popup)Named(window,"MonthPickerPopup");((Button)Tree(monthPopup.Child).OfType<FrameworkElement>().First(x=>x.Name=="PickMonth02")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(((DateTime)typeof(PlannerWindow).GetField("_date",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(window)!)==new DateTime(2027,2,28),"A41 jumping from the 31st to a shorter month selects its last day");Set("_date",day);typeof(PlannerWindow).GetMethod("Render",BindingFlags.NonPublic|BindingFlags.Instance,null,Type.EmptyTypes,null)!.Invoke(window,null);window.UpdateLayout();
             var plannerTitle=(Grid)Named(window,"PlannerTitleBar");
             var plannerChrome=System.Windows.Shell.WindowChrome.GetWindowChrome(window);
-            Check(window.Width==1200&&window.Height==810&&window.MinWidth==1200&&window.MaxWidth==1200&&window.MinHeight==810&&window.MaxHeight==810&&window.ResizeMode==ResizeMode.NoResize&&plannerChrome?.ResizeBorderThickness==new Thickness(0),"Planner has a fixed 1200×810 viewport with no resize grip");
+            Check(window.Width>0&&window.Height>0&&window.Width<=SystemParameters.WorkArea.Width&&window.Height<=SystemParameters.WorkArea.Height&&window.ResizeMode==ResizeMode.NoResize&&plannerChrome?.ResizeBorderThickness==new Thickness(0),"Planner fits the available desktop with no resize grip");
             var titleActions=(StackPanel)plannerTitle.Children.OfType<StackPanel>().Single(p=>Grid.GetColumn(p)==2);
             Check(titleActions.Children.Count==1&&titleActions.Children[0] is Button onlyClose&&onlyClose.Name=="PlannerCloseWindow"&&!Tree(plannerTitle).OfType<Button>().Any(b=>Equals(b.ToolTip,"最小化")||Equals(b.ToolTip,"最大化")),"Planner title bar exposes only Close");
             bool BlankTitleHit(double fraction)
@@ -62,7 +62,7 @@ public partial class MainWindow
             }
             Check(plannerTitle.Background==Brushes.Transparent&&BlankTitleHit(.33)&&BlankTitleHit(.74),"title bar blank areas receive drag input without covering navigation or window buttons");
             Check(!Tree(window).OfType<FrameworkElement>().Any(e=>e.Name=="PlannerSettingsButton"),"Planner header does not expose the removed reminder settings entry");
-            Check(((Button)Named(window,"PlannerCalendarNavigation")).Content is StackPanel&&((Button)Named(window,"PlannerAlarmNavigation")).Content is StackPanel,"Planner tabs use selected color without an underline row");
+            Check(((Button)Named(window,"PlannerCalendarNavigation")).Content is Grid selectedTab&&selectedTab.Children.OfType<Border>().Count()==1&&((Button)Named(window,"PlannerAlarmNavigation")).Content is Grid inactiveTab&&!inactiveTab.Children.OfType<Border>().Any(),"Planner tabs show an underline only on the selected tab");
             Check(Tree(window).OfType<Button>().Any(b=>b.Name=="ManageSchedules"&&Equals(b.Content,"管理日程")),"calendar exposes schedule management next to creation");
             var body=(ScrollViewer)typeof(PlannerWindow).GetField("_body",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(window)!;
             Check(((Grid)body.Content).ColumnDefinitions.Count==1,"A02 opening month starts with the full width calendar and no day details");
@@ -256,8 +256,9 @@ public partial class MainWindow
             await service.ChangeAsync(b=>ReminderEngine.Advance(b,keptItem.Start.AddDays(7)));Check(service.Book.Occurrences.Any(o=>o.At==keptItem.Start.AddDays(7)&&o.Phase==ReminderPhase.Due),"next weekly occurrence still rings after cancelling quick card");
             PetReminderCard constrained=new(this);constrained.Present("空间限制验证",new Border{Height=400},true,true);constrained.LimitHeight(140);constrained.Show();constrained.UpdateLayout();
             var constrainedScroll=Tree(constrained).OfType<ScrollViewer>().Single();Check(constrained.ActualHeight<=140&&constrainedScroll.ScrollableHeight>0,"small available space scrolls content instead of clipping actions");constrained.Close();
+            await VerifyReminderLayoutQaAsync(service,Check,(w,name)=>Snapshot(w,name,true));
             await VerifyReminderStartupQaAsync(path, Check, (w, name) => Snapshot(w, name, true));
-            window.Close();_reminderCard.Close();_reminderCard=null;_reminders=null;File.WriteAllLines(Path.Combine(path,"result.txt"),checks);
+            await RunPlannerRevisionQa(window,service,path,checks);window.Close();_reminderCard.Close();_reminderCard=null;_reminders=null;File.WriteAllLines(Path.Combine(path,"result.txt"),checks);
         }
         catch(Exception ex){File.WriteAllText(Path.Combine(path,"FAILED.txt"),ex.ToString());}
         finally{System.Windows.Application.Current.Shutdown();}

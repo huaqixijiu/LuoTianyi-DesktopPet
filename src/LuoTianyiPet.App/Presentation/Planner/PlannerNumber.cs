@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -20,9 +20,9 @@ internal sealed class PlannerNumber : StackPanel
 
     public PlannerNumber(string name,int value,int max)
     {
-        _max=max;Width=96;Margin=new Thickness(4,0,4,0);HorizontalAlignment=System.Windows.HorizontalAlignment.Center;
+        _max=max;Width=140;Margin=new Thickness(4,0,4,0);HorizontalAlignment=System.Windows.HorizontalAlignment.Center;
         _previous=SideValue();_next=SideValue();
-        Input=new TextBox{Name=name,Text=Math.Max(0,Math.Min(max,value)).ToString("00"),FontFamily=new FontFamily("Segoe UI"),FontWeight=FontWeights.SemiBold,Foreground=PlannerTheme.Ink,Background=PlannerTheme.AccentSoft,FontSize=25,TextAlignment=TextAlignment.Center,Padding=new Thickness(3,7,3,7),BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Height=48};
+        Input=new TextBox{Name=name,Text=Math.Max(0,Math.Min(max,value)).ToString("00"),FontFamily=new FontFamily("Segoe UI"),FontWeight=FontWeights.SemiBold,Foreground=PlannerTheme.Ink,Background=PlannerTheme.AccentSoft,FontSize=25,TextAlignment=TextAlignment.Center,Padding=new Thickness(3,7,3,7),BorderBrush=PlannerTheme.Line,BorderThickness=new Thickness(1),Height=62};
         Children.Add(_previous);Children.Add(Input);Children.Add(_next);
         PreviewMouseWheel+=(_,e)=>{Step(e.Delta>0?1:-1);e.Handled=true;};
         PreviewMouseLeftButtonDown+=BeginDrag;PreviewMouseMove+=ContinueDrag;PreviewMouseLeftButtonUp+=EndDrag;LostMouseCapture+=(_,_)=>{_dragPending=false;_dragging=false;};
@@ -33,7 +33,7 @@ internal sealed class PlannerNumber : StackPanel
     }
 
     internal void SetEnabled(bool enabled){IsEnabled=enabled;Opacity=enabled?1:0.48;}
-    private TextBlock SideValue()=>new(){Height=30,FontFamily=new FontFamily("Segoe UI"),FontSize=17,Foreground=PlannerTheme.Muted,Opacity=0.55,TextAlignment=TextAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
+    private TextBlock SideValue()=>new(){Height=44,FontFamily=new FontFamily("Segoe UI"),FontSize=22,Foreground=PlannerTheme.Muted,Opacity=0.55,TextAlignment=TextAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
     private void Step(int delta){int current=Value<0?0:Value;Input.Text=Math.Max(0,Math.Min(_max,current+delta)).ToString("00");Input.CaretIndex=Input.Text.Length;}
     private void Normalize(){int value=Value<0?0:Math.Max(0,Math.Min(_max,Value));Input.Text=value.ToString("00");}
     private void RefreshNeighbors(){int value=Value<0?0:Math.Max(0,Math.Min(_max,Value));int previous=value==0?(_max==24?23:_max):value-1;int next=value>=_max?0:value+1;_previous.Text=previous.ToString("00");_next.Text=next.ToString("00");}

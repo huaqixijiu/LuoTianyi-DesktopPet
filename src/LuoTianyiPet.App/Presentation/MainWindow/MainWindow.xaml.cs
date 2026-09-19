@@ -45,6 +45,7 @@ public partial class MainWindow : Window
     private const int CrystalDuckSitLastFrame = 216;
     private const double GenshinCameoSafeMargin = 24;
     private const double MediaControlsReservedHeight = 86;
+    private const double MusicIslandPetGap = 7;
     private const double FeedbackBubbleAnchorOffset = 92;
     private const double TrackInfoReservedHeight = 86;
     private static readonly TimeSpan AccessoryMouseLeaveDelay = TimeSpan.FromSeconds(5);
@@ -216,6 +217,7 @@ public partial class MainWindow : Window
     private EdgeDockSide _edgeDockSide;
     private EdgeDockSide _dragEdgeCandidate;
     private DesktopRectangle? _dragIntentPetBoundsInWindow;
+    private bool _edgeDockReleasedByDrag;
     private bool _classicDragExpansionStarted;
     private bool _classicSpinDanceActive;
     private Guid? _classicSpinDanceReactionToken;
@@ -430,6 +432,7 @@ public partial class MainWindow : Window
         _previewFeedback = previewFeedback;
         _persistSettings = persistSettings;
         InitializeComponent();
+        FeedbackBubble.LayoutUpdated += (_, _) => PositionFeedbackNearPet();
         if (!_showQaTaskbar)
         {
             _desktopToolWindowBehavior = new DesktopToolWindowBehavior(
@@ -1701,6 +1704,7 @@ public partial class MainWindow : Window
             CancelReactionForDrag();
         }
         _sleepHeldAfterDrag = _stateMachine.CurrentContinuousState == PetContinuousState.Sleeping;
+        _edgeDockReleasedByDrag = _edgeDockSide != EdgeDockSide.None;
         // A moved cameo must finish at its new position instead of jumping back.
         _genshinCameoRestorePosition = null;
         if (_edgeDockSide != EdgeDockSide.None)
@@ -1784,6 +1788,8 @@ public partial class MainWindow : Window
 
         _rapidDragTracker.Cancel();
         _isWindowDragging = false;
+        bool edgeDockReleasedByDrag = _edgeDockReleasedByDrag;
+        _edgeDockReleasedByDrag = false;
         if (_stateMachine.EndDrag())
         {
             if (TryEnterEdgeDock())
@@ -1815,7 +1821,15 @@ public partial class MainWindow : Window
             _dragIntentPetBoundsInWindow = null;
             _dragEdgeCandidate = EdgeDockSide.None;
             SetEdgeMirror(false);
-            if (_dragPreservesAnimation || !CanUseOrdinaryDragVisual() || _animationPlayer?.CurrentAnimationId == _stateMachine.Resolve(DateTimeOffset.Now).AnimationId)
+            PetPlaybackPlan resolvedPlan = _stateMachine.Resolve(DateTimeOffset.Now);
+            if (edgeDockReleasedByDrag &&
+                resolvedPlan.Source == PlaybackPlanSource.Continuous)
+            {
+                _ = TransitionToResolvedContinuousAnimationAsync(
+                    "animation.edge_dock_drag_restored",
+                    dragReleaseBounds: releaseBounds);
+            }
+            else if (_dragPreservesAnimation || !CanUseOrdinaryDragVisual() || _animationPlayer?.CurrentAnimationId == resolvedPlan.AnimationId)
             {
                 ApplyDragReleasePlacement(releaseBounds);
                 UpdateBodyHitDebugOverlay();
@@ -3128,6 +3142,7 @@ public partial class MainWindow : Window
         _dragEdgeCandidate = EdgeDockSide.None;
         _edgeDockSide = side;
         _edgeDockRevealed = false;
+        _edgeDockReleasedByDrag = false;
         if (side == EdgeDockSide.Bottom)
         {
             ApplyAccessoryLayout(AccessoryLayout.AbovePet);
@@ -3540,6 +3555,10 @@ public partial class MainWindow : Window
     {
         if (_accessoryLayout == layout && !force)
         {
+            if (layout == AccessoryLayout.AbovePet)
+            {
+                PositionMusicIslandNearPet();
+            }
             return;
         }
 
@@ -3561,7 +3580,7 @@ public partial class MainWindow : Window
                 MediaControls.VerticalAlignment = VerticalAlignment.Top;
                 MediaControls.Margin = new Thickness(0, 7, 0, 0);
                 FeedbackBubble.VerticalAlignment = VerticalAlignment.Top;
-                FeedbackBubble.Margin = new Thickness(5, 92, 5, 0);
+                FeedbackBubble.Margin = new Thickness(5, 6, 5, 0);
                 break;
             case AccessoryLayout.BelowPet:
                 PetVisual.Margin = new Thickness(8, 8, 8, edgeReservation);
@@ -3569,7 +3588,7 @@ public partial class MainWindow : Window
                 MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
                 MediaControls.Margin = new Thickness(0, 0, 0, 7);
                 FeedbackBubble.VerticalAlignment = VerticalAlignment.Bottom;
-                FeedbackBubble.Margin = new Thickness(5, 0, 5, 92);
+                FeedbackBubble.Margin = new Thickness(5, 0, 5, 6);
                 break;
             case AccessoryLayout.Split:
                 PetVisual.Margin = new Thickness(8, 60 + _feedbackSlotHeight, 8, 86);
@@ -3577,7 +3596,7 @@ public partial class MainWindow : Window
                 MediaControls.VerticalAlignment = VerticalAlignment.Bottom;
                 MediaControls.Margin = new Thickness(0, 0, 0, 7);
                 FeedbackBubble.VerticalAlignment = VerticalAlignment.Top;
-                FeedbackBubble.Margin = new Thickness(5, 92, 5, 0);
+                FeedbackBubble.Margin = new Thickness(5, 6, 5, 0);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(layout));
@@ -3612,6 +3631,11 @@ public partial class MainWindow : Window
                     _dragStartTop += topAdjustment;
                 }
             }
+        }
+
+        if (layout == AccessoryLayout.AbovePet)
+        {
+            PositionMusicIslandNearPet();
         }
 
         _logger.Info(
@@ -3938,6 +3962,7 @@ public partial class MainWindow : Window
         string previousFullBodyAnimation = _stateMachine.VisualState.FullBodyAnimationId;
         int previousScale = _settings.Appearance.DisplayScalePercent;
         _settings = _settings with { Appearance = normalized };
+        _plannerWindow?.SetPageSize(normalized.PlannerSize);
 
         string fullBodyAnimation = AppearanceOptionIds.ResolveFullBodyAnimation(
             normalized.FullBodyStyle);
@@ -4601,6 +4626,63 @@ public partial class MainWindow : Window
         _feedbackSlotHeight = slot;
         ApplyAccessoryLayout(_accessoryLayout, force: true);
         UpdateAccessoryLayoutForCurrentPosition();
+    }
+
+    private void PositionFeedbackNearPet()
+    {
+        if(!IsLoaded||FeedbackBubble.Visibility!=Visibility.Visible||FeedbackBubble.ActualHeight<=0)return;
+        var pet=GetPetImageAlphaBoundsInWindow();
+        if(pet.Height<=0)return;
+        double height=FeedbackBubble.ActualHeight;
+        double top=_accessoryLayout==AccessoryLayout.BelowPet?pet.Bottom+6:pet.Top-height-6;
+        top=Math.Max(0,Math.Min(Math.Max(0,ActualHeight-height),top));
+        FeedbackBubble.VerticalAlignment=VerticalAlignment.Top;
+        if(Math.Abs(FeedbackBubble.Margin.Top-top)>.5||FeedbackBubble.Margin.Bottom!=0)
+            FeedbackBubble.Margin=new Thickness(5,top,5,0);
+    }
+
+    private void PositionMusicIslandNearPet()
+    {
+        if (!IsLoaded || _accessoryLayout != AccessoryLayout.AbovePet ||
+            PetImage.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        UpdateLayout();
+        DesktopRectangle pet = GetPetImageAlphaBoundsInWindow();
+        if (pet.Height <= 0)
+        {
+            return;
+        }
+
+        // MediaControls is laid out as a top-aligned child in this mode. Use
+        // the current animation's aggregate alpha bounds rather than the
+        // transparent stage height, so short music artwork does not leave a
+        // large invisible band between the island and the visible head.
+        double islandHeight = GetMusicIslandLayoutHeight();
+        double desiredTop = pet.Top - islandHeight - MusicIslandPetGap;
+        double maximumTop = Math.Max(0, ActualHeight - islandHeight);
+        double top = Math.Max(0, Math.Min(maximumTop, desiredTop));
+        Thickness margin = MediaControls.Margin;
+        if (Math.Abs(margin.Top - top) > 0.1 ||
+            Math.Abs(margin.Bottom) > 0.1 ||
+            Math.Abs(margin.Left) > 0.1 ||
+            Math.Abs(margin.Right) > 0.1)
+        {
+            MediaControls.Margin = new Thickness(0, top, 0, 0);
+        }
+    }
+
+    private double GetMusicIslandLayoutHeight()
+    {
+        double scale = MediaControlsLayoutScale.ScaleY;
+        if (double.IsNaN(scale) || double.IsInfinity(scale) || scale <= 0)
+        {
+            scale = 1;
+        }
+
+        return Math.Max(1, MediaControls.Height * scale);
     }
 
     private Point ConvertScreenPixelsToDips(PointerPoint point)

@@ -34,19 +34,41 @@ public partial class MainWindow
             {
                 string id = snapshot.Substring(snapshot.IndexOf('=') + 1);
                 _ = _animationCatalog.GetRequired(id);
+                bool snapshotAbovePet = Environment.GetCommandLineArgs().Contains(
+                    "--qa-stable-layout-snapshot-above",
+                    StringComparer.OrdinalIgnoreCase);
                 SetDisplayScalePercent(100, save: false);
-                ApplyAccessoryLayout(AccessoryLayout.BelowPet);
+                ApplyAccessoryLayout(snapshotAbovePet ? AccessoryLayout.AbovePet : AccessoryLayout.BelowPet);
                 var area = GetCurrentWorkArea();
                 Left = area.Right - Width;
-                Top = area.Top - PetVisual.Margin.Top;
+                Top = snapshotAbovePet
+                    ? area.Bottom - GetPetImageBoundsInWindow().Bottom
+                    : area.Top - PetVisual.Margin.Top;
                 PlayAnimation(id);
+                if (snapshotAbovePet)
+                {
+                    Top = area.Bottom - GetPetImageBoundsInWindow().Bottom;
+                    PositionMusicIslandNearPet();
+                }
                 ShowTrackInfo(new MediaTrackSnapshot(true, true, "布局回归测试", "测试歌手"), true);
                 _trackInfoHideTimer.Stop();
                 _mediaControlsHideTimer.Stop();
                 _musicIslandMotion.Show(animate: false);
                 await Task.Delay(250);
                 _musicIslandMotion.Show(animate: false);
+                if (snapshotAbovePet)
+                {
+                    UpdateLayout();
+                    Rect islandBounds = MediaControls.TransformToAncestor(this)
+                        .TransformBounds(new Rect(MediaControls.RenderSize));
+                    DesktopRectangle alpha = GetPetImageAlphaBoundsInWindow();
+                    Check(
+                        Math.Abs(alpha.Top - islandBounds.Bottom - MusicIslandPetGap) < 0.2,
+                        $"Above-pet snapshot uses the visible rendered gap " +
+                        $"(expected={MusicIslandPetGap:0.0}; actual={alpha.Top - islandBounds.Bottom:0.0})");
+                }
                 CaptureQuickActionsQa(this, Path.Combine(directory, "snapshot-" + id + ".png"));
+                File.WriteAllLines(Path.Combine(directory, "result.txt"), checks);
                 Close();
                 return;
             }
@@ -79,6 +101,20 @@ public partial class MainWindow
                         UpdateLayout();
                         UpdateAccessoryLayoutForCurrentPosition();
                         await Task.Delay(20);
+                        if (_accessoryLayout == AccessoryLayout.AbovePet)
+                        {
+                            DesktopRectangle alpha = GetPetImageAlphaBoundsInWindow();
+                            double islandHeight = GetMusicIslandLayoutHeight();
+                            double expectedTop = Math.Max(
+                                0,
+                                Math.Min(
+                                    Math.Max(0, ActualHeight - islandHeight),
+                                    alpha.Top - islandHeight - MusicIslandPetGap));
+                            Check(
+                                Near(MediaControls.Margin.Top, expectedTop),
+                                $"{scale}% {corner} round {repeat} {id}: music island follows visible artwork " +
+                                $"(expectedTop={expectedTop:0.0}; actualTop={MediaControls.Margin.Top:0.0})");
+                        }
                         Check(Near(Left, x) && Near(Top, y) && Near(Width, width) && Near(Height, height) &&
                             Near(island, MediaControls.Width) && Near(controls, MediaControlsLayoutScale.ScaleX) && layout == _accessoryLayout,
                             $"{scale}% {corner} round {repeat} {id}: stable window, islands and attachment side " +

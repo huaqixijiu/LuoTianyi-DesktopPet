@@ -1,4 +1,4 @@
-<Window x:Class="LuoTianyiPet.App.SettingsWindow"
+﻿<Window x:Class="LuoTianyiPet.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="洛天依桌宠设置" Icon="/assets/app/luotianyi-pet.ico"
@@ -241,9 +241,24 @@
                         <CheckBox x:Name="DesktopFileTreatsCheckBox" AutomationProperties.Name="启用桌面吃包子动画" Checked="OnSettingChanged" Unchecked="OnSettingChanged"><StackPanel><TextBlock Style="{StaticResource OptionTitle}" Text="桌面吃包子动画" /><TextBlock Style="{StaticResource OptionDescription}" Text="只控制桌面项目消失后的追包；拖入回收站快捷功能始终可用" /></StackPanel></CheckBox>
                     </StackPanel></Border>
                     <Border Style="{StaticResource GroupCard}"><StackPanel Margin="11,9,11,10">
-                        <Grid><TextBlock FontSize="12.5" FontWeight="SemiBold" Text="显示大小" /><TextBlock HorizontalAlignment="Right" Foreground="{StaticResource PrimaryDark}" FontWeight="SemiBold" Text="{Binding Value, ElementName=DisplayScaleSlider, StringFormat={}{0:0}%}" /></Grid>
+                        <Grid><TextBlock FontSize="12.5" FontWeight="SemiBold" Text="桌宠显示大小" /><TextBlock HorizontalAlignment="Right" Foreground="{StaticResource PrimaryDark}" FontWeight="SemiBold" Text="{Binding Value, ElementName=DisplayScaleSlider, StringFormat={}{0:0}%}" /></Grid>
                         <Slider x:Name="DisplayScaleSlider" Style="{StaticResource SettingsSlider}" Margin="0,10,0,4" Minimum="50" Maximum="300" TickFrequency="5" SmallChange="5" LargeChange="10" IsSnapToTickEnabled="True" IsMoveToPointEnabled="True" ValueChanged="OnSettingChanged" AutomationProperties.Name="桌宠显示大小" />
                         <Grid><TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" Text="50%" /><TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Text="100% 为默认大小 · 拖动时实时预览" /><TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" HorizontalAlignment="Right" Text="300%" /></Grid>
+                    </StackPanel></Border>
+                    <Border Style="{StaticResource GroupCard}"><StackPanel Margin="11,9,11,10">
+                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Text="日历/闹钟页面大小" />
+                        <ListBox x:Name="PlannerSizeSelector" Margin="0,10,0,6" Height="38" BorderThickness="0" Background="Transparent" SelectionChanged="OnSettingChanged" AutomationProperties.Name="日历/闹钟页面大小" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                            <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="SizeOption" CornerRadius="8" BorderBrush="{StaticResource Line}" BorderThickness="1" Background="White" Margin="2" Padding="5"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers>
+                                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="SizeOption" Property="Background" Value="#E4F5FF"/><Setter TargetName="SizeOption" Property="BorderBrush" Value="{StaticResource Primary}"/><Setter Property="Foreground" Value="{StaticResource PrimaryDark}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SizeOption" Property="BorderBrush" Value="{StaticResource Primary}"/></Trigger>
+                                </ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+                            </Style></ListBox.ItemContainerStyle>
+                            <ListBoxItem Content="迷你"/><ListBoxItem Content="标准"/><ListBoxItem Content="舒适"/><ListBoxItem Content="全屏"/>
+                        </ListBox>
+                        <TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" Text="默认标准 · 保存后生效 · 与桌宠大小独立" />
                     </StackPanel></Border>
                 </StackPanel>
             </ScrollViewer>

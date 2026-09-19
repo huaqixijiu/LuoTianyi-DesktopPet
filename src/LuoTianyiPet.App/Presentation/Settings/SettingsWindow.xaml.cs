@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
@@ -39,7 +39,8 @@ public partial class SettingsWindow : Window
         AlarmAnimationCheckBox.IsChecked=SelectedReminderPreferences.Animation;
         AlarmSoundCheckBox.IsChecked=SelectedReminderPreferences.Sound;
         AlarmVolumeSlider.Value=SelectedReminderPreferences.Volume;
-        Closed+=(_,_)=>{if(_alarmPreview){ReminderAudio.Stop();_alarmPreview=false;}};
+        ReminderAudio.PlaybackStateChanged+=OnReminderPlaybackStateChanged;
+        Closed+=OnClosed;
 
         MessageReminderCheckBox.IsChecked = notificationPreferences.EnableMessageReminders;
         QqDetailedReminderCheckBox.IsChecked = notificationPreferences.EnableQqDetailedReminders;
@@ -47,6 +48,7 @@ public partial class SettingsWindow : Window
         StartWithWindowsCheckBox.IsChecked = startupRegistrationEnabled;
         AlwaysOnTopCheckBox.IsChecked = windowPreferences.AlwaysOnTop;
         DisplayScaleSlider.Value = SelectedAppearancePreferences.DisplayScalePercent;
+        PlannerSizeSelector.SelectedIndex = Array.IndexOf(new[]{"mini","standard","comfortable","fullscreen"},SelectedAppearancePreferences.PlannerSize);
         FullBodyStyleCyclingCheckBox.IsChecked =
             SelectedAppearancePreferences.EnableFullBodyStyleCycling;
         DesktopFileTreatsCheckBox.IsChecked = fileTreatPreferences.EnableDesktopFileTreats;
@@ -76,11 +78,31 @@ public partial class SettingsWindow : Window
     public ReminderPreferences SelectedReminderPreferences { get; private set; } = new();
     private bool _alarmPreview;
     internal void NavigateNotifications() { NotificationNavigationRadioButton.IsChecked=true; }
-    private void OnAlarmVolumeChanged(object sender,RoutedPropertyChangedEventArgs<double> e)=>OnSettingChanged(sender,e);
+    private void OnAlarmVolumeChanged(object sender,RoutedPropertyChangedEventArgs<double> e)
+    {
+        if(_alarmPreview)ReminderAudio.SetVolume(AlarmVolumeSlider.Value);
+        OnSettingChanged(sender,e);
+    }
+    private void OnReminderPlaybackStateChanged(bool playing)
+    {
+        if(playing||!_alarmPreview)return;
+        _alarmPreview=false;
+        TestAlarmSoundButton.Content="试听音乐";
+    }
+    private void OnClosed(object? sender,EventArgs e)
+    {
+        ReminderAudio.PlaybackStateChanged-=OnReminderPlaybackStateChanged;
+        if(_alarmPreview)
+        {
+            ReminderAudio.StopPreview();
+            _alarmPreview=false;
+        }
+    }
     private void OnTestAlarmSound(object sender,RoutedEventArgs e)
     {
-        if(_alarmPreview){ReminderAudio.Stop();_alarmPreview=false;TestAlarmSoundButton.Content="试听音乐";return;}
-        ReminderAudio.Play(new(){Sound=true,Volume=AlarmVolumeSlider.Value});_alarmPreview=true;TestAlarmSoundButton.Content="停止试听";
+        if(_alarmPreview){ReminderAudio.StopPreview();_alarmPreview=false;TestAlarmSoundButton.Content="试听音乐";return;}
+        if(!ReminderAudio.PlayPreview(AlarmVolumeSlider.Value))return;
+        _alarmPreview=true;TestAlarmSoundButton.Content="停止试听";
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -232,6 +254,7 @@ public partial class SettingsWindow : Window
             {
                 EnableFullBodyStyleCycling = FullBodyStyleCyclingCheckBox.IsChecked == true,
                 DisplayScalePercent = (int)Math.Round(DisplayScaleSlider.Value / 5d) * 5,
+                PlannerSize = new[]{"mini","standard","comfortable","fullscreen"}[Math.Max(0,PlannerSizeSelector.SelectedIndex)],
             });
         WpfRadioButton? selectedMusicAnimation = MusicAnimationSelectionPanel.Children
             .OfType<WpfRadioButton>()

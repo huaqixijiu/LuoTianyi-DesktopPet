@@ -112,6 +112,7 @@ public sealed record AppearancePreferences
     public bool EnableFullBodyStyleCycling { get; init; } = true;
 
     public int DisplayScalePercent { get; init; } = DefaultDisplayScalePercent;
+    public string PlannerSize { get; init; } = "standard";
 
     public static AppearancePreferences Normalize(AppearancePreferences? preferences)
     {
@@ -121,6 +122,7 @@ public sealed record AppearancePreferences
         return preferences with
         {
             FullBodyStyle = fullBodyStyle,
+            PlannerSize = preferences.PlannerSize is "mini" or "standard" or "comfortable" or "fullscreen" ? preferences.PlannerSize : "standard",
             BunEatingStyle = AppearanceOptionIds.ResolveDefaultBunEatingStyle(fullBodyStyle),
             DisplayScalePercent = Numeric.Clamp(
                 preferences.DisplayScalePercent,

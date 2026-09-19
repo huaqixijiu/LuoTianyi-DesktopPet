@@ -19,6 +19,7 @@ public partial class MainWindow
     private readonly HashSet<string> _shownReminders = [];
     private bool _quickReminderExpanded;
     private bool _quickReminderSuppressed;
+    private bool _restoreMusicAfterReminder;
     private DateTime _quickDismissFeedbackUntil;
     private ReminderBook? _presentedReminderBook;
     private string _reminderCardKey = "";
@@ -67,6 +68,7 @@ public partial class MainWindow
         if (_plannerWindow == null)
         {
             _plannerWindow = new PlannerWindow(_reminders, alarm);
+            _plannerWindow.SetPageSize(_settings.Appearance.PlannerSize);
             _plannerWindow.Closed += (_, _) => _plannerWindow = null;
         }
         _plannerWindow.Navigate(alarm);
@@ -106,6 +108,19 @@ public partial class MainWindow
         if(_reminderCard==null)
         {
             _reminderCard=new PetReminderCard(this);
+            _reminderCard.IsVisibleChanged+=(_,_)=>
+            {
+                if(_reminderCard.IsVisible)
+                {
+                    _restoreMusicAfterReminder=MediaControls.Visibility==Visibility.Visible;
+                    HideMusicIslands();
+                }
+                else
+                {
+                    bool restore=_restoreMusicAfterReminder;_restoreMusicAfterReminder=false;
+                    if(restore&&CanShowMusicIslands&&PlannerPresentationSafe(_foregroundApplicationProbe?.Query()??new(false,null,false)))ShowTrackInfoSurface(holdAfterLeave:true);
+                }
+            };
             _reminderCard.ToggleRequested+=()=>
             {
                 _quickReminderExpanded=!_quickReminderExpanded;
@@ -116,8 +131,7 @@ public partial class MainWindow
             _reminderCard.GeometryChanged+=PositionReminderCard;
         }
         var work=GetQuickActionsWorkArea();var alpha=GetPetImageAlphaBoundsInWindow();
-        double width=Math.Min(work.Width,quick?Numeric.Clamp(alpha.Width*1.35+16,360,376):440);
-        if(Math.Abs(_reminderCard.Width-width)>1){_reminderCard.Width=width;_reminderCardKey="";}
+        _reminderCard.ScaleForPet(_settings.Appearance.DisplayScalePercent,work.Width);
         bool fresh=false;
         var validKeys=new HashSet<string>(pending.Select(o=>$"{o.RuleId}:{o.At.Ticks}:{o.Phase}:{o.Revision}"));_shownReminders.IntersectWith(validKeys);
         foreach(var k in validKeys)fresh|=_shownReminders.Add(k);
@@ -167,7 +181,7 @@ public partial class MainWindow
         {
             _plannerAlarmTopmost ??= AcquireTransientTopmost();
             if(fresh)ReminderAudio.Play(book.Preferences);
-            if(!book.Preferences.Sound)ReminderAudio.Stop();
+            if(!book.Preferences.Sound)ReminderAudio.StopAlarm();
             if(book.Preferences.Animation)PlayPlannerAnimation();else StopPlannerAnimation();
         }
     }
@@ -206,6 +220,7 @@ public partial class MainWindow
         try
         {
             var work=GetQuickActionsWorkArea();var alpha=GetPetImageAlphaBoundsInWindow();
+            _reminderCard.ScaleForPet(_settings.Appearance.DisplayScalePercent,work.Width);
             var pet=new DesktopRectangle(Left+alpha.Left,Top+alpha.Top,alpha.Width,alpha.Height);
             var target=ReminderPlacement.Resolve(pet,work,_reminderCard.Width,Math.Max(18,_reminderCard.TargetHeight),2);
             // Eight DIPs of shadow inset + two DIPs outside = ten visible DIPs.
@@ -235,7 +250,7 @@ public partial class MainWindow
     {
         if(_plannerAlarmReaction is Guid token){_plannerAlarmReaction=null;if(_stateMachine.CompleteReaction(token,DateTimeOffset.Now)&&!_isClosing)PlayResolvedContinuousAnimation();}
     }
-    private void StopPlannerPresentation(){ReminderAudio.Stop();StopPlannerAnimation();ReleaseTransientTopmost(_plannerAlarmTopmost);_plannerAlarmTopmost=null;_shownReminders.Clear();}
+    private void StopPlannerPresentation(){ReminderAudio.StopAlarm();StopPlannerAnimation();ReleaseTransientTopmost(_plannerAlarmTopmost);_plannerAlarmTopmost=null;_shownReminders.Clear();}
     private bool _openPlannerNotificationSettings;
     private void OpenReminderSettings()
     {

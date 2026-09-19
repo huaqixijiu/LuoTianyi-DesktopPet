@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -116,11 +116,12 @@ internal sealed partial class PlannerWindow
 
     private void ShowOverlay(UIElement content, bool editor = false)
     {
-        Grid overlay = new() { Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(95, 47, 72, 88)) };
+        Grid overlay = new() { Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(72, 37, 63, 107)) };
         bool calendarEditor = editor && content is FrameworkElement element && Equals(element.Tag, "CalendarEditor");
-        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(calendarEditor ? 32 : editor ? 16 : 24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(editor ? 32 : 24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        card.Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=30,ShadowDepth=6,Opacity=.14,Color=System.Windows.Media.Color.FromRgb(32,65,105)};
         if (editor) card.Child = content;
-        else card.Child = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = Math.Max(250, ActualHeight - 130) };
+        else card.Child = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = Math.Max(250, _shell.Height - 130) };
         overlay.Children.Add(card); _root.IsEnabled = false;
         if (_shell.Children.Count > 1) _shell.Children[_shell.Children.Count - 1].IsEnabled = false;
         _shell.Children.Add(overlay);
@@ -181,7 +182,7 @@ internal sealed partial class PlannerWindow
         Border filterFrame = new() { Height = 40, Width = 252, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), Background = Brushes.White, CornerRadius = new CornerRadius(9), Padding = new Thickness(3) };
         StackPanel filters = Row(); filters.Children.Add(FilterButton("ManageFilterAll", "全部", _manageFilter == ManageFilter.All, () => { _manageFilter = ManageFilter.All; RenderGroups(); })); filters.Children.Add(FilterButton("ManageFilterActive", "未结束", _manageFilter == ManageFilter.Active, () => { _manageFilter = ManageFilter.Active; RenderGroups(); })); filters.Children.Add(FilterButton("ManageFilterEnded", "已结束", _manageFilter == ManageFilter.Ended, () => { _manageFilter = ManageFilter.Ended; RenderGroups(); })); filterFrame.Child = filters; right.Children.Add(filterFrame); Grid.SetColumn(right, 1); titleRow.Children.Add(right);
         Grid.SetRow(titleRow, 0); page.Children.Add(titleRow);
-        _manageCards = new StackPanel { Name = "ManageScheduleCards" }; Grid.SetRow(_manageCards, 1); page.Children.Add(_manageCards); _body.Content = page; RenderGroupCards();
+        _manageCards = new StackPanel { Name = "ManageScheduleCards" }; Grid.SetRow(_manageCards, 1); page.Children.Add(_manageCards); _body.Content = new Border{Child=page,Background=Brushes.White,CornerRadius=new CornerRadius(16)}; RenderGroupCards();
     }
 
     private void RenderGroupCards()
@@ -204,15 +205,15 @@ internal sealed partial class PlannerWindow
 
     private Border ScheduleCard(ScheduleProjection projection, DateTime now)
     {
-        ReminderItem item = projection.Item; Grid layout = new() { MinHeight = 176 };
+        ReminderItem item = projection.Item; Grid layout = new() { MinHeight = 118 };
         for (int row = 0; row < 6; row++) layout.RowDefinitions.Add(new RowDefinition { Height = row == 3 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
         Grid header = new(); header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid name = new(); name.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});name.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
-        var nameText=Text(string.IsNullOrWhiteSpace(item.Title)?"未命名日程":item.Title,18,FontWeights.SemiBold);nameText.TextWrapping=TextWrapping.NoWrap;nameText.TextTrimming=TextTrimming.CharacterEllipsis;name.Children.Add(nameText);
+        Grid name = new(); name.ColumnDefinitions.Add(new(){Width=GridLength.Auto});name.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});
+        var nameText=Text(string.IsNullOrWhiteSpace(item.Title)?"未命名日程":item.Title,20,FontWeights.SemiBold);nameText.MaxWidth=260;nameText.TextWrapping=TextWrapping.NoWrap;nameText.TextTrimming=TextTrimming.CharacterEllipsis;name.Children.Add(nameText);
         int total=projection.IsFinite?projection.Occurrences.Count:0;
-        var type=new Border{Child=Text(GroupLabel(item,total),11,FontWeights.SemiBold,PlannerTheme.Accent),Background=PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(12),Padding=new Thickness(8,4,8,4),Margin=new Thickness(8,0,5,0),VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(type,1);name.Children.Add(type);header.Children.Add(name);
+        var type=new Border{Child=Text(GroupLabel(item,total),11,FontWeights.SemiBold,PlannerTheme.Accent),Background=PlannerTheme.AccentSoft,CornerRadius=new CornerRadius(12),Padding=new Thickness(8,4,8,4),Margin=new Thickness(8,0,5,0),VerticalAlignment=VerticalAlignment.Center};type.HorizontalAlignment=HorizontalAlignment.Left;Grid.SetColumn(type,1);name.Children.Add(type);header.Children.Add(name);
         Button edit=Action("编辑",()=>{_occurrenceDate=null;Edit(item,true);});edit.Name="EditSchedule"+item.Id.ToString("N");edit.Width=64;edit.Height=34;edit.FontSize=13;edit.Padding=new Thickness(8,4,8,4);edit.Margin=new Thickness(6,0,0,0);Grid.SetColumn(edit,1);header.Children.Add(edit);layout.Children.Add(header);
-        TextBlock notes = Text(string.IsNullOrWhiteSpace(item.Notes) ? "" : item.Notes, 13, foreground: PlannerTheme.Muted); notes.MaxHeight = 42; notes.TextTrimming = TextTrimming.CharacterEllipsis; notes.Margin = new Thickness(3, 7, 3, 5); Grid.SetRow(notes, 1); layout.Children.Add(notes);
+        TextBlock notes = Text(string.IsNullOrWhiteSpace(item.Notes) ? "" : item.Notes, 14, foreground: PlannerTheme.Muted); notes.MaxHeight = 42; notes.TextTrimming = TextTrimming.CharacterEllipsis; notes.Margin = new Thickness(3, 7, 3, 5); Grid.SetRow(notes, 1); layout.Children.Add(notes);
         if (item.Repeat == ReminderRepeat.Once)
         {
             DateTime day = projection.Occurrences.Count > 0 ? projection.Occurrences[0] : item.Start.Date; StackPanel dateLine = Row(); dateLine.Children.Add(PlannerTheme.Icon("calendar", 22, PlannerTheme.Muted, 9)); dateLine.Children.Add(Text(FormatOccurrence(item, day, now), 14, FontWeights.SemiBold)); Grid.SetRow(dateLine, 2); layout.Children.Add(dateLine);
@@ -236,6 +237,6 @@ internal sealed partial class PlannerWindow
         }
         Border divider = new() { Height = 1, Background = PlannerTheme.Line, Margin = new Thickness(3, 7, 3, 6) }; Grid.SetRow(divider, 4); layout.Children.Add(divider);
         string footer = item.Repeat == ReminderRepeat.Once ? $"状态：{SingleStatus(projection, now)}" : projection.IsFinite ? MultiSummary(projection) : projection.IsEnded ? "状态：已结束" : "状态：进行中"; TextBlock bottom = Text(footer, 13, foreground: projection.IsEnded ? PlannerTheme.Muted : PlannerTheme.Ink); bottom.Margin = new Thickness(3, 0, 3, 2); Grid.SetRow(bottom, 5); layout.Children.Add(bottom);
-        return new Border { Child = layout, Background = Brushes.White, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(22, 17, 22, 16), Margin = new Thickness(5, 7, 5, 7) };
+        return new Border { Child = layout, Background = Brushes.White, BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(14), Padding = new Thickness(20, 18, 20, 16), Margin = new Thickness(5, 7, 5, 7) };
     }
 }

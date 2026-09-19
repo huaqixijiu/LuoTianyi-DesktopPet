@@ -13,7 +13,7 @@ public partial class MainWindow
 
     private bool CanShowMusicIslands => _settings.Media.ShowMusicIslands &&
         !_isClosing && !_hiddenByUser && !_bunChaseActive &&
-        !IsGenshinPresentationLocked &&
+        !IsGenshinPresentationLocked && _reminderCard?.IsVisible != true &&
         _edgeDockSide == EdgeDockSide.None && _petQuickPanel?.IsVisible != true;
 
     private void OnPetMouseRightButtonUp(object sender, MouseButtonEventArgs e)

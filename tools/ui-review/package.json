@@ -1,7 +1,0 @@
-{
-  "name": "luotianyi-ui-review",
-  "private": true,
-  "type": "module",
-  "scripts": { "test": "node --test compare.test.mjs" },
-  "devDependencies": { "pixelmatch": "7.2.0", "pngjs": "7.0.0" }
-}
