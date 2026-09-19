@@ -40,6 +40,40 @@ public static class ReminderEngine
         }
         book.EngineVersion=1;
     }
+    public static void PrepareStartup(ReminderBook book, DateTime now)
+    {
+        Initialize(book, now);
+        foreach (var occurrence in book.Occurrences)
+        {
+            if (occurrence.Phase is ReminderPhase.Done or ReminderPhase.Cancelled) continue;
+            // A user-requested snooze whose deadline is still ahead is not a missed alarm.
+            if (occurrence.Phase == ReminderPhase.DueSnoozed && occurrence.SnoozeAt > now) continue;
+            if (occurrence.At <= now)
+            {
+                occurrence.Phase = ReminderPhase.Cancelled;
+                occurrence.SnoozeAt = null;
+                occurrence.RoundStartedAt = null;
+            }
+            else if (occurrence.Phase == ReminderPhase.Early ||
+                     occurrence.Phase == ReminderPhase.EarlySnoozed && occurrence.SnoozeAt <= now)
+            {
+                // Do not replay an old early alert, but keep its future due trigger and cursor.
+                occurrence.Phase = ReminderPhase.Waiting;
+                occurrence.SnoozeAt = null;
+                occurrence.RoundStartedAt = null;
+            }
+        }
+        foreach (var item in book.Items.Where(Active))
+        {
+            if (item.CheckedThrough < now) item.CheckedThrough = now;
+            // Keep the original record/dates; only exhausted standalone alarms stop being enabled.
+            if (!item.Calendar && item.Repeat is ReminderRepeat.Once or ReminderRepeat.Dates &&
+                ReminderSchedule.Next(item, book, now) == null &&
+                !book.Occurrences.Any(o => o.RuleId == item.Id &&
+                    o.Phase == ReminderPhase.DueSnoozed && o.SnoozeAt > now))
+                item.Enabled = false;
+        }
+    }
     public static void Reconcile(ReminderBook book)
     {
         book.Occurrences.RemoveAll(o => !book.Items.Any(i => i.Id==o.RuleId && ReminderSchedule.OccursOn(i,book,o.At) &&
@@ -50,7 +84,7 @@ public static class ReminderEngine
         bool changed=false;
         foreach(var i in book.Items.Where(Active))
         {
-            // At most one catch-up instance, matching the previous application's bounded catch-up policy.
+            // Runtime resume keeps bounded catch-up; PrepareStartup skips time while the app was closed.
             DateTime? next=ReminderSchedule.Next(i,book,i.CheckedThrough);
             if(next is DateTime at && !book.Occurrences.Any(o=>o.RuleId==i.Id && o.At==at))
             {
@@ -66,7 +100,7 @@ public static class ReminderEngine
         foreach(var o in book.Occurrences)
         {
             if(o.Phase is ReminderPhase.Done or ReminderPhase.Cancelled) continue;
-            if(o.Phase is ReminderPhase.Early or ReminderPhase.EarlySnoozed or ReminderPhase.AcknowledgedEarly && now>=o.At)
+            if(o.Phase is ReminderPhase.Waiting or ReminderPhase.Early or ReminderPhase.EarlySnoozed or ReminderPhase.AcknowledgedEarly && now>=o.At)
             { o.Phase=ReminderPhase.Due;o.SnoozeAt=null;o.RoundStartedAt=now;o.Revision++;changed=true; }
             else if(o.SnoozeAt is DateTime snooze && snooze<=now)
             { o.Phase=o.Phase==ReminderPhase.EarlySnoozed?ReminderPhase.Early:ReminderPhase.Due;o.SnoozeAt=null;o.RoundStartedAt=now;o.Revision++;changed=true; }

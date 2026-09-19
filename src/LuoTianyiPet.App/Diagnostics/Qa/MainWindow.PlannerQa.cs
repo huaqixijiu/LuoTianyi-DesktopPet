@@ -256,6 +256,7 @@ public partial class MainWindow
             await service.ChangeAsync(b=>ReminderEngine.Advance(b,keptItem.Start.AddDays(7)));Check(service.Book.Occurrences.Any(o=>o.At==keptItem.Start.AddDays(7)&&o.Phase==ReminderPhase.Due),"next weekly occurrence still rings after cancelling quick card");
             PetReminderCard constrained=new(this);constrained.Present("空间限制验证",new Border{Height=400},true,true);constrained.LimitHeight(140);constrained.Show();constrained.UpdateLayout();
             var constrainedScroll=Tree(constrained).OfType<ScrollViewer>().Single();Check(constrained.ActualHeight<=140&&constrainedScroll.ScrollableHeight>0,"small available space scrolls content instead of clipping actions");constrained.Close();
+            await VerifyReminderStartupQaAsync(path, Check, (w, name) => Snapshot(w, name, true));
             window.Close();_reminderCard.Close();_reminderCard=null;_reminders=null;File.WriteAllLines(Path.Combine(path,"result.txt"),checks);
         }
         catch(Exception ex){File.WriteAllText(Path.Combine(path,"FAILED.txt"),ex.ToString());}
