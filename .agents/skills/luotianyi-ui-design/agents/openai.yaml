@@ -1,0 +1,6 @@
+interface:
+  display_name: "洛天依 UI 设计与视觉验收"
+  short_description: "面向原生 WPF 的参考图分析、真实窗口操作、截图比较与迭代验收工作流"
+  default_prompt: "使用 $luotianyi-ui-design 按参考图改进当前页面，并完成实际运行、截图、视觉对比和复查。"
+policy:
+  allow_implicit_invocation: true

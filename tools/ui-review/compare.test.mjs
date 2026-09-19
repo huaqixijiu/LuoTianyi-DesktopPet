@@ -1,0 +1,30 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { PNG } from 'pngjs';
+import { compare } from './compare.mjs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+test('identical passes, changed block fails, mismatch rejects', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'luotianyi-diff-'));
+  const a = new PNG({width: 20, height: 20}); a.data.fill(255);
+  const ref = path.join(dir, 'ref.png'), current = path.join(dir, 'current.png');
+  fs.writeFileSync(ref, PNG.sync.write(a));
+  assert.equal(compare(ref, ref, path.join(dir, 'same')).changed, 0);
+  for (let y=4;y<12;y++) for(let x=4;x<12;x++) { const p=(y*20+x)*4; a.data[p]=0;a.data[p+1]=0;a.data[p+2]=0; }
+  fs.writeFileSync(current, PNG.sync.write(a));
+  const changed = compare(ref, current, path.join(dir, 'changed'));
+  assert.equal(changed.pass, false); assert.ok(changed.changed > 0);
+  const cli = fileURLToPath(new URL('./compare.mjs', import.meta.url));
+  assert.equal(spawnSync(process.execPath, [cli, ref, ref, path.join(dir, 'cli-same')]).status, 0);
+  assert.equal(spawnSync(process.execPath, [cli, ref, current, path.join(dir, 'cli-changed')]).status, 1);
+  assert.equal(PNG.sync.read(fs.readFileSync(path.join(dir, 'changed', 'side-by-side.png'))).width, 40);
+  fs.writeFileSync(current, PNG.sync.write(new PNG({width: 10, height: 20})));
+  assert.throws(() => compare(ref, current, path.join(dir, 'size')), /Size mismatch/);
+  assert.equal(spawnSync(process.execPath, [cli, ref, current, path.join(dir, 'cli-size')]).status, 2);
+  assert.throws(() => compare(ref, ref, dir, NaN), /maxRatio/);
+  const collision = path.join(dir, 'diff.png'); fs.copyFileSync(ref, collision);
+  assert.throws(() => compare(collision, ref, dir), /overwrite/);
+});
