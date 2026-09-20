@@ -48,7 +48,7 @@
   <Border.Effect><DropShadowEffect BlurRadius="14" ShadowDepth="2" Opacity="0.18" Color="#176A90" /></Border.Effect>
   <StackPanel>
    <Button x:Name="ShowPetButton" Content="召回天依" Tag="&#xE80F;" Click="OnShowPetClick" />
-   <Button x:Name="HidePetButton" Content="暂时隐藏" Tag="&#xE921;" Click="OnHidePetClick" ToolTip="从托盘左键即可找回天依" />
+   <Button x:Name="HidePetButton" Content="隐藏桌宠" Tag="&#xE890;" Click="OnHidePetClick" ToolTip="从托盘左键即可找回天依" />
    <Button x:Name="OpenSettingsButton" Content="设置" Tag="&#xE713;" Click="OnOpenSettingsClick" />
    <Button x:Name="ReminderSettingsButton" Content="提醒设置" Tag="&#xE823;" Click="OnReminderSettingsClick" Visibility="Collapsed" />
    <Border Height="1" Background="{StaticResource FloatDividerBrush}" Margin="8,5" />

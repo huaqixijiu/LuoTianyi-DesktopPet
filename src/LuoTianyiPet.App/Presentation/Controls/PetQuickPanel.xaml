@@ -12,7 +12,7 @@
             <ScaleTransform x:Name="PanelEntranceScale" ScaleX="1" ScaleY="1" />
         </Border.RenderTransform>
         <StackPanel>
-            <!-- 头部：品牌点 + 标题，右侧两个图标入口 -->
+            <!-- 头部：品牌点、标题与隐藏入口，右侧日历和闹钟入口 -->
             <Grid Margin="2,0,0,8">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="6"
@@ -24,6 +24,15 @@
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
                                Text="天依 · 常用功能" />
+                    <Button x:Name="HidePetButton"
+                            Style="{StaticResource PanelIconButton}"
+                            Focusable="False"
+                            Margin="5,0,0,0"
+                            Click="OnHidePetClick"
+                            ToolTip="隐藏桌宠（从托盘左键即可找回天依）"
+                            AutomationProperties.Name="隐藏桌宠">
+                        <Viewbox Width="20" Height="20"><Canvas Width="24" Height="24"><Path Data="M2.5,12 C5,8.5 8,6.5 12,6.5 C16,6.5 19,8.5 21.5,12 C19,15.5 16,17.5 12,17.5 C8,17.5 5,15.5 2.5,12 Z M9,12 A3,3 0 1 0 15,12 A3,3 0 1 0 9,12 Z" Fill="Transparent" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.7" StrokeLineJoin="Round" /></Canvas></Viewbox>
+                    </Button>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="CalendarButton"

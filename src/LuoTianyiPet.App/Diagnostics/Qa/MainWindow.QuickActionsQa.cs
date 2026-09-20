@@ -119,10 +119,25 @@ public partial class MainWindow
             _petQuickPanel.ShowNearPet(new DesktopRectangle(Left, Top, ActualWidth, ActualHeight), GetQuickActionsWorkArea());
             Check(!_petQuickPanel.CalendarButton.Focusable && !_petQuickPanel.AlarmButton.Focusable,
                 "Calendar and alarm quick-entry buttons do not retain a blue keyboard-focus state");
+            Point hideOrigin = _petQuickPanel.HidePetButton.TransformToAncestor(_petQuickPanel)
+                .Transform(new Point(0, 0));
+            Point calendarOrigin = _petQuickPanel.CalendarButton.TransformToAncestor(_petQuickPanel)
+                .Transform(new Point(0, 0));
+            Check(_petQuickPanel.HidePetButton.Content is System.Windows.Controls.Viewbox &&
+                  System.Windows.Automation.AutomationProperties.GetName(_petQuickPanel.HidePetButton) == "隐藏桌宠" &&
+                  Math.Abs(_petQuickPanel.HidePetButton.ActualWidth - 32) < 1 &&
+                  Math.Abs(hideOrigin.Y - calendarOrigin.Y) < 1 &&
+                  hideOrigin.X + _petQuickPanel.HidePetButton.ActualWidth <= calendarOrigin.X,
+                "Pet hide is an icon-only header action between title and calendar");
             CaptureQuickActionsQa(_petQuickPanel, Path.Combine(directory, "03-pet-menu.png"), true);
             int petSettingsRequests=0,petExitRequests=0;
             _petQuickPanel.OpenSettings=()=>petSettingsRequests++;
             _petQuickPanel.ExitPet=()=>{petExitRequests++;return Task.CompletedTask;};
+            _petQuickPanel.HidePet=HidePetFromTray;
+            _petQuickPanel.HidePetButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            Check(!IsVisible&&!_petQuickPanel.IsVisible,"Pet eye action uses existing tray hide behavior");
+            ShowPetFromTray();
+            _petQuickPanel.ShowNearPet(new DesktopRectangle(Left,Top,ActualWidth,ActualHeight),GetQuickActionsWorkArea());
             _petQuickPanel.SettingsButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             Check(petSettingsRequests==1&&!_petQuickPanel.IsVisible,"Pet settings closes menu and opens existing settings action");
             _petQuickPanel.ShowNearPet(new DesktopRectangle(Left,Top,ActualWidth,ActualHeight),GetQuickActionsWorkArea());
@@ -136,6 +151,8 @@ public partial class MainWindow
             System.Drawing.Point trayAnchor = new(work.Right - 40, work.Bottom - 20);
             tray.ShowNearTray(trayAnchor);
             await Task.Delay(120);
+            Check(tray.HidePetButton.Content?.ToString() == "隐藏桌宠",
+                "Tray hide restores the concise original label");
             double trayLeft = tray.Left, trayTop = tray.Top;
             double trayHeight = tray.ActualHeight;
             Check(!tray.ShowPetButton.IsKeyboardFocused, "Mouse opening does not preselect a menu action");

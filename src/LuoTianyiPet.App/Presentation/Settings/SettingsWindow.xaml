@@ -170,6 +170,36 @@
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
+        <Style x:Key="ShortcutInput" TargetType="TextBox">
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinWidth" Value="150" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryDark}" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource Line}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Surface" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8">
+                            <ScrollViewer x:Name="PART_ContentHost" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{StaticResource SettingsCardHoverBrush}" /></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="{StaticResource PrimaryDark}" /><Setter TargetName="Surface" Property="BorderThickness" Value="2" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.45" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="SettingsSlider" TargetType="Slider">
             <Setter Property="Height" Value="28" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Slider">
@@ -290,6 +320,36 @@
                             <StackPanel HorizontalAlignment="Center"><Border Width="76" Height="72" Background="{StaticResource SettingsTileBrush}" CornerRadius="8"><Image Margin="2" Source="/assets/ui/music-preview-sing.png" Stretch="Uniform" /></Border><TextBlock Margin="0,5,0,0" HorizontalAlignment="Center" FontSize="11.5" FontWeight="SemiBold" Text="一键唱歌" /></StackPanel>
                         </RadioButton>
                     </Grid>
+                    <Border x:Name="CloudMusicShortcutCard" Style="{StaticResource GroupCard}">
+                        <StackPanel Margin="11,9,11,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock FontSize="12.5" FontWeight="SemiBold" Text="网易云快捷键" VerticalAlignment="Center" />
+                                <Button x:Name="ResetCloudMusicShortcutsButton" Grid.Column="1" Height="30" MinWidth="76" Padding="10,0" Content="恢复默认" Click="OnResetCloudMusicShortcutsClick" AutomationProperties.Name="恢复网易云快捷键默认值" />
+                            </Grid>
+                            <TextBlock Style="{StaticResource OptionDescription}" Margin="0,4,0,6" Text="点击输入框后直接按下组合键，Esc 取消。桌宠会把组合键发送给当前允许的前台应用，请在网易云中设置相同组合；桌宠无法检测其它程序是否已占用。" />
+                            <Separator Background="{StaticResource FloatDividerBrush}" />
+                            <Grid Margin="0,8,0,0">
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,7">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource OptionTitle}" Text="暂停 / 继续" VerticalAlignment="Center" />
+                                    <TextBox x:Name="TogglePlayPauseShortcutTextBox" Grid.Column="1" Style="{StaticResource ShortcutInput}" PreviewMouseLeftButtonDown="OnShortcutInputMouseDown" PreviewKeyDown="OnShortcutInputPreviewKeyDown" LostKeyboardFocus="OnShortcutInputLostKeyboardFocus" AutomationProperties.Name="暂停继续快捷键" ToolTip="点击后按下组合键，Esc 取消" />
+                                </Grid>
+                                <Grid Grid.Row="1" Margin="0,0,0,7">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource OptionTitle}" Text="上一首" VerticalAlignment="Center" />
+                                    <TextBox x:Name="PreviousTrackShortcutTextBox" Grid.Column="1" Style="{StaticResource ShortcutInput}" PreviewMouseLeftButtonDown="OnShortcutInputMouseDown" PreviewKeyDown="OnShortcutInputPreviewKeyDown" LostKeyboardFocus="OnShortcutInputLostKeyboardFocus" AutomationProperties.Name="上一首快捷键" ToolTip="点击后按下组合键，Esc 取消" />
+                                </Grid>
+                                <Grid Grid.Row="2">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource OptionTitle}" Text="下一首" VerticalAlignment="Center" />
+                                    <TextBox x:Name="NextTrackShortcutTextBox" Grid.Column="1" Style="{StaticResource ShortcutInput}" PreviewMouseLeftButtonDown="OnShortcutInputMouseDown" PreviewKeyDown="OnShortcutInputPreviewKeyDown" LostKeyboardFocus="OnShortcutInputLostKeyboardFocus" AutomationProperties.Name="下一首快捷键" ToolTip="点击后按下组合键，Esc 取消" />
+                                </Grid>
+                            </Grid>
+                            <TextBlock x:Name="ShortcutStatusText" Style="{StaticResource OptionDescription}" Margin="0,8,0,0" Text="支持 Ctrl、Alt 或 Shift 加字母、数字、方向键或空格。" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
 

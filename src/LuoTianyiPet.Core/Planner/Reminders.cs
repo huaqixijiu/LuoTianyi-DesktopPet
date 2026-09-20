@@ -1,4 +1,4 @@
-﻿namespace LuoTianyiPet.Core;
+namespace LuoTianyiPet.Core;
 
 public enum ReminderRepeat { Once, Daily, Weekly, Dates, Workdays, RestDays }
 
@@ -50,6 +50,8 @@ public sealed class ReminderBook
 
 public static class ReminderSchedule
 {
+    // Retain readable legacy storage while applying the current maximum to scheduling.
+    public static int LimitEarlyMinutes(int minutes) => Math.Max(1, Math.Min(60, minutes));
     public static readonly DateTime MinimumDate = new(2026, 1, 1);
     public static readonly DateTime MaximumDate = new(2099, 12, 31);
 

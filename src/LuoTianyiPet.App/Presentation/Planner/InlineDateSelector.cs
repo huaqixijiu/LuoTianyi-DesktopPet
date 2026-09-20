@@ -25,7 +25,7 @@ internal sealed class InlineDateSelector : Border
     {
         Name="InlineDateSelector";_dates=dates;_locked=locked;_book=book;_month=new DateTime(month.Year,month.Month,1);_changed=changed;_accept=accept;_cancel=cancel;
         Height=380;Background=Brushes.White;BorderBrush=PlannerTheme.ControlLine;BorderThickness=new Thickness(1);CornerRadius=new CornerRadius(12);Padding=new Thickness(10);
-        Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=10,ShadowDepth=3,Opacity=.12};Render();
+        Render();
     }
     private static TextBlock Text(string text,double size=14)=>new(){Text=text,FontSize=size,Foreground=PlannerTheme.Ink,VerticalAlignment=VerticalAlignment.Center};
     private Button Button(string name,string label,Action click)
@@ -115,7 +115,7 @@ internal sealed class InlineDateSelector : Border
             if(years&&lastYear!=day.Year){var year=Text(day.Year+"年",11);year.Foreground=PlannerTheme.Muted;year.Margin=new Thickness(0,7,0,4);list.Children.Add(year);lastYear=day.Year;}
             Grid row=new(){Height=32};foreach(var w in new[]{new GridLength(76),new GridLength(42),new GridLength(25),new GridLength(28)})row.ColumnDefinitions.Add(new(){Width=w});
             row.Children.Add(Text(day.ToString("M月d日")));var weekday=Text("周"+"日一二三四五六"[(int)day.DayOfWeek],11);weekday.Foreground=PlannerTheme.Muted;Grid.SetColumn(weekday,1);row.Children.Add(weekday);
-            if(_book.RestOverrides.TryGetValue(day.ToString("yyyy-MM-dd"),out bool rest)){var badge=new Border{Child=Text(rest?"休":"班",11),Background=rest?PlannerTheme.DangerSoft:PlannerTheme.AccentSoft,Padding=new Thickness(3),CornerRadius=new CornerRadius(4),VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(badge,2);row.Children.Add(badge);}
+            if(_book.RestOverrides.TryGetValue(day.ToString("yyyy-MM-dd"),out bool rest)){var label=Text(rest?"休":"班",11);label.Foreground=rest?PlannerTheme.RestForeground:PlannerTheme.WorkForeground;var badge=new Border{Child=label,Background=rest?PlannerTheme.DangerSoft:PlannerTheme.WorkBadgeBackground,Padding=new Thickness(3),CornerRadius=new CornerRadius(4),VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(badge,2);row.Children.Add(badge);}
             var remove=Button("InlineRemove"+day.ToString("yyyyMMdd"),_locked.Contains(day)?"锁":"×",()=>{_dates.Remove(day);Changed();});remove.IsEnabled=!_locked.Contains(day);remove.BorderThickness=new Thickness(0);remove.Background=Brushes.Transparent;remove.Padding=new Thickness(0);remove.ToolTip=_locked.Contains(day)?"历史日期已锁定":"移除此日期";Grid.SetColumn(remove,3);row.Children.Add(remove);list.Children.Add(row);
         }
         var scroll=new ScrollViewer{Name="InlineSelectedDates",Content=list,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(scroll,1);right.Children.Add(scroll);

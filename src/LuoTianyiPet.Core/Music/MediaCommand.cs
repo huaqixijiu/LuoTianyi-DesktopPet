@@ -35,6 +35,8 @@ public sealed record MediaCommandSendResult(
 public interface IMediaCommandSender
 {
     MediaCommandSendResult TrySend(MediaCommand command, DateTimeOffset now);
+
+    void ApplySettings(MediaPreferences mediaPreferences, SafetyPreferences safetyPreferences);
 }
 
 public enum MediaApplicationLaunchStatus

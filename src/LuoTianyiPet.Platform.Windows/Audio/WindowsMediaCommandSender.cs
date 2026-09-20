@@ -29,10 +29,11 @@ public sealed class WindowsMediaCommandSender : IMediaCommandSender
     ];
 
     private readonly IShortcutInputBackend _backend;
-    private readonly bool _enabled;
-    private readonly IReadOnlyDictionary<MediaCommand, ShortcutBinding> _bindings;
-    private readonly HashSet<string> _protectedProcesses;
-    private readonly TimeSpan _cooldown;
+    private bool _enabled;
+    private IReadOnlyDictionary<MediaCommand, ShortcutBinding> _bindings =
+        new Dictionary<MediaCommand, ShortcutBinding>();
+    private HashSet<string> _protectedProcesses = new(StringComparer.OrdinalIgnoreCase);
+    private TimeSpan _cooldown;
     private DateTimeOffset? _lastSentAt;
 
     public WindowsMediaCommandSender(
@@ -41,10 +42,17 @@ public sealed class WindowsMediaCommandSender : IMediaCommandSender
         SafetyPreferences safetyPreferences)
     {
         Guard.NotNull(backend, nameof(backend));
+        _backend = backend;
+        ApplySettings(mediaPreferences, safetyPreferences);
+    }
+
+    public void ApplySettings(
+        MediaPreferences mediaPreferences,
+        SafetyPreferences safetyPreferences)
+    {
         Guard.NotNull(mediaPreferences, nameof(mediaPreferences));
         Guard.NotNull(safetyPreferences, nameof(safetyPreferences));
 
-        _backend = backend;
         _enabled = mediaPreferences.EnableCloudMusicShortcutControl;
         _bindings = new Dictionary<MediaCommand, ShortcutBinding>
         {
@@ -171,9 +179,14 @@ public sealed class Win32ShortcutInputBackend : IShortcutInputBackend
 
 }
 
-internal sealed record ShortcutBinding(bool IsValid, IReadOnlyList<ushort> Modifiers, ushort PrimaryKey)
+public sealed record ShortcutBinding(bool IsValid, IReadOnlyList<ushort> Modifiers, ushort PrimaryKey)
 {
     public IEnumerable<ushort> Keys => Modifiers.Concat(new[] { PrimaryKey });
+
+    public bool EquivalentTo(ShortcutBinding other) =>
+        IsValid && other.IsValid &&
+        PrimaryKey == other.PrimaryKey &&
+        Modifiers.OrderBy(key => key).SequenceEqual(other.Modifiers.OrderBy(key => key));
 
     public static ShortcutBinding Parse(string? value)
     {

@@ -118,11 +118,25 @@ internal sealed partial class PlannerWindow
     {
         Grid overlay = new() { Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(72, 37, 63, 107)) };
         bool calendarEditor = editor && content is FrameworkElement element && Equals(element.Tag, "CalendarEditor");
-        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(editor ? 32 : 24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
-        card.Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=30,ShadowDepth=6,Opacity=.14,Color=System.Windows.Media.Color.FromRgb(32,65,105)};
-        if (editor) card.Child = content;
+        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(editor ? (calendarEditor ? 32 : 26) : 24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        // Keep the shadow on a separate, text-free visual. An effect on card rasterizes its text.
+        Border shadow=new(){Background=Brushes.White,CornerRadius=card.CornerRadius,Margin=card.Margin,HorizontalAlignment=card.HorizontalAlignment,VerticalAlignment=card.VerticalAlignment,IsHitTestVisible=false,Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=30,ShadowDepth=6,Opacity=.14,Color=System.Windows.Media.Color.FromRgb(32,65,105)}};
+        shadow.SetBinding(WidthProperty,new System.Windows.Data.Binding("ActualWidth"){Source=card});
+        shadow.SetBinding(HeightProperty,new System.Windows.Data.Binding("ActualHeight"){Source=card});
+        if (editor)
+        {
+            if (content is FrameworkElement editorContent)
+            {
+                // Native-size pages need room for the dialog's padding, border
+                // and outer margins as well as its form. Otherwise the fixed
+                // form height clips the action row inside the card.
+                editorContent.MaxWidth = Math.Max(1, _shell.Width - card.Margin.Left - card.Margin.Right - card.Padding.Left - card.Padding.Right - card.BorderThickness.Left - card.BorderThickness.Right);
+                editorContent.MaxHeight = Math.Max(1, _shell.Height - card.Margin.Top - card.Margin.Bottom - card.Padding.Top - card.Padding.Bottom - card.BorderThickness.Top - card.BorderThickness.Bottom);
+            }
+            card.Child = content;
+        }
         else card.Child = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = Math.Max(250, _shell.Height - 130) };
-        overlay.Children.Add(card); _root.IsEnabled = false;
+        overlay.Children.Add(shadow);overlay.Children.Add(card); _root.IsEnabled = false;
         if (_shell.Children.Count > 1) _shell.Children[_shell.Children.Count - 1].IsEnabled = false;
         _shell.Children.Add(overlay);
     }

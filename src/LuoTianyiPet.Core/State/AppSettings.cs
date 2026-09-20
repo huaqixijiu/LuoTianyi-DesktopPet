@@ -214,6 +214,10 @@ public sealed record WindowPreferences
 
 public sealed record MediaPreferences
 {
+    public const string DefaultPreviousTrackShortcut = "Ctrl+Alt+Left";
+    public const string DefaultTogglePlayPauseShortcut = "Ctrl+Alt+P";
+    public const string DefaultNextTrackShortcut = "Ctrl+Alt+Right";
+
     public const int DefaultPollIntervalMilliseconds = 250;
     public const int DefaultSilenceGraceMilliseconds = 5000;
     public const float DefaultAudiblePeakThreshold = 0.001f;
@@ -232,11 +236,11 @@ public sealed record MediaPreferences
 
     public bool ShowMusicIslands { get; init; }
 
-    public string PreviousTrackShortcut { get; init; } = "Ctrl+Alt+Left";
+    public string PreviousTrackShortcut { get; init; } = DefaultPreviousTrackShortcut;
 
-    public string TogglePlayPauseShortcut { get; init; } = "Ctrl+Alt+P";
+    public string TogglePlayPauseShortcut { get; init; } = DefaultTogglePlayPauseShortcut;
 
-    public string NextTrackShortcut { get; init; } = "Ctrl+Alt+Right";
+    public string NextTrackShortcut { get; init; } = DefaultNextTrackShortcut;
 
     public int CommandCooldownMilliseconds { get; init; } = 350;
 

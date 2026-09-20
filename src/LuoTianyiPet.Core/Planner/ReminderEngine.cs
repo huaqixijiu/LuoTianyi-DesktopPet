@@ -10,6 +10,10 @@ public sealed class ReminderOccurrence
     public int Revision { get; set; }
     public DateTime? RoundStartedAt { get; set; }
 }
+public readonly record struct ReminderUndoSnapshot(
+    Guid RuleId, DateTime At, ReminderPhase Phase, DateTime? SnoozeAt,
+    DateTime? RoundStartedAt, int Revision, bool ItemEnabled,
+    DateTime ItemStart, DateTime ItemCheckedThrough);
 public sealed class ReminderPreferences
 {
     public bool Sound { get; set; } = true;
@@ -28,7 +32,8 @@ public static class ReminderEngine
         foreach(var i in book.Items)
         {
             i.ReminderCreated ??= !i.Calendar || i.Enabled;
-            i.EarlyEnabled ??= i.Calendar && i.ShowCountdown && book.ShowUpcoming;
+            // A legacy "show upcoming" preference is not consent to an early alarm.
+            i.EarlyEnabled ??= false;
         }
         if(book.EngineVersion == 1) return;
         foreach(var i in book.Items)
@@ -76,6 +81,17 @@ public static class ReminderEngine
     }
     public static void Reconcile(ReminderBook book)
     {
+        foreach (var occurrence in book.Occurrences)
+        {
+            var item = book.Items.FirstOrDefault(i => i.Id == occurrence.RuleId);
+            if (item?.EarlyEnabled == true || occurrence.Phase is not
+                (ReminderPhase.Early or ReminderPhase.EarlySnoozed or ReminderPhase.AcknowledgedEarly)) continue;
+            // Disabling the advance notice must not suppress the scheduled due alarm.
+            occurrence.Phase = ReminderPhase.Waiting;
+            occurrence.SnoozeAt = null;
+            occurrence.RoundStartedAt = null;
+            occurrence.Revision++;
+        }
         book.Occurrences.RemoveAll(o => !book.Items.Any(i => i.Id==o.RuleId && ReminderSchedule.OccursOn(i,book,o.At) &&
             (i.Calendar && o.Phase is ReminderPhase.Done or ReminderPhase.Cancelled || Active(i) && o.At.TimeOfDay==i.Start.TimeOfDay)));
     }
@@ -88,8 +104,8 @@ public static class ReminderEngine
             DateTime? next=ReminderSchedule.Next(i,book,i.CheckedThrough);
             if(next is DateTime at && !book.Occurrences.Any(o=>o.RuleId==i.Id && o.At==at))
             {
-                bool early=i.EarlyEnabled==true && !i.Relative && at.AddMinutes(-i.EarlyMinutes)>i.CheckedThrough;
-                if(at<=now || early && at.AddMinutes(-i.EarlyMinutes)<=now)
+                bool early=i.EarlyEnabled==true && !i.Relative && at.AddMinutes(-ReminderSchedule.LimitEarlyMinutes(i.EarlyMinutes))>i.CheckedThrough;
+                if(at<=now || early && at.AddMinutes(-ReminderSchedule.LimitEarlyMinutes(i.EarlyMinutes))<=now)
                 {
                     book.Occurrences.Add(new() { RuleId=i.Id,At=at,Phase=at<=now?ReminderPhase.Due:ReminderPhase.Early });
                     // Future instances are now tracked by their own stable occurrence record.
@@ -104,11 +120,14 @@ public static class ReminderEngine
             { o.Phase=ReminderPhase.Due;o.SnoozeAt=null;o.RoundStartedAt=now;o.Revision++;changed=true; }
             else if(o.SnoozeAt is DateTime snooze && snooze<=now)
             { o.Phase=o.Phase==ReminderPhase.EarlySnoozed?ReminderPhase.Early:ReminderPhase.Due;o.SnoozeAt=null;o.RoundStartedAt=now;o.Revision++;changed=true; }
-            if(o.Phase is ReminderPhase.Early or ReminderPhase.Due)
+            if(o.Phase==ReminderPhase.Due)
             {
                 if(o.RoundStartedAt==null){o.RoundStartedAt=now;changed=true;}
                 if((book.Preferences.Sound||book.Preferences.Animation) && now>=o.RoundStartedAt.Value.AddSeconds(MaximumRoundSeconds))
-                { Snooze(book,o.RuleId,o.At,o.Phase,now);changed=true; }
+                {
+                    Snooze(book,o.RuleId,o.At,o.Phase,now);
+                    changed=true;
+                }
             }
         }
         // Old terminal records are safe to prune only after the persisted schedule cursor has crossed them.
@@ -119,7 +138,7 @@ public static class ReminderEngine
     {
         var o=b.Occurrences.FirstOrDefault(x=>x.RuleId==id && x.At==at);
         if(o==null || o.Phase!=expected) return;
-        o.Phase=expected==ReminderPhase.Early?ReminderPhase.AcknowledgedEarly:ReminderPhase.Done;o.SnoozeAt=null;o.RoundStartedAt=null;
+        o.Phase=expected==ReminderPhase.Early?ReminderPhase.AcknowledgedEarly:ReminderPhase.Done;o.SnoozeAt=null;o.RoundStartedAt=null;o.Revision++;
         if(expected is ReminderPhase.Due or ReminderPhase.DueSnoozed)
         {
             ReminderItem? item=b.Items.FirstOrDefault(i=>i.Id==id);
@@ -132,11 +151,49 @@ public static class ReminderEngine
         var o=b.Occurrences.FirstOrDefault(x=>x.RuleId==id && x.At==at);
         if(o==null || o.Phase!=expected) return;
         o.Phase=expected==ReminderPhase.Early?ReminderPhase.EarlySnoozed:ReminderPhase.DueSnoozed;
-        o.RoundStartedAt=null;
+        o.RoundStartedAt=null;o.Revision++;
         o.SnoozeAt=expected==ReminderPhase.Early && now.AddMinutes(10)>=at?at:now.AddMinutes(10);
     }
     public static void Cancel(ReminderBook b,Guid id,DateTime at)
-    { var o=b.Occurrences.FirstOrDefault(x=>x.RuleId==id && x.At==at); if(o!=null) {o.Phase=ReminderPhase.Cancelled;o.SnoozeAt=null;} }
+    {
+        var o=b.Occurrences.FirstOrDefault(x=>x.RuleId==id && x.At==at);
+        if(o==null||o.Phase is ReminderPhase.Done or ReminderPhase.Cancelled)return;
+        o.Phase=ReminderPhase.Cancelled;o.SnoozeAt=null;o.RoundStartedAt=null;o.Revision++;
+        var item=b.Items.FirstOrDefault(i=>i.Id==id);
+        if(item is {Calendar:false,Relative:false,Enabled:true} &&
+            (item.Repeat is ReminderRepeat.Once or ReminderRepeat.Dates) &&
+            ReminderSchedule.Next(item,b,at)==null)
+            item.Enabled=false;
+    }
+    public static ReminderUndoSnapshot? CaptureUndo(ReminderBook b,Guid id,DateTime at)
+    {
+        var item=b.Items.FirstOrDefault(i=>i.Id==id);
+        var occurrence=b.Occurrences.FirstOrDefault(o=>o.RuleId==id&&o.At==at);
+        return item==null||occurrence==null?null:new ReminderUndoSnapshot(id,at,occurrence.Phase,
+            occurrence.SnoozeAt,occurrence.RoundStartedAt,occurrence.Revision,item.Enabled,item.Start,item.CheckedThrough);
+    }
+    public static bool TryUndo(ReminderBook b,ReminderUndoSnapshot before,ReminderPhase after,DateTime now)
+    {
+        var item=b.Items.FirstOrDefault(i=>i.Id==before.RuleId);
+        if(item==null||item.Start!=before.ItemStart||item.CheckedThrough!=before.ItemCheckedThrough)return false;
+        var occurrence=b.Occurrences.FirstOrDefault(o=>o.RuleId==before.RuleId&&o.At==before.At);
+        if(occurrence==null)
+        {
+            // Completing the final standalone occurrence disables the item, so Reconcile prunes its record.
+            if(after is not (ReminderPhase.Done or ReminderPhase.Cancelled)||item.Calendar||item.Enabled||!before.ItemEnabled)return false;
+            occurrence=new ReminderOccurrence{RuleId=before.RuleId,At=before.At,Phase=after,Revision=before.Revision+1};
+            b.Occurrences.Add(occurrence);
+        }
+        else if(occurrence.Phase!=after||occurrence.Revision!=before.Revision+1)return false;
+        if(item.Enabled!=before.ItemEnabled && !((after is ReminderPhase.Done or ReminderPhase.Cancelled)&&before.ItemEnabled&&!item.Enabled))return false;
+        item.Enabled=before.ItemEnabled;
+        bool due=now>=before.At&&(before.Phase is ReminderPhase.Early or ReminderPhase.AcknowledgedEarly or ReminderPhase.Waiting);
+        occurrence.Phase=due?ReminderPhase.Due:before.Phase;
+        occurrence.SnoozeAt=due?null:before.SnoozeAt;
+        occurrence.RoundStartedAt=due||before.Phase==ReminderPhase.Due?now:before.RoundStartedAt;
+        occurrence.Revision++;
+        return true;
+    }
     public static void SetEnabled(ReminderBook b,Guid id,bool enabled,DateTime now)
     {
         var i=b.Items.FirstOrDefault(x=>x.Id==id);if(i==null)return;

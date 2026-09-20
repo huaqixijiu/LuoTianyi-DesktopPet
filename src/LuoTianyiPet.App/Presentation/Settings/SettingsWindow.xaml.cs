@@ -1,8 +1,12 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using LuoTianyiPet.Core;
+using LuoTianyiPet.Platform.Windows;
+using TextBox = System.Windows.Controls.TextBox;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfRadioButton = System.Windows.Controls.RadioButton;
 
 namespace LuoTianyiPet.App;
@@ -11,6 +15,8 @@ public partial class SettingsWindow : Window
 {
     private readonly IMessageNotificationSource? _messageNotificationSource;
     private bool _isInitializing = true;
+    private TextBox? _activeShortcutInput;
+    private string? _shortcutBeforeCapture;
     public event Action<int>? DisplayScalePreviewChanged;
     public SettingsWindow(
         MessageNotificationPreferences notificationPreferences,
@@ -35,6 +41,7 @@ public partial class SettingsWindow : Window
         StartWithWindowsSelected = startupRegistrationEnabled;
         _messageNotificationSource = messageNotificationSource;
         InitializeComponent();
+        InitializeShortcutInputs();
         SelectedReminderPreferences=reminderPreferences??new();
         AlarmAnimationCheckBox.IsChecked=SelectedReminderPreferences.Animation;
         AlarmSoundCheckBox.IsChecked=SelectedReminderPreferences.Sound;
@@ -210,6 +217,247 @@ public partial class SettingsWindow : Window
         MusicAnimationSelectionPanel.IsEnabled = enabled;
     }
 
+    private void InitializeShortcutInputs()
+    {
+        TogglePlayPauseShortcutTextBox.Text = SelectedMediaPreferences.TogglePlayPauseShortcut;
+        PreviousTrackShortcutTextBox.Text = SelectedMediaPreferences.PreviousTrackShortcut;
+        NextTrackShortcutTextBox.Text = SelectedMediaPreferences.NextTrackShortcut;
+
+        if (!AreShortcutInputsValid(out string? message))
+        {
+            SetShortcutStatus(message!, isError: true);
+        }
+    }
+
+    private void OnShortcutInputMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not TextBox input)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        BeginShortcutCapture(input);
+        input.Focus();
+    }
+
+    private void OnShortcutInputLostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox input && ReferenceEquals(_activeShortcutInput, input))
+        {
+            CancelShortcutCapture();
+        }
+    }
+
+    private void OnShortcutInputPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox input)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_activeShortcutInput, input))
+        {
+            BeginShortcutCapture(input);
+        }
+
+        Key key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key == Key.Escape)
+        {
+            CancelShortcutCapture();
+            e.Handled = true;
+            return;
+        }
+
+        if (IsModifierKey(key))
+        {
+            SetShortcutStatus("请继续按下字母、数字、方向键或空格。", isError: false);
+            e.Handled = true;
+            return;
+        }
+
+        ModifierKeys modifiers = Keyboard.Modifiers;
+        if ((modifiers & ModifierKeys.Windows) != 0)
+        {
+            SetShortcutStatus("暂不支持 Windows 键，请使用 Ctrl、Alt 或 Shift。", isError: true);
+            e.Handled = true;
+            return;
+        }
+
+        ModifierKeys supportedModifiers = modifiers &
+            (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Shift);
+        if (supportedModifiers == ModifierKeys.None)
+        {
+            SetShortcutStatus("快捷键至少需要 Ctrl、Alt 或 Shift 中的一个。", isError: true);
+            e.Handled = true;
+            return;
+        }
+
+        if (!TryGetPrimaryKeyName(key, out string primaryKey))
+        {
+            SetShortcutStatus("不支持这个按键，请使用字母、数字、方向键或空格。", isError: true);
+            e.Handled = true;
+            return;
+        }
+
+        string shortcut = BuildShortcutText(supportedModifiers, primaryKey);
+        if (IsShortcutUsedByAnotherInput(shortcut, input))
+        {
+            SetShortcutStatus("这个组合键已经分配给另一项操作，请换一个。", isError: true);
+            e.Handled = true;
+            return;
+        }
+
+        input.Text = shortcut;
+        FinishShortcutCapture();
+        SetShortcutStatus("快捷键已更新，保存后立即生效。", isError: false);
+        OnSettingChanged(input, e);
+        e.Handled = true;
+    }
+
+    private void OnResetCloudMusicShortcutsClick(object sender, RoutedEventArgs e)
+    {
+        CancelShortcutCapture();
+        TogglePlayPauseShortcutTextBox.Text = MediaPreferences.DefaultTogglePlayPauseShortcut;
+        PreviousTrackShortcutTextBox.Text = MediaPreferences.DefaultPreviousTrackShortcut;
+        NextTrackShortcutTextBox.Text = MediaPreferences.DefaultNextTrackShortcut;
+        SetShortcutStatus("已恢复默认快捷键，保存后生效。", isError: false);
+        OnSettingChanged(sender, e);
+    }
+
+    private void BeginShortcutCapture(TextBox input)
+    {
+        if (ReferenceEquals(_activeShortcutInput, input))
+        {
+            return;
+        }
+
+        CancelShortcutCapture();
+        _activeShortcutInput = input;
+        _shortcutBeforeCapture = input.Text;
+        input.Text = "请按下组合键…";
+        SetShortcutStatus("正在录入，按下组合键后会自动完成；Esc 取消。", isError: false);
+    }
+
+    private void CancelShortcutCapture()
+    {
+        if (_activeShortcutInput is not null && _shortcutBeforeCapture is not null)
+        {
+            _activeShortcutInput.Text = _shortcutBeforeCapture;
+        }
+
+        FinishShortcutCapture();
+    }
+
+    private void FinishShortcutCapture()
+    {
+        _activeShortcutInput = null;
+        _shortcutBeforeCapture = null;
+    }
+
+    private bool AreShortcutInputsValid(out string? message)
+    {
+        TextBox[] inputs =
+        [
+            TogglePlayPauseShortcutTextBox,
+            PreviousTrackShortcutTextBox,
+            NextTrackShortcutTextBox,
+        ];
+        foreach (TextBox input in inputs)
+        {
+            if (!ShortcutBinding.Parse(input.Text).IsValid)
+            {
+                message = $"“{GetShortcutLabel(input)}”的组合键无效，请重新录入或恢复默认。";
+                return false;
+            }
+        }
+
+        for (int i = 0; i < inputs.Length; i++)
+        {
+            for (int j = i + 1; j < inputs.Length; j++)
+            {
+                if (ShortcutBinding.Parse(inputs[i].Text).EquivalentTo(ShortcutBinding.Parse(inputs[j].Text)))
+                {
+                    message = $"“{GetShortcutLabel(inputs[i])}”与“{GetShortcutLabel(inputs[j])}”不能使用同一个组合键。";
+                    return false;
+                }
+            }
+        }
+
+        message = null;
+        return true;
+    }
+
+    private bool IsShortcutUsedByAnotherInput(string shortcut, TextBox current)
+    {
+        ShortcutBinding candidate = ShortcutBinding.Parse(shortcut);
+        return new[]
+        {
+            TogglePlayPauseShortcutTextBox,
+            PreviousTrackShortcutTextBox,
+            NextTrackShortcutTextBox,
+        }
+            .Where(input => !ReferenceEquals(input, current))
+            .Select(input => ShortcutBinding.Parse(input.Text))
+            .Any(candidate.EquivalentTo);
+    }
+
+    private void SetShortcutStatus(string message, bool isError)
+    {
+        ShortcutStatusText.Text = message;
+        ShortcutStatusText.Foreground = (System.Windows.Media.Brush)FindResource(
+            isError ? "PrimaryDark" : "Muted");
+    }
+
+    private static string GetShortcutLabel(TextBox input) => input.Name switch
+    {
+        nameof(TogglePlayPauseShortcutTextBox) => "暂停 / 继续",
+        nameof(PreviousTrackShortcutTextBox) => "上一首",
+        _ => "下一首",
+    };
+
+    private static bool IsModifierKey(Key key) => key is
+        Key.LeftCtrl or Key.RightCtrl or
+        Key.LeftAlt or Key.RightAlt or
+        Key.LeftShift or Key.RightShift or
+        Key.LWin or Key.RWin;
+
+    private static bool TryGetPrimaryKeyName(Key key, out string name)
+    {
+        if (key is >= Key.A and <= Key.Z)
+        {
+            name = key.ToString();
+            return true;
+        }
+
+        if (key is >= Key.D0 and <= Key.D9)
+        {
+            name = ((int)key - (int)Key.D0).ToString();
+            return true;
+        }
+
+        name = key switch
+        {
+            Key.Left => "Left",
+            Key.Right => "Right",
+            Key.Up => "Up",
+            Key.Down => "Down",
+            Key.Space => "Space",
+            _ => string.Empty,
+        };
+        return name.Length > 0;
+    }
+
+    private static string BuildShortcutText(ModifierKeys modifiers, string primaryKey)
+    {
+        List<string> parts = [];
+        if ((modifiers & ModifierKeys.Control) != 0) parts.Add("Ctrl");
+        if ((modifiers & ModifierKeys.Alt) != 0) parts.Add("Alt");
+        if ((modifiers & ModifierKeys.Shift) != 0) parts.Add("Shift");
+        parts.Add(primaryKey);
+        return string.Join("+", parts);
+    }
+
     private async void OnRequestNotificationAccessClick(object sender, RoutedEventArgs e)
     {
         if (_messageNotificationSource is null)
@@ -232,6 +480,14 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
+        CancelShortcutCapture();
+        if (!AreShortcutInputsValid(out string? shortcutMessage))
+        {
+            MusicNavigationRadioButton.IsChecked = true;
+            SetShortcutStatus(shortcutMessage!, isError: true);
+            return;
+        }
+
         SelectedReminderPreferences=new(){Animation=AlarmAnimationCheckBox.IsChecked==true,Sound=AlarmSoundCheckBox.IsChecked==true,Volume=AlarmVolumeSlider.Value,Tone="再给我一天的时间吧QAQ"};
         SelectedNotificationPreferences = SelectedNotificationPreferences with
         {
@@ -272,6 +528,9 @@ public partial class SettingsWindow : Window
                 // intelligent mode both Luo Tianyi animations form the pool;
                 // fixed mode is artist-independent.
                 EnableLuoTianyiSingingEasterEgg = true,
+                TogglePlayPauseShortcut = TogglePlayPauseShortcutTextBox.Text.Trim(),
+                PreviousTrackShortcut = PreviousTrackShortcutTextBox.Text.Trim(),
+                NextTrackShortcut = NextTrackShortcutTextBox.Text.Trim(),
             });
         DialogResult = true;
     }

@@ -81,6 +81,7 @@ public partial class MainWindow
                         HideFeedbackBubble(true);
                         ApplyAccessoryLayout(layout);
                         var before = GetStableStageDesktopBounds();
+                        DesktopRectangle beforePetAlpha = GetPetImageAlphaBoundsInWindow();
                         ShowTrackInfo(new MediaTrackSnapshot(true, true, "歌名与提示各有位置", "洛天依"), true);
                         _musicIslandMotion.Show(false);
                         _trackInfoHideTimer.Stop();
@@ -89,16 +90,41 @@ public partial class MainWindow
                         UpdateLayout();
                         Check(_accessoryLayout == layout, $"Actual edge layout {scale}/{layout}");
                         Rect song = Bounds(TrackInfoBubble), feedback = Bounds(FeedbackBubble), controls = Bounds(MediaControls);
-                        var pet = GetStableStageDesktopBounds();
-                        Check(feedback.Top >= song.Bottom + 3 && !feedback.IntersectsWith(controls),
-                            $"Feedback below song, outside controls {scale}/{layout}/{message.Length}");
+                        DesktopRectangle petAlpha = GetPetImageAlphaBoundsInWindow();
+                        Rect pet = new(petAlpha.Left, petAlpha.Top, petAlpha.Width, petAlpha.Height);
+                        DesktopRectangle workArea = GetCurrentWorkArea();
+                        bool preferredFits = Top + pet.Top - feedback.Height - FeedbackBubblePetGap >= workArea.Top &&
+                            Top + pet.Top - FeedbackBubblePetGap <= workArea.Bottom;
+                        bool preferredOverlapsIsland =
+                            pet.Top - feedback.Height - FeedbackBubblePetGap < controls.Bottom &&
+                            pet.Top - FeedbackBubblePetGap > controls.Top;
+                        if (preferredFits && !preferredOverlapsIsland)
+                        {
+                            Check(Math.Abs(pet.Top - feedback.Bottom - FeedbackBubblePetGap) < 1,
+                                $"Feedback stays above the visible pet {scale}/{layout}/{message.Length}");
+                        }
+                        else if (controls.Bottom <= pet.Top)
+                        {
+                            Check(feedback.Bottom <= controls.Top - FeedbackBubblePetGap + 1,
+                                $"Feedback stays above the music island when it is above the pet {scale}/{layout}/{message.Length}");
+                        }
+                        else
+                        {
+                            Check(feedback.Top >= controls.Bottom + FeedbackBubblePetGap - 1,
+                                $"Top-edge feedback stays below the music island {scale}/{layout}/{message.Length} " +
+                                $"(feedbackTop={feedback.Top:0.0}, islandBottom={controls.Bottom:0.0}, petTop={pet.Top:0.0}, " +
+                                $"feedbackHeight={feedback.Height:0.0}, windowHeight={ActualHeight:0.0}, slot={_feedbackSlotHeight:0.0})");
+                        }
+                        Check(!feedback.IntersectsWith(pet) && !feedback.IntersectsWith(controls),
+                            $"Feedback does not overlap pet or controls {scale}/{layout}/{message.Length}");
                         Check(feedback.Left >= 0 && feedback.Right <= Width + 0.1 && feedback.Bottom <= Height + 0.1,
                             $"Feedback fits window {scale}/{layout}/{message.Length}");
                         Check(Top + feedback.Top >= work.Top && Top + feedback.Bottom <= work.Bottom &&
                             Top + song.Top >= work.Top && Top + controls.Bottom <= work.Bottom,
                             $"Islands remain on screen {scale}/{layout}/{message.Length}");
-                        Check(Math.Abs(before.Bottom - pet.Bottom) < 0.1 && Math.Abs(before.Height - pet.Height) < 0.1,
-                            $"Feedback does not shift or resize pet {scale}/{layout}/{message.Length}");
+                        Check(Math.Abs(beforePetAlpha.Width - petAlpha.Width) < 0.1 &&
+                            Math.Abs(beforePetAlpha.Height - petAlpha.Height) < 0.1,
+                            $"Feedback keeps the visible pet scale unchanged {scale}/{layout}/{message.Length}");
                         Check(MediaControls.Opacity == 1 && TrackInfoBubble.IsVisible,
                             "Feedback does not hide the song island");
                         if (message == messages[0]) CaptureQuickActionsQa(this, Path.Combine(directory, $"{scale}-{layout}.png"));
@@ -108,12 +134,28 @@ public partial class MainWindow
                     }
                 }
             }
+            foreach (int scale in new[] { 50, 95, 200 })
+            {
+                SetDisplayScalePercent(scale,false);
+                ApplyAccessoryLayout(AccessoryLayout.Split);
+                var centeredWork=GetCurrentWorkArea();
+                Left=centeredWork.Left+(centeredWork.Width-Width)/2;
+                Top=centeredWork.Top+(centeredWork.Height-Height)/2;
+                ShowTrackInfo(new MediaTrackSnapshot(true,true,"间距检查","洛天依"),true);
+                _musicIslandMotion.Show(false);
+                UpdateLayout();PositionMusicIslandNearPet();UpdateLayout();
+                Rect centeredIsland=Bounds(MediaControls);
+                DesktopRectangle centeredPet=GetPetImageAlphaBoundsInWindow();
+                Check(Math.Abs(centeredIsland.Top-centeredPet.Bottom-MusicIslandPetGap)<1.5,
+                    $"Music island follows visible feet at pet scale {scale} " +
+                    $"(gap={centeredIsland.Top-centeredPet.Bottom:0.0})");
+            }
             SetMusicIslandsVisible(false);
             ShowPersistentFeedbackBubble(messages[1]);
             Check(MediaControls.Visibility == Visibility.Collapsed, "Important feedback never re-enables disabled islands");
             SetDisplayScalePercent(50, false);
             UpdateLayout();
-            Check(FeedbackBubble.Width <= Width - 10 && Bounds(FeedbackBubble).Bottom <= Height,
+            Check(FeedbackBubble.ActualWidth <= Width - 10 && Bounds(FeedbackBubble).Bottom <= Height,
                 "Visible feedback reflows when resizing to minimum size");
             HideFeedbackBubble(true);
             // This QA instance has its own on-disk profile, never the user's settings.

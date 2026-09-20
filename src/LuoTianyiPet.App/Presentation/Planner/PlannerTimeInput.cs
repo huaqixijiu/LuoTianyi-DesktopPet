@@ -49,7 +49,7 @@ internal sealed class PlannerTimeInput
                 _compactMinutes += digit;
                 _hour.Text = _compactMinutes.Substring(0, 2);
                 _minute.Text = _compactMinutes.Substring(2);
-                Focus(_hour);
+                Focus(_minute);
                 continue;
             }
             string candidate = source.Text.Remove(source.SelectionStart, source.SelectionLength).Insert(source.SelectionStart, digit.ToString());
@@ -66,7 +66,7 @@ internal sealed class PlannerTimeInput
                     _compactMinutes = candidate;
                     _hour.Text = candidate.Substring(0, 1);
                     _minute.Text = candidate.Substring(1, 2);
-                    Focus(_hour);
+                    Focus(_minute);
                 }
             }
         }

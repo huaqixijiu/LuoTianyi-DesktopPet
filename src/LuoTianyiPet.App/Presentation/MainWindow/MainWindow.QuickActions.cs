@@ -13,7 +13,7 @@ public partial class MainWindow
 
     private bool CanShowMusicIslands => _settings.Media.ShowMusicIslands &&
         !_isClosing && !_hiddenByUser && !_bunChaseActive &&
-        !IsGenshinPresentationLocked && _reminderCard?.IsVisible != true &&
+        !IsGenshinPresentationLocked &&
         _edgeDockSide == EdgeDockSide.None && _petQuickPanel?.IsVisible != true;
 
     private void OnPetMouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -46,6 +46,7 @@ public partial class MainWindow
             percent => SetDisplayScalePercent(percent, save: true));
         _petQuickPanel.OpenPlanner = OpenPlanner;
         _petQuickPanel.OpenSettings = ShowSettingsDialog;
+        _petQuickPanel.HidePet = HidePetFromTray;
         _petQuickPanel.ExitPet = BeginUserRequestedExitAsync;
         DesktopRectangle bounds = GetPetImageAlphaBoundsInWindow();
         _petQuickPanel.ShowNearPet(

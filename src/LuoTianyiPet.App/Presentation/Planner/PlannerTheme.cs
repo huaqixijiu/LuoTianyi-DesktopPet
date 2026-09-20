@@ -14,20 +14,32 @@ internal static class PlannerTheme
     public static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(101, 128, 153));
     public static readonly Brush PrimaryFill = new SolidColorBrush(Color.FromRgb(0, 148, 226));
     public static readonly Brush CalendarSelection = Accent;
-    public static readonly Brush CalendarBatchSelectionSoft = new SolidColorBrush(Color.FromRgb(234, 248, 255));
-    public static readonly Brush CalendarRestSelectionSoft = new SolidColorBrush(Color.FromRgb(245, 239, 251));
-    public static readonly Brush SchedulePreview = new SolidColorBrush(Color.FromRgb(105, 197, 217));
+    public static readonly Brush CalendarSelectionFill = new SolidColorBrush(Color.FromRgb(238, 248, 255));
+    public static readonly Brush WeekColumnBackground = new SolidColorBrush(Color.FromRgb(247, 250, 253));
+    public static readonly Brush WeekColumnLine = new SolidColorBrush(Color.FromRgb(230, 239, 246));
+    public static readonly Brush WeekSelectionLine = new SolidColorBrush(Color.FromRgb(131, 196, 235));
+    public static readonly Brush WeekCardLine = new SolidColorBrush(Color.FromRgb(222, 233, 241));
+    public static readonly Brush SchedulePreview = new SolidColorBrush(Color.FromRgb(35, 174, 165));
     // Planner-only semantic tokens. Floating pet surfaces keep their own configured palette.
     public static readonly Brush Danger = new SolidColorBrush(Color.FromRgb(217, 83, 79));
     public static readonly Brush DangerSoft = new SolidColorBrush(Color.FromRgb(253, 236, 236));
     public static readonly Brush DangerLine = new SolidColorBrush(Color.FromRgb(245, 198, 198));
-    public static readonly Brush RestForeground = Danger;
+    public static readonly Brush RestForeground = new SolidColorBrush(Color.FromRgb(179, 70, 84));
     public static readonly Brush RestBackground = new SolidColorBrush(Color.FromRgb(255, 247, 249));
+    public static readonly Brush RestActionFill = new SolidColorBrush(Color.FromRgb(190, 79, 96));
+    public static readonly Brush RestChoiceFill = new SolidColorBrush(Color.FromRgb(255, 239, 242));
+    public static readonly Brush RestChoiceLine = new SolidColorBrush(Color.FromRgb(237, 168, 180));
     public static readonly Brush RuleRestForeground = new SolidColorBrush(Color.FromRgb(236, 145, 157));
     public static readonly Brush RuleRestBadgeBackground = new SolidColorBrush(Color.FromRgb(255, 237, 241));
-    public static readonly Brush WorkForeground = new SolidColorBrush(Color.FromRgb(40, 126, 221));
+    public static readonly Brush WorkForeground = new SolidColorBrush(Color.FromRgb(19, 111, 106));
+    public static readonly Brush WorkBadgeBackground = new SolidColorBrush(Color.FromRgb(221, 245, 241));
+    public static readonly Brush WorkActionFill = new SolidColorBrush(Color.FromRgb(22, 126, 120));
+    public static readonly Brush ReminderAccent = new SolidColorBrush(Color.FromRgb(14, 145, 173));
+    public static readonly Brush ReminderLine = new SolidColorBrush(Color.FromRgb(171, 225, 238));
+    public static readonly Brush WorkLine = new SolidColorBrush(Color.FromRgb(132, 202, 193));
+    public static readonly Brush FunctionFill = WorkBadgeBackground;
     public static readonly Brush WorkBackground = Brushes.White;
-    public static readonly Brush TermForeground = new SolidColorBrush(Color.FromRgb(20, 145, 218));
+    public static readonly Brush TermForeground = Muted;
     public static readonly Brush AccentSoft = new SolidColorBrush(Color.FromRgb(229, 246, 255));
     public static readonly Brush HoverBackground = new SolidColorBrush(Color.FromRgb(235, 247, 253));
     public static readonly Brush ChipBackground = new SolidColorBrush(Color.FromRgb(246, 250, 253));
@@ -78,6 +90,11 @@ internal static class PlannerTheme
     {
         window.FontSize=15;
         System.Windows.Media.TextOptions.SetTextFormattingMode(window,TextFormattingMode.Display);
+        System.Windows.Media.TextOptions.SetTextRenderingMode(window,TextRenderingMode.ClearType);
+        System.Windows.Media.TextOptions.SetTextHintingMode(window,TextHintingMode.Fixed);
+        RenderOptions.SetClearTypeHint(window,ClearTypeHint.Enabled);
+        window.SnapsToDevicePixels=true;
+        window.UseLayoutRounding=true;
         System.Windows.Media.RenderOptions.SetBitmapScalingMode(window,BitmapScalingMode.HighQuality);
         window.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse("""
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
@@ -127,7 +144,7 @@ internal static class PlannerTheme
  <Style x:Key="PlannerContextMenu" TargetType="ContextMenu"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#DEEDF8"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Padding" Value="4"/><Setter Property="HasDropShadow" Value="True"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10" Padding="{TemplateBinding Padding}"><ItemsPresenter/></Border></ControlTemplate></Setter.Value></Setter></Style>
  <Style x:Key="PlannerMenuItem" TargetType="MenuItem"><Setter Property="Background" Value="White"/><Setter Property="Foreground" Value="#103468"/><Setter Property="Padding" Value="10,7"/><Setter Property="Margin" Value="1"/><Setter Property="FontSize" Value="15"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Border x:Name="B" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header"/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="B" Property="Background" Value="#EAF8FF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>
  <Style x:Key="PlannerMode" TargetType="Button" BasedOn="{StaticResource PlannerSegment}"><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="ModeSurface" CornerRadius="24" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ModeSurface" Property="BorderThickness" Value="1"/><Setter TargetName="ModeSurface" Property="BorderBrush" Value="#0094E2"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="ModeSurface" CornerRadius="24" Background="{TemplateBinding Background}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ModeSurface" Property="Opacity" Value="0.78"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
  </Style>
 </ResourceDictionary>
 """));

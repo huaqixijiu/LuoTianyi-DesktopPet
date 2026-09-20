@@ -47,6 +47,7 @@ public partial class MainWindow : Window
     private const double MediaControlsReservedHeight = 86;
     private const double MusicIslandPetGap = 7;
     private const double FeedbackBubbleAnchorOffset = 92;
+    private const double FeedbackBubblePetGap = 6;
     private const double TrackInfoReservedHeight = 86;
     private static readonly TimeSpan AccessoryMouseLeaveDelay = TimeSpan.FromSeconds(5);
     private const double EdgeDockActivationFraction = 0.25;
@@ -89,10 +90,12 @@ public partial class MainWindow : Window
     private static readonly TimeSpan FileDropDwellDuration = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan CloudMusicLaunchShortcutDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan CloudMusicLaunchRetryInterval = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan CloudMusicLaunchPlaybackRetryInterval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan CloudMusicLaunchFallbackCommandDelay = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan CloudMusicLaunchTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan CrystalDecorationSelectionInterval = TimeSpan.FromMinutes(5);
     private const int CloudMusicLaunchMaximumAttempts = 3;
+    private const int CloudMusicLaunchMaximumPlaybackCommandAttempts = 3;
     private readonly ISettingsStore _settingsStore;
     private readonly IAppLogger _logger;
     private readonly AnimationCatalog? _animationCatalog;
@@ -550,9 +553,7 @@ public partial class MainWindow : Window
                     : "Unavailable");
         }
         ApplyEffectiveTopmost();
-        PreviousTrackButton.ToolTip = $"上一首（{_settings.Media.PreviousTrackShortcut}）";
-        TogglePlayPauseButton.ToolTip = $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}）";
-        NextTrackButton.ToolTip = $"下一首（{_settings.Media.NextTrackShortcut}）";
+        UpdateMediaShortcutTooltips();
         UpdatePlayPauseGlyph();
         _musicIslandMotion.Hide(animate: false);
 
@@ -1769,6 +1770,7 @@ public partial class MainWindow : Window
             SystemParameters.VirtualScreenTop + SystemParameters.VirtualScreenHeight - ActualHeight +
                 verticalOverscan);
         UpdateAccessoryLayoutForCurrentPosition();
+        PositionReminderCard();
         if (_dragEdgeCandidate == EdgeDockSide.None)
         {
             _dragIntentPetBoundsInWindow = GetPetImageAlphaBoundsInWindow();
@@ -1777,6 +1779,9 @@ public partial class MainWindow : Window
         {
             UpdateDragEdgePreview();
         }
+        // The message rail is a separate transparent window. Update it on the
+        // same pointer event as the pet instead of waiting for its 40 ms timer.
+        PositionMessageInbox();
     }
 
     private void EndWindowDrag()
@@ -3555,10 +3560,7 @@ public partial class MainWindow : Window
     {
         if (_accessoryLayout == layout && !force)
         {
-            if (layout == AccessoryLayout.AbovePet)
-            {
-                PositionMusicIslandNearPet();
-            }
+            PositionMusicIslandNearPet();
             return;
         }
 
@@ -3633,10 +3635,7 @@ public partial class MainWindow : Window
             }
         }
 
-        if (layout == AccessoryLayout.AbovePet)
-        {
-            PositionMusicIslandNearPet();
-        }
+        PositionMusicIslandNearPet();
 
         _logger.Info(
             "window.accessory_layout_changed",
@@ -4019,6 +4018,8 @@ public partial class MainWindow : Window
             _settings.Media.EnableLuoTianyiSingingEasterEgg !=
                 normalized.EnableLuoTianyiSingingEasterEgg;
         _settings = _settings with { Media = normalized };
+        _mediaCommandSender.ApplySettings(normalized, _settings.Safety);
+        UpdateMediaShortcutTooltips();
         if (musicAnimationChanged &&
             _stateMachine.CurrentContinuousState == PetContinuousState.MusicPlaying)
         {
@@ -4446,7 +4447,8 @@ public partial class MainWindow : Window
         DateTimeOffset startedAt = DateTimeOffset.Now;
         DateTimeOffset lastLaunchAttemptAt = startedAt;
         int launchAttemptCount = 1;
-        bool playCommandSent = false;
+        DateTimeOffset? lastPlaybackCommandAttemptAt = null;
+        int playbackCommandSentCount = 0;
         try
         {
             while (DateTimeOffset.Now - startedAt < CloudMusicLaunchTimeout)
@@ -4483,20 +4485,27 @@ public partial class MainWindow : Window
 
                 bool playerContentReady = _lastTrackSnapshot.HasTrack ||
                     launchElapsed >= CloudMusicLaunchFallbackCommandDelay;
-                if (!playCommandSent &&
+                bool playbackCommandRetryReady =
+                    lastPlaybackCommandAttemptAt is null ||
+                    now - lastPlaybackCommandAttemptAt.Value >=
+                    CloudMusicLaunchPlaybackRetryInterval;
+                if (playbackCommandSentCount < CloudMusicLaunchMaximumPlaybackCommandAttempts &&
                     launchElapsed >= CloudMusicLaunchShortcutDelay &&
                     playerContentReady &&
-                    playerRunning)
+                    playerRunning &&
+                    playbackCommandRetryReady)
                 {
+                    lastPlaybackCommandAttemptAt = now;
                     MediaCommandSendResult playResult = _mediaCommandSender.TrySend(
                         MediaCommand.TogglePlayPause,
                         DateTimeOffset.Now);
                     _logger.Info(
                         "media.application_launch_play_result",
+                        $"Attempt={playbackCommandSentCount + 1}/{CloudMusicLaunchMaximumPlaybackCommandAttempts}; " +
                         $"Status={playResult.Status}; Delivery={playResult.DeliveryMethod}.");
                     if (playResult.WasSent)
                     {
-                        playCommandSent = true;
+                        playbackCommandSentCount++;
                         if (_audioSessionProbe is null)
                         {
                             FinishCloudMusicLaunchWait(restoreContinuousAnimation: true);
@@ -4505,7 +4514,10 @@ public partial class MainWindow : Window
                             return;
                         }
 
-                        ShowPersistentFeedbackBubble("网易云已打开，正在等待音乐开始播放…");
+                        ShowPersistentFeedbackBubble(
+                            playbackCommandSentCount < CloudMusicLaunchMaximumPlaybackCommandAttempts
+                                ? $"网易云已打开，正在等待音乐开始播放…（可自动重试 {CloudMusicLaunchMaximumPlaybackCommandAttempts - playbackCommandSentCount} 次）"
+                                : "网易云已打开，正在等待音乐开始播放…");
                     }
                     else if (playResult.Status is
                         (MediaCommandSendStatus.RateLimited or MediaCommandSendStatus.KeyboardBusy))
@@ -4524,8 +4536,8 @@ public partial class MainWindow : Window
             if (_cloudMusicLaunchWaiting)
             {
                 FinishCloudMusicLaunchWait(restoreContinuousAnimation: true);
-                ShowFeedbackBubble(playCommandSent
-                    ? "等待网易云播放超时，请打开网易云检查歌曲"
+                ShowFeedbackBubble(playbackCommandSentCount > 0
+                    ? $"等待网易云播放超时（已尝试 {playbackCommandSentCount} 次），请检查网易云快捷键设置"
                     : "网易云启动超时，请稍后再试");
             }
         }
@@ -4617,10 +4629,18 @@ public partial class MainWindow : Window
         double slot = 0;
         if (FeedbackBubble.Visibility == Visibility.Visible)
         {
-            FeedbackBubble.Width = Math.Max(80, Math.Min(250, Width - 10));
+            // Measure the content, with only a wrapping cap. Short messages must not fill the cap.
+            FeedbackBubble.Width = double.NaN;
+            FeedbackBubble.MaxWidth = Math.Max(40, Math.Min(250, Width - 10));
+            // PositionFeedbackNearPet uses Margin.Top as an absolute in-window
+            // position. Measure with the normal small top margin so a previous
+            // position cannot change the reserved stage height.
+            Thickness position = FeedbackBubble.Margin;
+            FeedbackBubble.Margin = new Thickness(position.Left, 6, position.Right, 0);
             FeedbackBubble.Measure(new System.Windows.Size(Width, double.PositiveInfinity));
             slot = Math.Ceiling(FeedbackBubble.DesiredSize.Height -
                 FeedbackBubble.Margin.Top - FeedbackBubble.Margin.Bottom) + 8;
+            FeedbackBubble.Margin = position;
         }
         if (Math.Abs(slot - _feedbackSlotHeight) < 0.1) return;
         _feedbackSlotHeight = slot;
@@ -4634,17 +4654,99 @@ public partial class MainWindow : Window
         var pet=GetPetImageAlphaBoundsInWindow();
         if(pet.Height<=0)return;
         double height=FeedbackBubble.ActualHeight;
-        double top=_accessoryLayout==AccessoryLayout.BelowPet?pet.Bottom+6:pet.Top-height-6;
-        top=Math.Max(0,Math.Min(Math.Max(0,ActualHeight-height),top));
+        double preferredTop=pet.Top-height-FeedbackBubblePetGap;
+        DesktopRectangle work=GetCurrentWorkArea();
+        Rect island=default;
+        bool hasIsland=TryGetMusicIslandBoundsInWindow(out island);
+        bool IsWithinWorkArea(double candidateTop) =>
+            Top+candidateTop>=work.Top&&Top+candidateTop+height<=work.Bottom;
+        bool OverlapsIsland(double candidateTop) =>
+            hasIsland&&candidateTop<island.Bottom&&candidateTop+height>island.Top;
+        bool preferredFits=IsWithinWorkArea(preferredTop)&&!OverlapsIsland(preferredTop);
+
+        if(!preferredFits&&hasIsland&&island.Bottom>pet.Top&&
+            island.Bottom+FeedbackBubblePetGap+height>ActualHeight&&
+            _accessoryLayout==AccessoryLayout.BelowPet&&
+            MediaControls.VerticalAlignment==VerticalAlignment.Bottom)
+        {
+            // The music island is bottom-aligned in the top-edge layout. Move
+            // it upward just enough to create a real slot below it; otherwise
+            // the window clamp would place the bubble back in the old gap.
+            double requiredBottomMargin=7+FeedbackBubblePetGap+height;
+            Thickness margin=MediaControls.Margin;
+            if(margin.Bottom<requiredBottomMargin-.5)
+            {
+                MediaControls.Margin=new Thickness(
+                    margin.Left,margin.Top,margin.Right,requiredBottomMargin);
+                UpdateLayout();
+                hasIsland=TryGetMusicIslandBoundsInWindow(out island);
+            }
+        }
+
+        double top;
+        if(preferredFits)
+        {
+            // The normal position is attached to the visible top of the pet,
+            // regardless of which accessory layout is currently active, as
+            // long as the music island does not occupy that space.
+            top=preferredTop;
+        }
+        else if(hasIsland)
+        {
+            // Keep the message outside the music island. At the top edge the
+            // island is below the pet, so this intentionally selects the
+            // island's lower side instead of the pet/island gap. When the
+            // island is above the pet, use its upper side to avoid overlap.
+            double islandSideTop = island.Bottom<=pet.Top
+                ? island.Top-height-FeedbackBubblePetGap
+                : island.Bottom+FeedbackBubblePetGap;
+            top=islandSideTop;
+        }
+        else
+        {
+            top=pet.Bottom+FeedbackBubblePetGap;
+        }
+
+        double minimumTop=Math.Max(0,work.Top-Top);
+        double maximumTop=Math.Min(Math.Max(0,ActualHeight-height),work.Bottom-Top-height);
+        if(maximumTop<minimumTop)
+        {
+            minimumTop=0;
+            maximumTop=Math.Max(0,ActualHeight-height);
+        }
+        top=Math.Max(minimumTop,Math.Min(maximumTop,top));
         FeedbackBubble.VerticalAlignment=VerticalAlignment.Top;
         if(Math.Abs(FeedbackBubble.Margin.Top-top)>.5||FeedbackBubble.Margin.Bottom!=0)
             FeedbackBubble.Margin=new Thickness(5,top,5,0);
     }
 
+    private bool TryGetMusicIslandBoundsInWindow(out Rect bounds)
+    {
+        bounds=default;
+        if(MediaControls.Visibility!=Visibility.Visible||MediaControls.Opacity<=0.01||
+            MediaControls.ActualWidth<=0||MediaControls.ActualHeight<=0)return false;
+        try
+        {
+            bounds=MediaControls.TransformToAncestor(this).TransformBounds(new Rect(MediaControls.RenderSize));
+            return bounds.Width>0&&bounds.Height>0;
+        }
+        catch(InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    private void UpdateMediaShortcutTooltips()
+    {
+        PreviousTrackButton.ToolTip = $"上一首（{_settings.Media.PreviousTrackShortcut}）";
+        TogglePlayPauseButton.ToolTip = $"播放 / 暂停（{_settings.Media.TogglePlayPauseShortcut}）";
+        NextTrackButton.ToolTip = $"下一首（{_settings.Media.NextTrackShortcut}）";
+    }
+
     private void PositionMusicIslandNearPet()
     {
-        if (!IsLoaded || _accessoryLayout != AccessoryLayout.AbovePet ||
-            PetImage.Visibility != Visibility.Visible)
+        if (!IsLoaded || PetImage.Visibility != Visibility.Visible ||
+            (_accessoryLayout == AccessoryLayout.BelowPet && FeedbackBubble.IsVisible))
         {
             return;
         }
@@ -4656,15 +4758,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        // MediaControls is laid out as a top-aligned child in this mode. Use
-        // the current animation's aggregate alpha bounds rather than the
-        // transparent stage height, so short music artwork does not leave a
-        // large invisible band between the island and the visible head.
+        // Anchor every layout to the visible artwork, not the reserved stage
+        // row. At small scales the fixed row was much taller than the music
+        // island and left a growing gap below the pet's feet.
         double islandHeight = GetMusicIslandLayoutHeight();
-        double desiredTop = pet.Top - islandHeight - MusicIslandPetGap;
+        double desiredTop = _accessoryLayout == AccessoryLayout.AbovePet
+            ? pet.Top - islandHeight - MusicIslandPetGap
+            : pet.Bottom + MusicIslandPetGap;
         double maximumTop = Math.Max(0, ActualHeight - islandHeight);
         double top = Math.Max(0, Math.Min(maximumTop, desiredTop));
         Thickness margin = MediaControls.Margin;
+        MediaControls.VerticalAlignment = VerticalAlignment.Top;
         if (Math.Abs(margin.Top - top) > 0.1 ||
             Math.Abs(margin.Bottom) > 0.1 ||
             Math.Abs(margin.Left) > 0.1 ||

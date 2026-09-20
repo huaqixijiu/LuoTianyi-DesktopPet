@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using LuoTianyiPet.Core;
 
 namespace LuoTianyiPet.App;
@@ -18,7 +20,7 @@ internal sealed class StartupOptions
         IsMusicSettingsFeedbackQa = arguments.Contains(
             "--qa-music-settings-feedback",
             StringComparer.OrdinalIgnoreCase);
-        InstanceId = BuildInstanceId(arguments, IsPreviewOrQaRun);
+        InstanceId = BuildInstanceId(arguments, IsPreviewOrQaRun, IsPortable);
         UsesSoftwareRendering = UsesSoftwareRenderingFor(arguments);
         SimulateMissingAssets = arguments.Contains("--qa-missing-assets", StringComparer.OrdinalIgnoreCase);
         InitialVisualState = GetInitialVisualState(arguments);
@@ -112,11 +114,22 @@ internal sealed class StartupOptions
         };
     }
 
-    private static string BuildInstanceId(IReadOnlyCollection<string> arguments, bool isPreviewOrQaRun)
+    private static string BuildInstanceId(IReadOnlyCollection<string> arguments, bool isPreviewOrQaRun, bool isPortable)
     {
         const string applicationId = "LuoTianyiPet.App";
         string instanceId = isPreviewOrQaRun ? $"{applicationId}.QA" : applicationId;
+        // A portable preview owns different data from the installed/development
+        // app. It must not silently exit because that other copy is running.
+        if (isPortable)
+        {
+            string directory = Path.GetFullPath(AppContext.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToUpperInvariant();
+            using var hash = SHA256.Create();
+            byte[] digest = hash.ComputeHash(Encoding.UTF8.GetBytes(directory));
+            instanceId += ".Portable." + BitConverter.ToString(digest, 0, 8).Replace("-", "");
+        }
         if (arguments.Contains("--qa-planner", StringComparer.OrdinalIgnoreCase)) instanceId += ".Planner";
+        if (arguments.Contains("--qa-planner-editor-density", StringComparer.OrdinalIgnoreCase)) instanceId += ".PlannerEditorDensity";
+        if (arguments.Any(a=>a is "--qa-reminder-card" or "--qa-reminder-card-preview")) instanceId += ".ReminderCard";
         if (arguments.Contains("--qa-preserve-drag", StringComparer.OrdinalIgnoreCase)) instanceId += ".PreserveDrag";
         if (arguments.Contains("--qa-recycle-direction", StringComparer.OrdinalIgnoreCase)) instanceId += ".RecycleDirection";
         if (arguments.Contains("--qa-animation-edges", StringComparer.OrdinalIgnoreCase)) instanceId += ".AnimationEdges";

@@ -78,7 +78,8 @@ public sealed class WeChatSessionChangeTracker
                 string eventKey = $"wechat-session:{_epoch}:{++_sequence}";
                 _currentNotifications[row.Key] = eventKey;
                 events.Add(new MessageNotificationSummary(MessageProvider.WeChat, now, row.DisplayName,
-                    MessagePreview: row.Preview, NotificationKey: eventKey, WeChatSessionKey: row.Key));
+                    UnreadCount: row.UnreadCount, MessagePreview: row.Preview,
+                    NotificationKey: eventKey, WeChatSessionKey: row.Key));
             }
         }
         // Keep only hashes/numbers for currently exposed rows; raw text lives only in emitted reminders.

@@ -12,12 +12,44 @@ public sealed class MessageInbox
     public IReadOnlyList<InboxConversation> Rows(MessageProvider provider) => _rows.Values
         .Where(row => row.Provider == provider).OrderByDescending(row => row.UpdatedAt).ThenBy(row => row.Key).ToArray();
     public long Total(MessageProvider provider) => _rows.Values.Where(row => row.Provider == provider).Sum(row => (long)row.Count);
+    // The local event total is not necessarily the client's unread count. Shell
+    // flashes in particular have no reliable number, so the UI must not label
+    // that total as "unread".
+    public long? KnownUnreadCount(MessageProvider provider)
+    {
+        var rows=Rows(provider);
+        if(rows.Count==1)return rows[0].Latest.UnreadCount is int count && count>0?count:null;
+        // WeChat's public session marks are per conversation. QQ tray counts
+        // can be application-wide, so adding multiple QQ rows would invent a
+        // larger number even when every row carries the same tray count.
+        return provider==MessageProvider.WeChat && rows.Count>1 &&
+            rows.All(row=>row.Latest.WeChatSessionKey is not null && row.Latest.UnreadCount is > 0)
+            ? rows.Sum(row=>(long)row.Latest.UnreadCount!.Value) : null;
+    }
+    public int? KnownConversationUnreadCount(InboxConversation row)
+    {
+        if (row.Latest.UnreadCount is not > 0) return null;
+        // WeChat exposes a per-session mark. QQ's tray number can cover the
+        // entire application, so it belongs to a row only when it is alone.
+        return row.Provider == MessageProvider.WeChat && row.Latest.WeChatSessionKey is not null ||
+            Rows(row.Provider).Count == 1 ? row.Latest.UnreadCount : null;
+    }
     public static string Badge(long count) => count > 99 ? "99+" : count.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private static string GenericKey(MessageProvider provider) => $"{provider}:source";
+    private static string? DisplayText(string? value)
+    {
+        string? text=value?.Trim();
+        return text is null || text.Length==0 || text.Equals("null",StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("undefined",StringComparison.OrdinalIgnoreCase) || text.Equals("NaN",StringComparison.OrdinalIgnoreCase)
+            ? null : text;
+    }
 
     public bool Add(MessageNotificationSummary message)
     {
-        message = message with {ApplicationIcon = null, ContactAvatar = null};
+        message = message with {ApplicationIcon = null, ContactAvatar = null,
+            ConversationDisplayName=DisplayText(message.ConversationDisplayName),
+            MessagePreview=DisplayText(message.MessagePreview),
+            UnreadCount=message.UnreadCount is > 0 ? message.UnreadCount : null};
         string? eventKey = message.NotificationKey is string id ? $"{message.Provider}:{id}" : null;
         if (eventKey is not null && !_seen.Add(eventKey)) return false;
         if (_dismissed.TryGetValue(message.Provider, out var dismissed) && message.OccurredAt <= dismissed) return false;

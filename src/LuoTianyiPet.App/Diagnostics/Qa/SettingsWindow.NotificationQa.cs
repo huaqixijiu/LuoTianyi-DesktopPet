@@ -165,6 +165,20 @@ public partial class SettingsWindow
                 Check(page.ScrollableWidth < 1, name + " page never scrolls horizontally");
                 CaptureNotificationSettings(window, Path.Combine(directory, name + "-125.png"), 1.25);
                 CaptureNotificationSettings(window, Path.Combine(directory, name + "-150.png"), 1.5);
+                if (tag == "Music")
+                {
+                    Check(window.TogglePlayPauseShortcutTextBox.Text == MediaPreferences.DefaultTogglePlayPauseShortcut &&
+                        window.PreviousTrackShortcutTextBox.Text == MediaPreferences.DefaultPreviousTrackShortcut &&
+                        window.NextTrackShortcutTextBox.Text == MediaPreferences.DefaultNextTrackShortcut,
+                        "Music page loads the three existing default shortcuts");
+                    Check(window.TogglePlayPauseShortcutTextBox.IsVisible &&
+                        window.PreviousTrackShortcutTextBox.IsVisible &&
+                        window.NextTrackShortcutTextBox.IsVisible,
+                        "Music page exposes all three shortcut capture fields");
+                    page.ScrollToEnd();
+                    window.UpdateLayout();
+                    CaptureNotificationSettings(window, Path.Combine(directory, "music-shortcuts-bottom-150.png"), 1.5);
+                }
             }
             window.Close();
             window = null;
