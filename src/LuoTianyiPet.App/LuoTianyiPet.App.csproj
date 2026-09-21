@@ -27,6 +27,8 @@
              CopyToOutputDirectory="PreserveNewest" />
     <Resource Include="..\..\assets\app\luotianyi-pet.ico"
               Link="assets\app\luotianyi-pet.ico" />
+    <Resource Include="..\..\assets\app\luotianyi-soft-avatar-icon-v2-48.png"
+              Link="assets\app\luotianyi-soft-avatar-icon-v2-48.png" />
     <Resource Include="..\..\assets\app\luotianyi-pet.png"
               Link="assets\app\luotianyi-pet.png" />
     <Resource Include="..\..\assets\ui\*.png"
