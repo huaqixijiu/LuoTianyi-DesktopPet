@@ -2,6 +2,7 @@ using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using LuoTianyiPet.Core;
@@ -23,7 +24,7 @@ public partial class MainWindow
             var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));using var output=File.Create(Path.Combine(path,label+".png"));png.Save(output);
         }
         window.Navigate(false);await service.ChangeAsync(b=>b.WeekView=false);window.UpdateLayout();
-        Check(window.Title.Contains("与你依起")&&Tree(window).OfType<TextBlock>().Any(t=>t.Text=="愿世界，如你我所愿~"),"new branding");
+        Check(window.Title.Contains("与你相依")&&Tree(window).OfType<TextBlock>().Any(t=>t.Name=="PlannerBrandTitle"&&t.Inlines.OfType<Run>().Any(r=>r.Text.Contains("与你相依")))&&Tree(window).OfType<TextBlock>().Any(t=>t.Text=="愿世界，如你我所愿~"),"new branding");
         // Input tests exercise the same routing methods as PreviewTextInput/paste, not save normalization.
         var hour=new TextBox();var minute=new TextBox();var input=new PlannerTimeInput(hour,minute);
         input.Input(hour,"123");Check(hour.Text=="12"&&minute.Text=="3","hour third digit routes immediately to minute");
@@ -64,8 +65,8 @@ public partial class MainWindow
         {
             window.SetPageSize(preset);window.FitViewport(1920,1032);window.UpdateLayout();
             Check(window.ActualWidth<=1920&&window.ActualHeight<=1032,"preset fits "+preset);
-            double expectedWidth=preset switch{"mini"=>800,"comfortable"=>980,"fullscreen"=>1060,_=>900};
-            double expectedHeight=preset switch{"mini"=>680,"comfortable"=>750,"fullscreen"=>800,_=>700};
+            double expectedWidth=preset switch{"mini"=>840,"comfortable"=>1020,"fullscreen"=>1100,_=>940};
+            double expectedHeight=preset switch{"mini"=>620,"comfortable"=>710,"fullscreen"=>760,_=>660};
             Check(Math.Abs(window.ActualWidth-expectedWidth)<1&&Math.Abs(window.ActualHeight-expectedHeight)<1,"desktop tool bounds for "+preset);
             Shot("r4-size-"+preset);
         }
@@ -93,7 +94,7 @@ public partial class MainWindow
             Check((bool)typeof(PlannerNumber).GetField("_dragging",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(roller)!,"child capture transfer does not terminate roller drag "+max);
         }
         window.Navigate(true);window.UpdateLayout();Click("NewAlarm");
-        Check(Named("AlarmTimeField").ActualWidth==116&&Named("AlarmHour") is TextBox&&Named("AlarmMinute") is TextBox,"alarm uses a compact segmented time field");
+        Check(Named("AlarmTimeField").ActualWidth==110&&Named("AlarmHour") is TextBox&&Named("AlarmMinute") is TextBox,"alarm uses a compact segmented time field");
         Check(Named("ReminderNotes") is TextBox alarmNotes&&alarmNotes.MaxLength==100&&alarmNotes.ActualHeight>=38&&Named("AlarmNotesHint") is TextBlock,"alarm editor starts with one-line notes and a 100-character limit");
         var emptyNotes=(TextBox)Named("ReminderNotes");var emptyHint=(TextBlock)Named("AlarmNotesHint");
         var notesCenter=emptyNotes.TransformToAncestor(window).Transform(new Point(0,emptyNotes.ActualHeight/2)).Y;
@@ -108,7 +109,7 @@ public partial class MainWindow
         ((TextBox)Named("CountdownHours")).Text="23";((TextBox)Named("CountdownMinutes")).Text="50";((TextBox)Named("CountdownSeconds")).Text="40";Shot("r8-countdown-editor");Click("ReminderModeAlarm");
         Tree(window).OfType<Button>().Single(b=>Equals(b.Content,"每周")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.UpdateLayout();
         for(int n=0;n<7;n++){var button=(Button)Named("AlarmWeekday"+n);Check(button.ActualWidth-button.Padding.Left-button.Padding.Right>button.FontSize+2,"weekday glyph has full width "+n);}
-        var advance=(TextBox)Named("EarlyMinutes");Check(!advance.IsEnabled&&advance.Text=="30"&&advance.Width==76,"alarm lead field matches schedule default");
+        var advance=(TextBox)Named("EarlyMinutes");Check(!advance.IsEnabled&&advance.Text=="30"&&advance.Width>=56&&advance.Width<=76,"alarm lead field matches schedule default and active preset");
         var early=(System.Windows.Controls.CheckBox)Named("EarlyReminder");early.IsChecked=true;early.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));window.UpdateLayout();
         Click("AlarmWeekday0");advance=(TextBox)Named("EarlyMinutes");int before=service.Book.Items.Count;
         foreach(string invalid in new[]{"0","61","abc"}){advance.Text=invalid;Click("SaveReminder");await Task.Delay(60);Check(service.Book.Items.Count==before&&((TextBlock)Named("EditorError")).Text.Contains("1～60"),"alarm rejects early minutes "+invalid);}

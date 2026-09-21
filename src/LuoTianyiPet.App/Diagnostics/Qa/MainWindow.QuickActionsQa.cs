@@ -83,7 +83,8 @@ public partial class MainWindow
             SetPositionLocked(true);
             double left = Left, top = Top;
             BeginWindowDrag();
-            Check(!_isWindowDragging && Left == left && Top == top, "Locked position rejects dragging");
+            Check(!_isWindowDragging && Left == left && Top == top && Mouse.OverrideCursor is null,
+                "Locked position rejects dragging without changing the cursor");
             string previousStyle = _settings.Appearance.FullBodyStyle;
             bool styleChanged = false;
             for (int attempt = 0; attempt < 8 && !styleChanged; attempt++)

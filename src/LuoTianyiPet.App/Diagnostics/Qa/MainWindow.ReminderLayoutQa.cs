@@ -58,7 +58,7 @@ public partial class MainWindow
                 else check(top>=islandForLayout.Bottom+FeedbackBubblePetGap-1,$"feedback moves to the lower side of the upper island when there is no desktop room above it: {layout}, islandBottom={islandForLayout.Bottom}, bubbleTop={top}");
             }
             else if(hasIsland)
-                check(top>=islandForLayout.Bottom+FeedbackBubblePetGap-1,$"top-edge feedback stays below the visible music island: {layout}, islandBottom={islandForLayout.Bottom}, bubbleTop={top}");
+                check(top>=islandForLayout.Bottom+FeedbackBubblePetGap-1,$"top-edge feedback stays below the visible music island: {layout}, islandBottom={islandForLayout.Bottom}, bubbleTop={top}, height={FeedbackBubble.ActualHeight}, window={ActualHeight}, workBottom={work.Bottom-Top}, petTop={pet.Top}, islandMargin={MediaControls.Margin.Bottom}");
             else
                 check(top>=pet.Bottom+FeedbackBubblePetGap-1,$"top-edge feedback falls below the pet when music island is hidden: {layout}, petBottom={pet.Bottom}, bubbleTop={top}");
         }

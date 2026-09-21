@@ -84,10 +84,10 @@ internal sealed partial class PlannerWindow
         // Width and height fit independently on narrow or short DPI work areas.
         (double desiredWidth,double desiredHeight)=_pageSize switch
         {
-            "mini"=>(800,680),
-            "comfortable"=>(980,750),
-            "fullscreen"=>(1060,800),
-            _=>(900,700)
+            "mini"=>(840,620),
+            "comfortable"=>(1020,710),
+            "fullscreen"=>(1100,760),
+            _=>(940,660)
         };
         double nativeWidth=Math.Min(desiredWidth,Math.Max(1,availableWidth-48));
         double nativeHeight=Math.Min(desiredHeight,Math.Max(1,availableHeight-80));

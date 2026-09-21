@@ -18,24 +18,28 @@ public partial class MainWindow
 
     private void OnPreviousTrackClick(object sender, RoutedEventArgs e)
     {
+        PreserveReminderCardDuringTransientInput();
         InterruptTimeGreetingFromAccessoryInput();
         TrySendMediaCommand(MediaCommand.PreviousTrack);
     }
 
     private void OnTogglePlayPauseClick(object sender, RoutedEventArgs e)
     {
+        PreserveReminderCardDuringTransientInput();
         InterruptTimeGreetingFromAccessoryInput();
         HandleTogglePlayPauseRequest();
     }
 
     private void OnNextTrackClick(object sender, RoutedEventArgs e)
     {
+        PreserveReminderCardDuringTransientInput();
         InterruptTimeGreetingFromAccessoryInput();
         TrySendMediaCommand(MediaCommand.NextTrack);
     }
 
     private void OnCloudMusicVolumeClick(object sender, RoutedEventArgs e)
     {
+        PreserveReminderCardDuringTransientInput();
         InterruptTimeGreetingFromAccessoryInput();
         if (_bunChaseActive)
         {
@@ -104,6 +108,7 @@ public partial class MainWindow
             return;
         }
 
+        PreserveReminderCardDuringTransientInput();
         _isCloudMusicVolumeTrackDragging = CloudMusicVolumeDragSurface.CaptureMouse();
         UpdateCloudMusicVolumeFromPointer(e.GetPosition(CloudMusicVolumeSlider));
         e.Handled = true;
@@ -116,6 +121,7 @@ public partial class MainWindow
             return;
         }
 
+        PreserveReminderCardDuringTransientInput();
         if (e.LeftButton != MouseButtonState.Pressed)
         {
             StopCloudMusicVolumeTrackDrag();

@@ -59,6 +59,15 @@ public static class ReminderEngine
                 occurrence.SnoozeAt = null;
                 occurrence.RoundStartedAt = null;
             }
+            else if (occurrence.Phase == ReminderPhase.Early &&
+                     book.Items.FirstOrDefault(i => i.Id == occurrence.RuleId) is { } earlyItem &&
+                     earlyItem.EarlyEnabled == true &&
+                     occurrence.At.AddMinutes(-ReminderSchedule.LimitEarlyMinutes(earlyItem.EarlyMinutes)) <= now)
+            {
+                // The app may have been restarted while this early notice is
+                // still active. Keep it visible so every saved notice can be
+                // presented again, including several simultaneous notices.
+            }
             else if (occurrence.Phase == ReminderPhase.Early ||
                      occurrence.Phase == ReminderPhase.EarlySnoozed && occurrence.SnoozeAt <= now)
             {

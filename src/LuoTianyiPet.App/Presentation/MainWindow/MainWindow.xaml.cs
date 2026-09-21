@@ -190,6 +190,9 @@ public partial class MainWindow : Window
     private readonly PetStateMachine _stateMachine;
     private bool _isClosing;
     private bool _isWindowDragging;
+    private bool _petPressCursorActive;
+    private System.Windows.Input.Cursor? _petPressCursor;
+    private System.Windows.Input.Cursor? _windowDragCursor;
     private bool _sleepHeldAfterDrag;
     private bool _dragPreservesAnimation;
     private double _bunSubpixelX, _bunSubpixelY;
@@ -1465,6 +1468,7 @@ public partial class MainWindow : Window
         _dragPressScreenPoint = GetPointerScreenPositionInDips(e);
         _dragStartLeft = Left;
         _dragStartTop = Top;
+        HoldPetCursorForPress(ToPointerPoint(position));
         Mouse.Capture(this);
         DateTimeOffset now = DateTimeOffset.Now;
         PointerGestureAction action = _pointerGesture.Press(ToPointerPoint(position), e.ClickCount, now);
@@ -1536,6 +1540,7 @@ public partial class MainWindow : Window
             ReleaseMouseCapture();
         }
 
+        ReleasePetCursorHold();
         SyncSingleClickTimer();
         e.Handled = true;
     }
@@ -1544,14 +1549,18 @@ public partial class MainWindow : Window
     {
         _pettingGesture.Cancel();
         _pettingGestureConsumedPress = false;
-        if (_isClosing || !_isWindowDragging)
+        if (_isClosing || IsMouseCaptured)
         {
             return;
         }
 
-        _pointerGesture.Cancel();
-        _rapidDragTracker.Cancel();
-        EndWindowDrag();
+        if (_isWindowDragging)
+        {
+            _pointerGesture.Cancel();
+            _rapidDragTracker.Cancel();
+            EndWindowDrag();
+        }
+        ReleasePetCursorHold();
     }
 
     private void TryBeginPettingGesture(PointerPoint windowPoint, DateTimeOffset now)
@@ -1722,7 +1731,9 @@ public partial class MainWindow : Window
         _dragEdgeCandidate = EdgeDockSide.None;
         _classicDragExpansionStarted = false;
 
+        _windowDragCursor = _petPressCursorActive ? _petPressCursor : PetImage.Cursor;
         _isWindowDragging = true;
+        RefreshPetPointerOverride();
         _dragPreservesAnimation = !CanUseOrdinaryDragVisual();
         if (IsClassicCatEarsFullBodyMode() && CanUseOrdinaryDragVisual())
         {
@@ -1793,6 +1804,8 @@ public partial class MainWindow : Window
 
         _rapidDragTracker.Cancel();
         _isWindowDragging = false;
+        _windowDragCursor = null;
+        RefreshPetPointerOverride();
         bool edgeDockReleasedByDrag = _edgeDockReleasedByDrag;
         _edgeDockReleasedByDrag = false;
         if (_stateMachine.EndDrag())
@@ -4242,7 +4255,10 @@ public partial class MainWindow : Window
             return;
         }
 
-        PetImage.Cursor = null;
+        if (!_isWindowDragging && !_petPressCursorActive && !_fileDragCursorOverrideActive)
+        {
+            PetImage.Cursor = null;
+        }
         if (_edgeDockSide != EdgeDockSide.None)
         {
             if (!_isWindowDragging)
@@ -4356,13 +4372,29 @@ public partial class MainWindow : Window
 
     private void UpdatePetCursor(PointerPoint windowPoint)
     {
+        if (_fileDragCursorOverrideActive)
+        {
+            PetImage.Cursor = _petPointerCursor ?? System.Windows.Input.Cursors.Hand;
+            return;
+        }
+        if (_isWindowDragging || _petPressCursorActive)
+        {
+            PetImage.Cursor = _isWindowDragging ? _windowDragCursor : _petPressCursor;
+            return;
+        }
+
+        PetImage.Cursor = ResolvePetCursor(windowPoint);
+    }
+
+    private System.Windows.Input.Cursor? ResolvePetCursor(PointerPoint windowPoint)
+    {
         PointerPoint? normalizedPoint = NormalizeToPetImage(windowPoint);
         bool isOpaquePixel = normalizedPoint is PointerPoint point && IsOpaquePetPixel(point);
         PetPlaybackPlan plan = _stateMachine.Resolve(DateTimeOffset.Now);
         BodyRegionId? region = isOpaquePixel && plan.BodyRegionInteractionsEnabled
             ? _bodyHitMap.HitTest(normalizedPoint!.Value)
             : null;
-        PetImage.Cursor = PetCursorResolver.Resolve(
+        return PetCursorResolver.Resolve(
             isOpaquePixel,
             plan.BodyRegionInteractionsEnabled,
             region) switch
@@ -4714,6 +4746,21 @@ public partial class MainWindow : Window
             {
                 MediaControls.Margin=new Thickness(
                     margin.Left,margin.Top,margin.Right,requiredBottomMargin);
+                UpdateLayout();
+                hasIsland=TryGetMusicIslandBoundsInWindow(out island);
+            }
+        }
+        if(!preferredFits&&hasIsland&&island.Bottom>pet.Top&&
+            island.Bottom+FeedbackBubblePetGap+height>ActualHeight&&
+            MediaControls.VerticalAlignment==VerticalAlignment.Top)
+        {
+            // The split layout may pin the island by its top edge. Move that
+            // island up enough to keep a real feedback slot inside the window.
+            double shift=island.Bottom+FeedbackBubblePetGap+height-ActualHeight;
+            Thickness margin=MediaControls.Margin;
+            if(margin.Top>=shift)
+            {
+                MediaControls.Margin=new Thickness(margin.Left,margin.Top-shift,margin.Right,margin.Bottom);
                 UpdateLayout();
                 hasIsland=TryGetMusicIslandBoundsInWindow(out island);
             }
@@ -5615,12 +5662,8 @@ public partial class MainWindow : Window
 
     private void ApplyFileDragCursorOverride()
     {
-        System.Windows.Input.Cursor cursor =
-            _petPointerCursor ?? System.Windows.Input.Cursors.Hand;
         _fileDragCursorOverrideActive = true;
-        Mouse.OverrideCursor = cursor;
-        Cursor = cursor;
-        PetImage.Cursor = cursor;
+        RefreshPetPointerOverride();
     }
 
     private void ReleaseFileDragCursorOverride()
@@ -5631,9 +5674,53 @@ public partial class MainWindow : Window
         }
 
         _fileDragCursorOverrideActive = false;
-        Mouse.OverrideCursor = null;
-        Cursor = null;
-        PetImage.Cursor = null;
+        RefreshPetPointerOverride();
+    }
+
+    private void RefreshPetPointerOverride()
+    {
+        bool hasOverride = _fileDragCursorOverrideActive || _isWindowDragging || _petPressCursorActive;
+        System.Windows.Input.Cursor? cursor = _fileDragCursorOverrideActive
+            ? _petPointerCursor ?? System.Windows.Input.Cursors.Hand
+            : _isWindowDragging ? _windowDragCursor : _petPressCursorActive ? _petPressCursor : null;
+        Mouse.OverrideCursor = cursor;
+        Cursor = cursor;
+        if (hasOverride)
+        {
+            PetImage.Cursor = cursor;
+        }
+        else if (_isClosing)
+        {
+            PetImage.Cursor = null;
+        }
+        else
+        {
+            UpdatePetCursor(ToPointerPoint(Mouse.GetPosition(this)));
+        }
+    }
+
+    private void HoldPetCursorForPress(PointerPoint windowPoint)
+    {
+        HoldPetCursorForPress(ResolvePetCursor(windowPoint));
+    }
+
+    private void HoldPetCursorForPress(System.Windows.Input.Cursor? cursor)
+    {
+        _petPressCursor = cursor;
+        _petPressCursorActive = true;
+        RefreshPetPointerOverride();
+    }
+
+    private void ReleasePetCursorHold()
+    {
+        if (!_petPressCursorActive)
+        {
+            return;
+        }
+
+        _petPressCursorActive = false;
+        _petPressCursor = null;
+        RefreshPetPointerOverride();
     }
 
     private void HideAccessorySurfacesForBunChase()
@@ -6313,7 +6400,12 @@ public partial class MainWindow : Window
         _singleClickTimer.Tick -= OnSingleClickTimerTick;
         _pointerGesture.Cancel();
         _pettingGesture.Cancel();
+        _isWindowDragging = false;
+        _windowDragCursor = null;
+        _petPressCursorActive = false;
+        _petPressCursor = null;
         ReleaseFileDragCursorOverride();
+        RefreshPetPointerOverride();
         _bodyReactionMotion.Cancel();
         _musicIslandMotion.Cancel();
         CancelGenshinPresentations(restoreContinuousAnimation: false);

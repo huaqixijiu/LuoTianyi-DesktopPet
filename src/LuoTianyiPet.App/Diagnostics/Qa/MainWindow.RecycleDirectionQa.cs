@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using LuoTianyiPet.Core;
 
@@ -44,6 +45,9 @@ public partial class MainWindow
                 SeedMirror(kind);
                 StartFileDragPresentation();
                 await Task.Delay(80);
+                Check(_fileDragCursorOverrideActive &&
+                    ReferenceEquals(Mouse.OverrideCursor,_petPointerCursor ?? System.Windows.Input.Cursors.Hand),
+                    $"{scale}% {kind}: file drag keeps the custom pointing cursor");
                 Check(_fileDragPresentationActive && _animationPlayer?.CurrentAnimationId == FileDropPromptAnimation && Upright(),
                     $"{scale}% {kind}: Give-me starts upright in both transform layers");
                 Guid? token = _fileDropReactionToken;
@@ -54,7 +58,7 @@ public partial class MainWindow
                     $"{scale}% {kind}: prompt holds upright after playback");
                 if (kind == "both") CaptureQuickActionsQa(this, Path.Combine(directory, $"give-me-{scale}.png"));
                 FinishFileDragPresentation(false);
-                Check(!_fileDragPresentationActive && !_fileDragCursorOverrideActive,
+                Check(!_fileDragPresentationActive && !_fileDragCursorOverrideActive && Mouse.OverrideCursor is null,
                     $"{scale}% {kind}: leaving releases prompt and cursor");
                 SeedMirror(kind);
                 await PlayReactionAsync(

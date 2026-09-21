@@ -35,6 +35,11 @@ public partial class MainWindow
     private string _reminderCardOccurrenceKey = "";
     private string? _reminderStorageNotice;
     private bool _plannerReady;
+    // A media click or an ordinary drag can briefly make the foreground probe
+    // unavailable. Keep an already visible snooze card stable during that
+    // short interaction window; strict presentation safety still wins below.
+    private DateTimeOffset _reminderCardTransientUntil = DateTimeOffset.MinValue;
+    private static readonly TimeSpan ReminderCardTransientGrace = TimeSpan.FromSeconds(2);
     private async void InitializePlanner()
     {
         if (!_persistSettings)
@@ -97,24 +102,55 @@ public partial class MainWindow
             _stateMachine.VisualState.ContinuousState != PetContinuousState.HiddenForSafety &&
             foreground.ProcessName is not ("YuanShen" or "GenshinImpact" or "YuanShen.exe" or "GenshinImpact.exe");
     }
+    private void PreserveReminderCardDuringTransientInput()
+        => _reminderCardTransientUntil = DateTimeOffset.Now + ReminderCardTransientGrace;
+    private bool CanKeepVisibleReminderCardDuringTransientInput(ForegroundApplicationSnapshot foreground)
+    {
+        bool transientInput = _isWindowDragging || _isCloudMusicVolumeTrackDragging ||
+            CloudMusicVolumePopup.IsOpen || DateTimeOffset.Now < _reminderCardTransientUntil;
+        if (!transientInput || _isClosing || _systemSessionUnavailable || _hiddenByUser ||
+            _edgeDockSide != EdgeDockSide.None ||
+            _stateMachine.VisualState.ContinuousState == PetContinuousState.HiddenForSafety)
+            return false;
+        if (foreground.Succeeded && foreground.IsFullscreen)
+            return false;
+        return foreground.ProcessName is not ("YuanShen" or "GenshinImpact" or "YuanShen.exe" or "GenshinImpact.exe");
+    }
     private void RefreshReminderCard()
-        => RefreshReminderCardCore(PlannerPresentationSafe(_foregroundApplicationProbe?.Query() ?? new(false, null, false)));
+    {
+        ForegroundApplicationSnapshot foreground = _foregroundApplicationProbe?.Query() ?? new(false, null, false);
+        RefreshReminderCardCore(PlannerPresentationSafe(foreground), foreground);
+    }
     private void RefreshReminderCardCore(bool safe)
+    {
+        ForegroundApplicationSnapshot foreground = _foregroundApplicationProbe?.Query() ?? new(false, null, false);
+        RefreshReminderCardCore(safe, foreground);
+    }
+    private void RefreshReminderCardCore(bool safe, ForegroundApplicationSnapshot foreground)
     {
         if(_reminders==null||_isClosing)return;
         var book=_reminders.Book;DateTime now=DateTime.Now;
         bool CanPresent(ReminderOccurrence occurrence)
         {
             var item=book.Items.FirstOrDefault(i=>i.Id==occurrence.RuleId);
-            return item!=null&&ReminderEngine.Active(item)&&
-                (occurrence.Phase is ReminderPhase.Due or ReminderPhase.DueSnoozed || item.EarlyEnabled==true);
+            if(item==null||!ReminderEngine.Active(item))return false;
+            return occurrence.Phase switch
+            {
+                ReminderPhase.Early => item.EarlyEnabled==true&&occurrence.At>now,
+                ReminderPhase.Due => occurrence.At<=now,
+                ReminderPhase.DueSnoozed => (occurrence.SnoozeAt??occurrence.At)>now,
+                _ => false,
+            };
         }
         var pending=book.Occurrences.Where(o=>(o.Phase is ReminderPhase.Early or ReminderPhase.Due)&&CanPresent(o))
             .OrderBy(o=>o.Phase==ReminderPhase.Due?0:1).ThenBy(o=>o.At).ToList();
-        var capsules=book.Occurrences.Where(o=>(o.Phase is ReminderPhase.AcknowledgedEarly or ReminderPhase.EarlySnoozed or ReminderPhase.DueSnoozed)&&CanPresent(o)&&
+        var capsules=book.Occurrences.Where(o=>o.Phase==ReminderPhase.DueSnoozed&&CanPresent(o)&&
             (o.SnoozeAt??o.At)>now).OrderBy(o=>o.SnoozeAt??o.At).ToList();
-        if(!safe)
+        bool preserveVisibleCapsule = !safe && capsules.Count > 0 && _reminderCard is { IsVisible: true } &&
+            CanKeepVisibleReminderCardDuringTransientInput(foreground);
+        if(!safe && !preserveVisibleCapsule)
         { _reminderCard?.Hide();StopPlannerPresentation();return; }
+        if(!safe) StopPlannerPresentation();
         if(_reminderFeedback is { } feedback)
         {
             if(now>=feedback.Until||pending.Any(o=>o.Phase==ReminderPhase.Due))
@@ -126,7 +162,10 @@ public partial class MainWindow
             }
         }
         if(pending.Count+capsules.Count==0)
-        { _reminderCard?.Hide();StopPlannerPresentation();_quickReminderExpanded=false;_reminderCardOccurrenceKey="";return; }
+        {
+            _reminderCard?.SetExpanded(false,animate:false);
+            _reminderCard?.Hide();StopPlannerPresentation();_quickReminderExpanded=false;_reminderCardOccurrenceKey="";return;
+        }
         bool quick=pending.Count==0;
         bool hasDue=pending.Any(o=>o.Phase==ReminderPhase.Due);
         // An early notice is visual only. Starting the alarm reaction here also

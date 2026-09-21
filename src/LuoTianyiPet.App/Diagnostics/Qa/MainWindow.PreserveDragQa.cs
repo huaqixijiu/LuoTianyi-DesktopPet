@@ -49,13 +49,16 @@ public partial class MainWindow
                 Check(_stateMachine.ActiveReactionToken is null,name+": cancelled reaction does not return while moving");
             EndWindowDrag(); _pointerGesture.Cancel(); if(IsMouseCaptured)ReleaseMouseCapture();
             if (preserveReaction)
-                Check(_animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex==frame && _stateMachine.CurrentContinuousState==state,name+": drop preserves frame and state");
+                Check(_animationPlayer.CurrentAnimationId==id && _animationPlayer.CurrentFrameIndex>=frame && _stateMachine.CurrentContinuousState==state,
+                    name+$": drop keeps animation and state without rewinding (before={id}/{frame}/{state}; after={_animationPlayer.CurrentAnimationId}/{_animationPlayer.CurrentFrameIndex}/{_stateMachine.CurrentContinuousState})");
             else
                 Check(_animationPlayer.CurrentAnimationId!=id && _stateMachine.CurrentContinuousState==state,name+": drop keeps the continuous state after cancellation");
         }
         try
         {
             await Task.Delay(500);
+            Check(_petPointerCursor is not null,"user-provided pointing-hand cursor asset loads");
+            Check(_headPatCursor is not null,"user-provided head-pat cursor asset loads");
             await Reset(AppearanceOptionIds.FullBodyClassicCatEars);
             _stateMachine.SetContinuousState(PetContinuousState.MusicPlaying);
             PlayResolvedContinuousAnimation();await Task.Delay(180);
@@ -157,6 +160,31 @@ public partial class MainWindow
             OnBunChaseRendering(null,EventArgs.Empty);
             Check(_bunMotionStageElapsed<=TimeSpan.FromMilliseconds(34),"One-second render stall cannot skip acceleration ahead of motion");
             _bunChaseActive=false;_bunReturning=false;_bunReturnPosition=null;
+            await Reset(AppearanceOptionIds.FullBodyClassicCatEars);
+            foreach ((string pointerArea,System.Windows.Input.Cursor heldCursor) in new[]
+            {
+                ("head",_headPatCursor ?? System.Windows.Input.Cursors.Hand),
+                ("body",_petPointerCursor ?? System.Windows.Input.Cursors.Hand),
+            })
+            {
+                HoldPetCursorForPress(heldCursor);
+                Check(ReferenceEquals(Mouse.OverrideCursor,heldCursor) && ReferenceEquals(PetImage.Cursor,heldCursor),
+                    $"{pointerArea}: pressing keeps the current cursor before drag threshold");
+                _dragPressScreenPoint=new Point(600,450);
+                BeginWindowDrag();
+                Check(_isWindowDragging && ReferenceEquals(Mouse.OverrideCursor,heldCursor) &&
+                    ReferenceEquals(Cursor,heldCursor) && ReferenceEquals(PetImage.Cursor,heldCursor),
+                    $"{pointerArea}: dragging retains the cursor from mouse press");
+                UpdatePetCursor(new PointerPoint(-100,-100));
+                Check(ReferenceEquals(PetImage.Cursor,heldCursor),
+                    $"{pointerArea}: transparent drag area keeps the pressed cursor");
+                EndWindowDrag();
+                Check(ReferenceEquals(Mouse.OverrideCursor,heldCursor),
+                    $"{pointerArea}: drag completion holds the cursor until mouse release");
+                ReleasePetCursorHold();
+                Check(Mouse.OverrideCursor is null && Cursor is null,
+                    $"{pointerArea}: releasing the mouse restores normal cursor resolution");
+            }
         }
         catch(Exception error){checks.Add("FAIL "+error);}
         File.WriteAllLines(Path.Combine(directory,"result.txt"),checks);

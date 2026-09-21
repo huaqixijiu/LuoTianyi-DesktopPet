@@ -262,16 +262,38 @@ public partial class MainWindow
             Check(service.Book.Occurrences.Single().Phase==ReminderPhase.Cancelled,"skip suppresses this occurrence including due");
             Click("UndoReminderAction");await Task.Delay(250);RefreshReminderCardCore(true);
             Check(service.Book.Occurrences.Single().Phase==ReminderPhase.Early,"skip undo restores the early occurrence");
-            Click("KeepDueReminder");await Task.Delay(5200);RefreshReminderCardCore(true);Shot("05-due-countdown");
-            Check(service.Book.Occurrences.Single().Phase==ReminderPhase.AcknowledgedEarly&&!_reminderCard!.IsExpanded,"early dismissal leaves a collapsed countdown");
+            Click("KeepDueReminder");await Task.Delay(5200);RefreshReminderCardCore(true);Shot("05-early-card-hidden");
+            Check(service.Book.Occurrences.Single().Phase==ReminderPhase.AcknowledgedEarly&&
+                !_reminderCard!.IsVisible&&!_reminderCard.IsExpanded,
+                "early dismissal hides the card until the formal due reminder");
             Check(_reminderFeedback==null,"inline feedback expires after five seconds without an action");
-            await service.ChangeAsync(b=>{var o=b.Occurrences.Single();o.Phase=ReminderPhase.Due;o.RoundStartedAt=DateTime.Now;o.Revision++;});
+            DateTime dueAt=DateTime.Now;
+            await service.ChangeAsync(b=>{var item=b.Items.Single();var o=b.Occurrences.Single();item.Start=dueAt;item.CheckedThrough=dueAt;o.At=dueAt;o.Phase=ReminderPhase.Due;o.RoundStartedAt=dueAt;o.Revision++;});
+            Check(service.Book.Occurrences.Single().Phase==ReminderPhase.Due&&
+                ReminderEngine.Active(service.Book.Items.Single())&&service.Book.Occurrences.Single().At<=DateTime.Now,
+                "formal due state is active before presentation");
             RefreshReminderCardCore(true);await Task.Delay(240);Shot("06-due-expanded");
             Check(_reminderCard!.IsExpanded&&FindButton("AcknowledgeReminder").IsVisible&&FindButton("SnoozeReminder").IsVisible,"due presents finish and ten-minute snooze");
             Click("SnoozeReminder");await Task.Delay(250);RefreshReminderCardCore(true);Shot("07-snooze-feedback");
             Check(service.Book.Occurrences.Single().Phase==ReminderPhase.DueSnoozed&&FindButton("UndoReminderAction").IsVisible,"due snooze persists with inline undo");
             _reminderFeedback=null;RefreshReminderCardCore(true);Shot("08-snooze-countdown");
             Check(_reminderCard!.IsVisible&&!_reminderCard.IsExpanded,"snoozed due remains as a compact countdown");
+            var snoozeCard=_reminderCard!;
+            _isWindowDragging=true;
+            RefreshReminderCardCore(false,new ForegroundApplicationSnapshot(false,null,false));
+            Check(ReferenceEquals(_reminderCard,snoozeCard)&&snoozeCard.IsVisible,
+                "a transient foreground probe failure during an ordinary drag does not blink the visible snooze card");
+            Shot("08-snooze-drag-stable");
+            _isWindowDragging=false;
+            PreserveReminderCardDuringTransientInput();
+            RefreshReminderCardCore(false,new ForegroundApplicationSnapshot(false,null,false));
+            Check(ReferenceEquals(_reminderCard,snoozeCard)&&snoozeCard.IsVisible,
+                "music control grace keeps the visible snooze card stable during a transient probe failure");
+            Shot("08-snooze-music-stable");
+            _reminderCardTransientUntil=DateTimeOffset.MinValue;
+            RefreshReminderCardCore(false,new ForegroundApplicationSnapshot(false,null,false));
+            Check(!snoozeCard.IsVisible,"without an input grace period, an unavailable foreground probe still fails closed");
+            RefreshReminderCardCore(true);
             await service.ChangeAsync(b=>{var o=b.Occurrences.Single();o.SnoozeAt=DateTime.Now;ReminderEngine.Advance(b,DateTime.Now);});
             RefreshReminderCardCore(true);Check(_reminderCard!.IsExpanded&&service.Book.Occurrences.Single().Phase==ReminderPhase.Due,"snooze deadline opens due card again");
             Click("AcknowledgeReminder");await Task.Delay(250);RefreshReminderCardCore(true);Shot("09-finish-feedback");
@@ -312,6 +334,60 @@ public partial class MainWindow
                 "simultaneous early reminders auto-expand into one complete three-item list");
             Check(!multiTexts.Any(t=>t.Name=="ReminderNotesPreview")&&multiTexts.Count(t=>t.Text==multiAt.ToString("HH:mm"))==3,
                 "multiple reminder mode gives each item time and title while omitting long note previews");
+
+            // Regression: reopening the app during the active early window must
+            // restore every saved early occurrence, not just the first one.
+            var restartPaths = new LocalAppPaths(Path.Combine(path, "RestartMultipleEarlyUserData"));
+            var restartStore = new ReminderStore(restartPaths);
+            DateTime restartNow = DateTime.Now;
+            ReminderBook restartSeed = new() { EngineVersion = 1 };
+            for (int index = 0; index < 3; index++)
+            {
+                ReminderItem item = new()
+                {
+                    Title = $"重启后提前提醒 {index + 1}",
+                    Start = restartNow.AddMinutes(8 + index * 5),
+                    CheckedThrough = restartNow.AddMinutes(8 + index * 5),
+                    ReminderCreated = true,
+                    EarlyEnabled = true,
+                    EarlyMinutes = 30,
+                };
+                restartSeed.Items.Add(item);
+                restartSeed.Occurrences.Add(new ReminderOccurrence
+                {
+                    RuleId = item.Id,
+                    At = item.Start,
+                    Phase = ReminderPhase.Early,
+                });
+            }
+            await restartStore.SaveAsync(restartSeed);
+            using (var restarted = new ReminderService(restartPaths))
+            {
+                await restarted.LoadAsync();
+                var previousService = _reminders;
+                try
+                {
+                    _reminders = restarted;
+                    _reminderCard?.Hide();
+                    _reminderCardKey = "";
+                    _reminderCardOccurrenceKey = "";
+                    _quickReminderExpanded = false;
+                    RefreshReminderCardCore(true);
+                    Check(restarted.Book.Occurrences.Count == 3 &&
+                        restarted.Book.Occurrences.All(o => o.Phase == ReminderPhase.Early),
+                        "restart restores all three active early occurrences");
+                    Check(_reminderCard is { IsVisible: true, IsExpanded: true },
+                        "restart presents restored early reminders in one expanded card");
+                    Shot("12-restart-multiple-early");
+                }
+                finally
+                {
+                    _reminders = previousService;
+                    _reminderCard?.Hide();
+                    _reminderCardKey = "";
+                    _reminderCardOccurrenceKey = "";
+                }
+            }
             DateTime futureWithoutEarly=DateTime.Now.AddMinutes(5);
             await service.ChangeAsync(b=>
             {
