@@ -124,6 +124,17 @@ public partial class MainWindow
                 _reminderCard.Top>=dragWork.Top&&_reminderCard.Top+_reminderCard.ActualHeight<=dragWork.Bottom+1,
                 "reminder remains visible and clamped while the pet is dragged toward a work-area edge");
             _isWindowDragging=false;Left=initialLeft;Top=initialTop;PositionReminderCard();
+            var savedMediaSettings=_settings;
+            _settings=_settings with {Media=_settings.Media with {ShowMusicIslands=true}};
+            MediaControls.Visibility=Visibility.Visible;MediaControls.Opacity=0;MediaControlsTranslate.Y=0;
+            UpdateLayout();PositionReminderCard();
+            Check(TryGetMusicIslandBoundsInWindow(out Rect appearingMusicLocal),
+                "an appearing music island reserves its final bounds before the fade-in becomes visible");
+            Rect appearingMusic=new(Left+appearingMusicLocal.Left,Top+appearingMusicLocal.Top,appearingMusicLocal.Width,appearingMusicLocal.Height);
+            Rect appearingReminder=new(_reminderCard!.Left,_reminderCard.Top,_reminderCard.ActualWidth,_reminderCard.ActualHeight);
+            Check(!appearingMusic.IntersectsWith(appearingReminder),
+                "reminder card moves clear before the music island fade-in can cover it");
+            _settings=savedMediaSettings;MediaControls.Visibility=Visibility.Collapsed;MediaControls.Opacity=1;PositionReminderCard();
             if(preview)
             {
                 _settings=_settings with {Media=_settings.Media with {ShowMusicIslands=true}};
@@ -207,8 +218,38 @@ public partial class MainWindow
                         Click("ToggleQuickReminder");
                     }
                 }
+                SetDisplayScalePercent(95,false);
+                DateTime previewMultiAt=DateTime.Now.AddMinutes(18);
+                await service.ChangeAsync(b=>
+                {
+                    b.Items.Clear();b.Occurrences.Clear();
+                    foreach(var entry in new[]{("项目评审","核对演示稿"),("喝水休息","离开屏幕活动一下"),("回复消息","处理今天的待办")})
+                    {
+                        var item=new ReminderItem{Title=entry.Item1,Notes=entry.Item2,Start=previewMultiAt,
+                            CheckedThrough=previewMultiAt,ReminderCreated=true,EarlyEnabled=true,EarlyMinutes=30};
+                        b.Items.Add(item);b.Occurrences.Add(new ReminderOccurrence{RuleId=item.Id,At=previewMultiAt,Phase=ReminderPhase.Early});
+                    }
+                });
+                RefreshReminderCardCore(true);UpdateLayout();PositionReminderCard();await Task.Delay(280);
+                Check(_reminderCard!.IsExpanded&&Tree(_reminderCard).OfType<TextBlock>().Any(t=>t.Text=="3项提前提醒"),
+                    "desktop preview ends with the auto-expanded simultaneous reminder list");
+                TryGetMusicIslandBoundsInWindow(out Rect previewIslandLocal);
+                var previewPetLocal=GetPetImageAlphaBoundsInWindow();
+                Rect previewPetScreen=new(Left+previewPetLocal.Left,Top+previewPetLocal.Top,previewPetLocal.Width,previewPetLocal.Height);
+                Rect previewIslandScreen=new(Left+previewIslandLocal.Left,Top+previewIslandLocal.Top,previewIslandLocal.Width,previewIslandLocal.Height);
+                Rect previewCardScreen=new(_reminderCard.Left,_reminderCard.Top,_reminderCard.ActualWidth,_reminderCard.ActualHeight);
+                Check(!previewIslandScreen.IntersectsWith(previewCardScreen),"multiple reminder list also avoids the visible music island");
+                Rect previewView=Rect.Union(Rect.Union(previewPetScreen,previewIslandScreen),previewCardScreen);previewView.Inflate(12,12);
+                Matrix previewDevice=PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice??Matrix.Identity;
+                Rect previewPixels=new(previewDevice.Transform(previewView.TopLeft),previewDevice.Transform(previewView.BottomRight));
+                using(var bitmap=new System.Drawing.Bitmap((int)Math.Ceiling(previewPixels.Width),(int)Math.Ceiling(previewPixels.Height)))
+                using(var graphics=System.Drawing.Graphics.FromImage(bitmap))
+                {
+                    graphics.CopyFromScreen((int)Math.Floor(previewPixels.Left),(int)Math.Floor(previewPixels.Top),0,0,bitmap.Size);
+                    bitmap.Save(Path.Combine(path,"desktop-multiple-early.png"),System.Drawing.Imaging.ImageFormat.Png);
+                }
                 File.WriteAllLines(Path.Combine(path,"result.txt"),checks);
-                File.WriteAllText(Path.Combine(path,"ready.txt"),"Collapsed early reminder is visible for a desktop screenshot.");
+                File.WriteAllText(Path.Combine(path,"ready.txt"),"Multiple early reminders are visible for a desktop screenshot.");
                 await Task.Delay(TimeSpan.FromSeconds(90));
                 _reminderCard?.Close();_reminderCard=null;_reminders=null;
                 return;
@@ -252,6 +293,25 @@ public partial class MainWindow
             Shot("10-no-early-snooze-countdown");
             Check(service.Book.Occurrences.Single().Phase==ReminderPhase.DueSnoozed&&
                 _reminderCard!.IsVisible&&!_reminderCard.IsExpanded,"alarm without early gains a countdown only after snooze");
+            DateTime multiAt=DateTime.Now.AddMinutes(18);
+            await service.ChangeAsync(b=>
+            {
+                b.Items.Clear();b.Occurrences.Clear();
+                foreach(var entry in new[]{("项目评审","核对演示稿"),("喝水休息","离开屏幕活动一下"),("回复消息","处理今天的待办")})
+                {
+                    var item=new ReminderItem{Title=entry.Item1,Notes=entry.Item2,Start=multiAt,
+                        CheckedThrough=multiAt,ReminderCreated=true,EarlyEnabled=true,EarlyMinutes=30};
+                    b.Items.Add(item);
+                    b.Occurrences.Add(new ReminderOccurrence{RuleId=item.Id,At=multiAt,Phase=ReminderPhase.Early});
+                }
+            });
+            RefreshReminderCardCore(true);await Task.Delay(240);Shot("11-multiple-early-reminders");
+            var multiTexts=Tree(_reminderCard!).OfType<TextBlock>().ToList();
+            Check(_reminderCard.IsExpanded&&multiTexts.Any(t=>t.Text=="3项提前提醒")&&
+                new[]{"项目评审","喝水休息","回复消息"}.All(title=>multiTexts.Any(t=>t.Text==title)),
+                "simultaneous early reminders auto-expand into one complete three-item list");
+            Check(!multiTexts.Any(t=>t.Name=="ReminderNotesPreview")&&multiTexts.Count(t=>t.Text==multiAt.ToString("HH:mm"))==3,
+                "multiple reminder mode gives each item time and title while omitting long note previews");
             DateTime futureWithoutEarly=DateTime.Now.AddMinutes(5);
             await service.ChangeAsync(b=>
             {

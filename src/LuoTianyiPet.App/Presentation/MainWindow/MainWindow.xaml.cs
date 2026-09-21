@@ -3110,12 +3110,46 @@ public partial class MainWindow : Window
 
     private void ApplyDragReleasePlacement(DesktopRectangle releaseBounds)
     {
+        DesktopRectangle workArea=GetCurrentWorkArea();
         PointerPoint position = DragReleasePlacement.Resolve(
             new PointerPoint(Left, Top), releaseBounds, GetPetImageAlphaBoundsInWindow(),
-            GetCurrentWorkArea(), EdgeAlignmentTolerance);
+            workArea, EdgeAlignmentTolerance);
         Left = position.X;
         Top = position.Y;
+        // Music frames include floating notes below and beside the character.
+        // Near the taskbar, align the central silhouette a little closer instead
+        // of treating those detached notes as the character's feet.
+        if(IsMusicPlaybackActive && releaseBounds.Bottom>=workArea.Bottom-100 &&
+            TryGetMusicBodyBottomInWindow(out double bodyBottom))
+        {
+            double desiredTop=workArea.Bottom-28-bodyBottom;
+            if(desiredTop>Top)Top=Math.Min(Top+120,desiredTop);
+        }
         UpdateAccessoryLayoutForCurrentPosition();
+    }
+
+    private bool TryGetMusicBodyBottomInWindow(out double bottom)
+    {
+        bottom=0;
+        if(PetImage.Source is not BitmapSource source || PetImage.ActualWidth<=0 || PetImage.ActualHeight<=0)return false;
+        try
+        {
+            BitmapSource bitmap=source.Format==PixelFormats.Bgra32 || source.Format==PixelFormats.Pbgra32
+                ? source:new FormatConvertedBitmap(source,PixelFormats.Bgra32,null,0);
+            int left=(int)(bitmap.PixelWidth*.32),right=(int)(bitmap.PixelWidth*.68);
+            int stride=bitmap.PixelWidth*4;
+            byte[] pixels=new byte[stride*bitmap.PixelHeight];bitmap.CopyPixels(pixels,stride,0);
+            for(int y=bitmap.PixelHeight-1;y>=0;y--)
+            {
+                bool opaque=false;
+                for(int x=left;x<right;x++)if(pixels[y*stride+x*4+3]>=32){opaque=true;break;}
+                if(!opaque)continue;
+                Point point=PetImage.TransformToAncestor(this).Transform(new Point(0,(y+1)*PetImage.ActualHeight/bitmap.PixelHeight));
+                bottom=point.Y;return true;
+            }
+        }
+        catch(Exception exception) when(exception is InvalidOperationException or NotSupportedException or ArgumentException){}
+        return false;
     }
 
     private void StartResolvedContinuousMotion()
@@ -4177,6 +4211,7 @@ public partial class MainWindow : Window
             _mediaControlsHideTimer.Stop();
             _musicIslandMotion.Show();
             MediaControls.IsHitTestVisible = true;
+            QueuePlannerPosition();
         }
 
         if (!_isClosing)
@@ -4659,6 +4694,7 @@ public partial class MainWindow : Window
         Rect island=default;
         bool hasIsland=TryGetMusicIslandBoundsInWindow(out island);
         bool IsWithinWorkArea(double candidateTop) =>
+            candidateTop>=0&&candidateTop+height<=ActualHeight&&
             Top+candidateTop>=work.Top&&Top+candidateTop+height<=work.Bottom;
         bool OverlapsIsland(double candidateTop) =>
             hasIsland&&candidateTop<island.Bottom&&candidateTop+height>island.Top;
@@ -4697,9 +4733,13 @@ public partial class MainWindow : Window
             // island is below the pet, so this intentionally selects the
             // island's lower side instead of the pet/island gap. When the
             // island is above the pet, use its upper side to avoid overlap.
-            double islandSideTop = island.Bottom<=pet.Top
-                ? island.Top-height-FeedbackBubblePetGap
-                : island.Bottom+FeedbackBubblePetGap;
+            double islandSideTop;
+            if(island.Bottom<=pet.Top)
+            {
+                double aboveIsland=island.Top-height-FeedbackBubblePetGap;
+                islandSideTop=IsWithinWorkArea(aboveIsland)?aboveIsland:pet.Bottom+FeedbackBubblePetGap;
+            }
+            else islandSideTop=island.Bottom+FeedbackBubblePetGap;
             top=islandSideTop;
         }
         else
@@ -4723,7 +4763,7 @@ public partial class MainWindow : Window
     private bool TryGetMusicIslandBoundsInWindow(out Rect bounds)
     {
         bounds=default;
-        if(MediaControls.Visibility!=Visibility.Visible||MediaControls.Opacity<=0.01||
+        if(MediaControls.Visibility!=Visibility.Visible||
             MediaControls.ActualWidth<=0||MediaControls.ActualHeight<=0)return false;
         try
         {
@@ -6103,6 +6143,7 @@ public partial class MainWindow : Window
 
         UpdateMediaControlButtonsVisibility();
         _musicIslandMotion.Show();
+        QueuePlannerPosition();
         MediaControls.IsHitTestVisible = _settings.Media.EnableCloudMusicShortcutControl;
         _trackInfoHideTimer.Stop();
         if (holdAfterLeave && !_previewTrackInfo)

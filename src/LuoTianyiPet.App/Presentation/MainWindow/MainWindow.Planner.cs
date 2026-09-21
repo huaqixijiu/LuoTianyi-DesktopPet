@@ -169,7 +169,7 @@ public partial class MainWindow
                 else if(occurrenceKey!=_reminderCardOccurrenceKey)
                 {
                     _reminderCardOccurrenceKey=occurrenceKey;
-                    _quickReminderExpanded=pending.Any(o=>o.Phase==ReminderPhase.Due);
+                    _quickReminderExpanded=pending.Count>1||pending.Any(o=>o.Phase==ReminderPhase.Due);
                 }
             }
             RenderReminderCard(book,quick?capsules:pending);

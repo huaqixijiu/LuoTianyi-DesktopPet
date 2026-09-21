@@ -56,6 +56,21 @@ public partial class MainWindow
         try
         {
             await Task.Delay(500);
+            await Reset(AppearanceOptionIds.FullBodyClassicCatEars);
+            _stateMachine.SetContinuousState(PetContinuousState.MusicPlaying);
+            PlayResolvedContinuousAnimation();await Task.Delay(180);
+            Check(TryGetMusicBodyBottomInWindow(out double musicBodyBottom),"music body silhouette can be measured from the displayed frame");
+            DesktopRectangle musicWork=GetCurrentWorkArea();
+            Top=musicWork.Bottom-musicBodyBottom-48;
+            DesktopRectangle musicAlpha=GetPetImageAlphaBoundsInWindow();
+            DesktopRectangle musicRelease=new(Left+musicAlpha.Left,Top+musicAlpha.Top,musicAlpha.Width,musicAlpha.Height);
+            double musicBeforeGap=musicWork.Bottom-Top-musicBodyBottom;
+            ApplyDragReleasePlacement(musicRelease);
+            UpdateLayout();
+            Check(TryGetMusicBodyBottomInWindow(out double placedBodyBottom),"music body remains measurable after its lower-edge layout updates");
+            double musicAfterGap=musicWork.Bottom-Top-placedBodyBottom;
+            Check(musicAfterGap<musicBeforeGap&&musicAfterGap>=8,$"music bottom placement reduces the character-to-taskbar gap ({musicBeforeGap:0.0} to {musicAfterGap:0.0}; alpha={musicRelease.Bottom:0.0}, work={musicWork.Bottom:0.0})");
+            CaptureQuickActionsQa(this,Path.Combine(directory,"music-bottom-adjust.png"));
             foreach(var variant in new[]{CrystalLongIdleVariant.Sleep,CrystalLongIdleVariant.DuckSit})
             {
                 await Reset(AppearanceOptionIds.FullBodyCrystalDress);

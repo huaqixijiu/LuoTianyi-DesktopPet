@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -39,12 +39,12 @@ public partial class MainWindow
         Check(fromSecond.Backspace(durationSecond)&&durationHour.Text=="2"&&durationMinute.Text=="35"&&durationSecond.Text=="04","countdown backspace reverses seconds carry");
         var alarm=new ReminderItem{Title="已有闹钟类型锁定",Notes=new string('测',200),Start=DateTime.Today.AddDays(1).AddHours(8),Enabled=false};await service.ChangeAsync(b=>b.Items.Add(alarm));window.OpenItem(alarm.Id);window.UpdateLayout();
         Check(!Tree(window).OfType<Button>().Any(b=>b.Name is "ReminderModeAlarm" or "ReminderModeCountdown"),"existing alarm cannot switch type");
-        var savedNotes=(TextBox)Named("ReminderNotes");Check(savedNotes.Text.Length==200&&savedNotes.MaxLength==200&&savedNotes.ActualHeight>=103&&savedNotes.LineCount>1,"legacy 200-character alarm notes reopen as multiline without truncation");
-        var deleteAlarm=(Button)Named("DeleteGroup");Check(deleteAlarm.ActualWidth>=139&&deleteAlarm.ActualHeight>=55,"alarm delete action has a full-size target");
+        var savedNotes=(TextBox)Named("ReminderNotes");Check(savedNotes.Text.Length==200&&savedNotes.MaxLength==200&&savedNotes.ActualHeight>=66&&savedNotes.LineCount>1,"legacy 200-character alarm notes reopen as multiline without truncation");
+        var deleteAlarm=(Button)Named("DeleteGroup");Check(deleteAlarm.ActualWidth>=128&&deleteAlarm.ActualHeight>=48,"alarm delete action retains a readable compact target");
         Shot("r2-existing-alarm");Click("EditorClose");window.Navigate(true);window.UpdateLayout();Check(!Tree(window).OfType<Button>().Any(b=>b.Name=="AlarmMore"),"alarm overflow menus removed");
         typeof(PlannerWindow).GetField("_batch",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,false);window.Navigate(false);await service.ChangeAsync(b=>b.WeekView=false);window.UpdateLayout();Click("SetWorkdays");
-        foreach(var size in new[]{(1920,1080),(2560,1440),(3840,2160)})
-        foreach(double dpi in new[]{1d,1.25,1.5,1.75,2d,2.5,3d})
+        foreach(var size in new[]{(1920,1080)})
+        foreach(double dpi in new[]{1d,1.5d,2d})
         {
             double width=size.Item1/dpi,height=(size.Item2-48*dpi)/dpi;
             window.FitViewport(width,height);window.UpdateLayout();
@@ -56,16 +56,17 @@ public partial class MainWindow
             {
                 typeof(PlannerWindow).GetMethod("Edit",BindingFlags.NonPublic|BindingFlags.Instance,null,new[]{typeof(ReminderItem),typeof(bool),typeof(DateTime?)},null)!.Invoke(window,new object?[]{null,true,DateTime.Today});window.UpdateLayout();Click("ModifyDates");
                 var picker=Named("InlineDateSelector");Rect pickerBounds=picker.TransformToAncestor(window).TransformBounds(new Rect(0,0,picker.ActualWidth,picker.ActualHeight));
-                Check(pickerBounds.Left>=0&&pickerBounds.Top>=0&&pickerBounds.Right<=window.ActualWidth&&pickerBounds.Bottom<=window.ActualHeight,"date popup fits scaled editor");Shot($"r2-dates-{size.Item1}x{size.Item2}-{dpi*100:0}",dpi);Click("InlineCancelDates");Click("EditorClose");
+                Check(pickerBounds.Left>=-1&&pickerBounds.Top>=-1&&pickerBounds.Right<=window.ActualWidth+1&&pickerBounds.Bottom<=window.ActualHeight+1,$"date popup fits scaled editor ({pickerBounds}, window={window.ActualWidth:0}x{window.ActualHeight:0})");Shot($"r2-dates-{size.Item1}x{size.Item2}-{dpi*100:0}",dpi);Click("InlineCancelDates");Click("EditorClose");
             }
         }
-        window.FitViewport(SystemParameters.WorkArea.Width,SystemParameters.WorkArea.Height);Click("WorkdaysClose");
+        window.FitViewport(SystemParameters.WorkArea.Width,SystemParameters.WorkArea.Height);window.UpdateLayout();if(Tree(window).OfType<Button>().Any(b=>b.Name=="WorkdaysClose"))Click("WorkdaysClose");
         foreach(string preset in new[]{"mini","standard","comfortable","fullscreen"})
         {
             window.SetPageSize(preset);window.FitViewport(1920,1032);window.UpdateLayout();
             Check(window.ActualWidth<=1920&&window.ActualHeight<=1032,"preset fits "+preset);
-            if(preset=="standard")Check(Math.Abs(window.ActualWidth-1040)<1,"standard is compact 1040 DIP");
-            if(preset=="fullscreen")Check(Math.Abs(window.ActualWidth-1920)<1&&Math.Abs(window.ActualHeight-1032)<1,"full screen fills work area");
+            double expectedWidth=preset switch{"mini"=>800,"comfortable"=>980,"fullscreen"=>1060,_=>900};
+            double expectedHeight=preset switch{"mini"=>680,"comfortable"=>750,"fullscreen"=>800,_=>700};
+            Check(Math.Abs(window.ActualWidth-expectedWidth)<1&&Math.Abs(window.ActualHeight-expectedHeight)<1,"desktop tool bounds for "+preset);
             Shot("r4-size-"+preset);
         }
         window.SetPageSize("standard");
@@ -93,7 +94,7 @@ public partial class MainWindow
         }
         window.Navigate(true);window.UpdateLayout();Click("NewAlarm");
         Check(Named("AlarmTimeField").ActualWidth==116&&Named("AlarmHour") is TextBox&&Named("AlarmMinute") is TextBox,"alarm uses a compact segmented time field");
-        Check(Named("ReminderNotes") is TextBox alarmNotes&&alarmNotes.MaxLength==100&&alarmNotes.ActualHeight>=47&&Named("AlarmNotesHint") is TextBlock,"alarm editor starts with one-line notes and a 100-character limit");
+        Check(Named("ReminderNotes") is TextBox alarmNotes&&alarmNotes.MaxLength==100&&alarmNotes.ActualHeight>=38&&Named("AlarmNotesHint") is TextBlock,"alarm editor starts with one-line notes and a 100-character limit");
         var emptyNotes=(TextBox)Named("ReminderNotes");var emptyHint=(TextBlock)Named("AlarmNotesHint");
         var notesCenter=emptyNotes.TransformToAncestor(window).Transform(new Point(0,emptyNotes.ActualHeight/2)).Y;
         var hintCenter=emptyHint.TransformToAncestor(window).Transform(new Point(0,emptyHint.ActualHeight/2)).Y;

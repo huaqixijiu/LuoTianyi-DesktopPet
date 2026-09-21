@@ -11,6 +11,7 @@ internal static class PlannerTheme
     public static readonly Brush ControlLine = new SolidColorBrush(Color.FromRgb(176, 207, 228));
     public static readonly Brush Soft = new SolidColorBrush(Color.FromRgb(235, 247, 253));
     public static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(16, 52, 104));
+    public static readonly Brush TimeInk = new SolidColorBrush(Color.FromRgb(54, 83, 113));
     public static readonly Brush Muted = new SolidColorBrush(Color.FromRgb(101, 128, 153));
     public static readonly Brush PrimaryFill = new SolidColorBrush(Color.FromRgb(0, 148, 226));
     public static readonly Brush CalendarSelection = Accent;

@@ -69,5 +69,6 @@ public static class CalendarEditing
         book.Occurrences.RemoveAll(o => o.RuleId == item.Id && o.At > now &&
             (!item.Enabled || !item.HasTime || !Dates(item).Contains(o.At.Date) || o.At.TimeOfDay != item.Start.TimeOfDay));
         if (index >= 0) book.Items[index] = item; else book.Items.Add(item);
+        ReminderEngine.ActivateEarlyIfWithinWindow(book,item,now);
     }
 }

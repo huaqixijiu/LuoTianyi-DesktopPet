@@ -30,10 +30,11 @@ internal sealed class DateSelectionWindow : Window
     private DateTime? _dragLastDay;
     private Vector? _dragLastDirection;
     private bool _suppressNextClick;
+    private bool _compact;
     public DateSelectionWindow(IEnumerable<DateTime> dates, DateTime month, bool seedWhenEmpty=true)
     {
         Selection = new(dates.Select(d => d.Date)); if (seedWhenEmpty && Selection.Count == 0) Selection.Add(DateTime.Today); _month = new(month.Year, month.Month, 1);
-        Title = "选择日期"; Width = 470; FontSize = 14; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
+        Title = "选择日期"; Width = 430; FontSize = 14; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner; ShowInTaskbar = false;
         WindowStyle = WindowStyle.None; AllowsTransparency = true; Background = Brushes.Transparent;
         FontFamily = new FontFamily("Microsoft YaHei UI");
@@ -42,7 +43,12 @@ internal sealed class DateSelectionWindow : Window
         _shell.MouseLeftButtonDown += (_, e) => { if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed) DragMove(); };
         Content = _shell;
         PlannerTheme.Apply(this); Render();
-        Loaded += (_, _) => { MaxHeight = SafeModalHeight(); UpdateSelectionVisuals(); };
+        Loaded += (_, _) =>
+        {
+            _compact=Owner?.ActualHeight<500;
+            if(_compact){_shell.Padding=new Thickness(8);_shell.Margin=new Thickness(4);_panel.Margin=new Thickness(6);Render();}
+            MaxHeight=SafeModalHeight();UpdateSelectionVisuals();
+        };
     }
     private Button Make(string text, Action click) { Button b = new() { Content = text, Margin = new Thickness(2), Padding = new Thickness(7) }; b.Click += (_, _) => click(); return b; }
     private Button NavButton(string kind, Action click, string tip) { Button b = new() { Style = (Style)FindResource("PlannerIconBtn"), Content = PlannerTheme.Icon(kind, 16, PlannerTheme.Ink, 0), ToolTip = tip }; b.Click += (_, _) => click(); return b; }
@@ -64,9 +70,10 @@ internal sealed class DateSelectionWindow : Window
     {
         // Ordinary selections still grow naturally. Extreme selections reserve
         // roughly three compact chip rows so the picker stays inside Planner.
-        double reserve=Selection.Count>=30?120:40;
+        double reserve=Selection.Count>=30?(_compact?100:130):(_compact?24:80);
         double ownerHeight=Owner?.ActualHeight>0?Owner.ActualHeight-reserve:Selection.Count>=30?690:740;
-        return Math.Max(420,Math.Min(ownerHeight,SystemParameters.WorkArea.Height-24));
+        double ownerCap=Owner?.ActualHeight>0?Owner.ActualHeight-32:double.PositiveInfinity;
+        return Math.Max(1,Math.Min(Math.Max(_compact?280:360,ownerHeight),Math.Min(ownerCap,SystemParameters.WorkArea.Height-24)));
     }
     private void Render()
     {
@@ -77,21 +84,21 @@ internal sealed class DateSelectionWindow : Window
         _dayButtons.Clear();
         System.Windows.Input.Mouse.Capture(null);
         _panel.Children.Clear();
-        DockPanel title = new() { Margin = new Thickness(2, 0, 2, 8) }; var close = NavButton("close", () => DialogResult = false, "关闭"); DockPanel.SetDock(close, Dock.Right); title.Children.Add(close); title.Children.Add(new TextBlock { Text = "选择日期", FontSize = 20, FontWeight = FontWeights.SemiBold, Foreground = PlannerTheme.Ink, VerticalAlignment = VerticalAlignment.Center }); _panel.Children.Add(title);
-        DockPanel nav = new() { Margin = new Thickness(2, 2, 2, 6) }; var prev = NavButton("chevron-left", () => Move(-1), "上个月");prev.Name="PreviousDateMonth"; var next = NavButton("chevron-right", () => Move(1), "下个月");next.Name="NextDateMonth";
+        DockPanel title = new() { Margin = new Thickness(2, 0, 2, _compact?2:8) }; var close = NavButton("close", () => DialogResult = false, "关闭"); DockPanel.SetDock(close, Dock.Right); title.Children.Add(close); title.Children.Add(new TextBlock { Text = "选择日期", FontSize = _compact?18:20, FontWeight = FontWeights.SemiBold, Foreground = PlannerTheme.Ink, VerticalAlignment = VerticalAlignment.Center }); _panel.Children.Add(title);
+        DockPanel nav = new() { Margin = new Thickness(2, 2, 2, _compact?2:6) }; var prev = NavButton("chevron-left", () => Move(-1), "上个月");prev.Name="PreviousDateMonth"; var next = NavButton("chevron-right", () => Move(1), "下个月");next.Name="NextDateMonth";
         DockPanel.SetDock(prev, Dock.Left); DockPanel.SetDock(next, Dock.Right); nav.Children.Add(prev); nav.Children.Add(next);
         nav.Children.Add(new TextBlock { Text = _month.ToString("yyyy年M月"), TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = PlannerTheme.Ink }); _panel.Children.Add(nav);
         int weeks = (((int)_month.DayOfWeek + 6) % 7 + DateTime.DaysInMonth(_month.Year,_month.Month) + 6) / 7;
         Grid grid = new(); for (int c = 0; c < 7; c++) grid.ColumnDefinitions.Add(new()); for (int r = 0; r < weeks+1; r++) grid.RowDefinitions.Add(new() { Height = GridLength.Auto });
         grid.AddHandler(UIElement.PreviewMouseMoveEvent, new System.Windows.Input.MouseEventHandler((_, e) => ContinueDrag(grid, e)), true);
         grid.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new System.Windows.Input.MouseButtonEventHandler((_, e) => EndDrag(e)), true);
-        for (int c = 0; c < 7; c++) { TextBlock t = new() { Text = "一二三四五六日"[c].ToString(), TextAlignment = TextAlignment.Center, Margin = new Thickness(4, 10, 4, 8), FontSize = 12.5, Foreground = PlannerTheme.Muted }; Grid.SetColumn(t,c); grid.Children.Add(t); }
+        for (int c = 0; c < 7; c++) { TextBlock t = new() { Text = "一二三四五六日"[c].ToString(), TextAlignment = TextAlignment.Center, Margin = _compact?new Thickness(4,3,4,3):new Thickness(4,10,4,8), FontSize = 12.5, Foreground = PlannerTheme.Muted }; Grid.SetColumn(t,c); grid.Children.Add(t); }
         DateTime start = _month.AddDays(-((int)_month.DayOfWeek + 6) % 7);
         for (int i = 0; i < weeks*7; i++)
         {
             DateTime day = start.AddDays(i); Button b = Make(day.Day.ToString(), () => { if (_suppressNextClick) { _suppressNextClick = false; return; } Toggle(day); });
             b.Name = "Date" + day.ToString("yyyyMMdd"); b.ToolTip = day.ToString("yyyy年M月d日") + " " + CalendarLabels.FullLunar(day);
-            b.Width=48;b.Height=42;b.Margin=new Thickness(2);b.Padding=new Thickness(2);b.FontSize=14;b.BorderThickness=new Thickness(0);
+            b.Width=48;b.Height=_compact?(weeks>=6?20:22):42;b.Margin=new Thickness(_compact?0:2);b.Padding=new Thickness(2);b.FontSize=_compact?13:14;b.BorderThickness=new Thickness(0);
             b.IsEnabled = day >= ReminderSchedule.MinimumDate && day <= ReminderSchedule.MaximumDate;
             b.Tag = day;
             if (day == DateTime.Today)
@@ -107,9 +114,9 @@ internal sealed class DateSelectionWindow : Window
             Grid.SetColumn(b,i%7); Grid.SetRow(b,i/7+1); grid.Children.Add(b);
         }
         _panel.Children.Add(grid);
-        _selectedArea=new StackPanel{Margin=new Thickness(2,12,2,2)};
-        _selectedArea.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(2,0,2,10)});
-        DockPanel selectedHeader=new(){Name="SelectedDateHeader",Margin=new Thickness(2,0,2,6)};
+        _selectedArea=new StackPanel{Margin=new Thickness(2,_compact?0:12,2,2)};
+        _selectedArea.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(2,0,2,_compact?4:10)});
+        DockPanel selectedHeader=new(){Name="SelectedDateHeader",Margin=new Thickness(2,0,2,_compact?2:6)};
         _selectionSummary=TextBlockSummary();_selectionSummary.VerticalAlignment=VerticalAlignment.Center;selectedHeader.Children.Add(_selectionSummary);
         var headerActions=new StackPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=System.Windows.HorizontalAlignment.Right};DockPanel.SetDock(headerActions,Dock.Right);selectedHeader.Children.Insert(0,headerActions);
         _collapseDates=Link("收起⌃",()=>{_expanded=false;UpdateSelectionVisuals();},"CollapseDates");_collapseDates.Visibility=_expanded?Visibility.Visible:Visibility.Collapsed;headerActions.Children.Add(_collapseDates);
@@ -121,7 +128,7 @@ internal sealed class DateSelectionWindow : Window
         _clearExpandedDates=Link("清空选择",()=>{Selection.Clear();UpdateSelectionVisuals();},"ClearExpandedDates");_clearExpandedDates.HorizontalAlignment=System.Windows.HorizontalAlignment.Right;_clearExpandedDates.Margin=new Thickness(0,6,2,0);_clearExpandedDates.Visibility=_expanded?Visibility.Visible:Visibility.Collapsed;_selectedArea.Children.Add(_clearExpandedDates);
         _selectedScroll.SizeChanged+=(_,e)=>{if(e.NewSize.Width>0&&Math.Abs(e.NewSize.Width-_lastContainerWidth)>1&&!_adjustingLayout){_lastContainerWidth=e.NewSize.Width;UpdateSelectionVisuals();}};
         _panel.Children.Add(_selectedArea);
-        DockPanel footer = new() { Margin = new Thickness(2, 12, 2, 2) };
+        DockPanel footer = new() { Margin = new Thickness(2, _compact?2:12, 2, 2) };
         StackPanel right = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right };
         var cancel=FooterChip("取消", () => DialogResult = false, false);cancel.Name="CancelDates";right.Children.Add(cancel); var ok = FooterChip("确定", () => DialogResult = true, true); ok.Name = "ConfirmDates"; right.Children.Add(ok);
         DockPanel.SetDock(right, Dock.Right); footer.Children.Add(right); _panel.Children.Add(footer);
@@ -252,6 +259,10 @@ internal sealed class DateSelectionWindow : Window
         {
             if(Selection.Count==0)_expanded=false;
             _selectionSummary.Text=$"已选 {Selection.Count} 天";
+            // On very short work areas the count and selected day in the
+            // calendar already identify a single selection. Keep the action
+            // row fully visible instead of reserving a second chip row.
+            _selectedScroll.Visibility=_compact&&!_expanded&&Selection.Count==1?Visibility.Collapsed:Visibility.Visible;
             if(_collapseDates is not null)_collapseDates.Visibility=_expanded?Visibility.Visible:Visibility.Collapsed;
             if(_clearDates is not null){_clearDates.Visibility=_expanded?Visibility.Collapsed:Visibility.Visible;_clearDates.IsEnabled=Selection.Count>0;}
             if(_clearExpandedDates is not null){_clearExpandedDates.Visibility=_expanded?Visibility.Visible:Visibility.Collapsed;_clearExpandedDates.IsEnabled=Selection.Count>0;}
@@ -326,7 +337,7 @@ internal sealed class DateSelectionWindow : Window
             child.InvalidateMeasure();child.Measure(measureSize);fixedHeight+=child.DesiredSize.Height;
         }
         _selectedChips.InvalidateMeasure();_selectedChips.Measure(measureSize);
-        double safe=SafeModalHeight(),available=Math.Max(28,safe-fixedHeight-8);
+        double safe=SafeModalHeight(),available=Math.Max(_compact?0:28,safe-fixedHeight-8);
         if(_selectedChips.DesiredSize.Height>available+1)_selectedScroll.MaxHeight=available;
         MaxHeight=safe;
         _selectedScroll.InvalidateMeasure();_shell.InvalidateMeasure();InvalidateMeasure();

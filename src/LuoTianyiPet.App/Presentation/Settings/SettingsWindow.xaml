@@ -286,7 +286,7 @@
                                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SizeOption" Property="BorderBrush" Value="{StaticResource Primary}"/></Trigger>
                                 </ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
                             </Style></ListBox.ItemContainerStyle>
-                            <ListBoxItem Content="迷你"/><ListBoxItem Content="标准"/><ListBoxItem Content="舒适"/><ListBoxItem Content="全屏"/>
+                            <ListBoxItem Content="迷你"/><ListBoxItem Content="标准"/><ListBoxItem Content="舒适"/><ListBoxItem Content="宽敞"/>
                         </ListBox>
                         <TextBlock FontSize="10.5" Foreground="{StaticResource Muted}" Text="默认标准 · 保存后生效 · 与桌宠大小独立" />
                     </StackPanel></Border>

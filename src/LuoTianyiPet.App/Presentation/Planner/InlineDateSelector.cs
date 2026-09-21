@@ -37,14 +37,15 @@ internal sealed class InlineDateSelector : Border
     {
         Grid root=new();root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         Grid body=new();body.ColumnDefinitions.Add(new(){Width=new GridLength(1,GridUnitType.Star)});body.ColumnDefinitions.Add(new(){Width=new GridLength(210)});root.Children.Add(body);
-        _buttons.Clear();Grid calendar=new(){Margin=new Thickness(0,0,10,0)};calendar.RowDefinitions.Add(new(){Height=new GridLength(44)});calendar.RowDefinitions.Add(new(){Height=new GridLength(26)});for(int r=0;r<6;r++)calendar.RowDefinitions.Add(new());for(int c=0;c<7;c++)calendar.ColumnDefinitions.Add(new());body.Children.Add(calendar);_calendar=calendar;
+        DateTime first=_month.AddDays(-((int)_month.DayOfWeek+6)%7);
+        int weekCount=(int)Math.Ceiling((DateTime.DaysInMonth(_month.Year,_month.Month)+(double)(_month-first).Days)/7);
+        _buttons.Clear();Grid calendar=new(){Margin=new Thickness(0,0,10,0)};calendar.RowDefinitions.Add(new(){Height=new GridLength(44)});calendar.RowDefinitions.Add(new(){Height=new GridLength(26)});for(int r=0;r<weekCount;r++)calendar.RowDefinitions.Add(new());for(int c=0;c<7;c++)calendar.ColumnDefinitions.Add(new());body.Children.Add(calendar);_calendar=calendar;
         calendar.PreviewMouseMove+=(_,e)=>ContinueDrag(e);calendar.PreviewMouseLeftButtonUp+=(_,e)=>EndDrag(e);calendar.LostMouseCapture+=(_,_)=>{_dragSnapshot=null;};
         var prev=Button("InlinePreviousMonth","‹",()=>{_month=_month.AddMonths(-1);Render();});prev.IsEnabled=_month>ReminderSchedule.MinimumDate;calendar.Children.Add(prev);
         var caption=Text(_month.ToString("yyyy年M月"),14);caption.FontWeight=FontWeights.SemiBold;caption.HorizontalAlignment=HorizontalAlignment.Center;Grid.SetColumn(caption,1);Grid.SetColumnSpan(caption,5);calendar.Children.Add(caption);
         var next=Button("InlineNextMonth","›",()=>{_month=_month.AddMonths(1);Render();});next.IsEnabled=_month.Year<2099||_month.Month<12;Grid.SetColumn(next,6);calendar.Children.Add(next);
         for(int c=0;c<7;c++){var label=Text("一二三四五六日"[c].ToString());label.Foreground=PlannerTheme.Muted;label.HorizontalAlignment=HorizontalAlignment.Center;Grid.SetRow(label,1);Grid.SetColumn(label,c);calendar.Children.Add(label);}
-        DateTime first=_month.AddDays(-((int)_month.DayOfWeek+6)%7);
-        for(int i=0;i<42;i++)
+        for(int i=0;i<weekCount*7;i++)
         {
             DateTime day=first.AddDays(i);bool selected=_dates.Contains(day),today=day==DateTime.Today,locked=_locked.Contains(day);
             var pick=Button("InlineDate"+day.ToString("yyyyMMdd"),day.Day.ToString(),()=>{if(_suppressClick)return;if(!_dates.Add(day))_dates.Remove(day);Changed();});
@@ -68,9 +69,9 @@ internal sealed class InlineDateSelector : Border
         if(_dragSnapshot==null||_calendar==null||e.LeftButton!=System.Windows.Input.MouseButtonState.Pressed)return;
         Point point=e.GetPosition(_calendar);
         int column=(int)(point.X/(_calendar.ActualWidth/7));
-        double header=70,rowHeight=(_calendar.ActualHeight-header)/6;
+        double header=70,rowHeight=(_calendar.ActualHeight-header)/Math.Max(1,_calendar.RowDefinitions.Count-2);
         int row=(int)Math.Floor((point.Y-header)/rowHeight);
-        if(column<0||column>6||row<0||row>5)return;
+        if(column<0||column>6||row<0||row>=_calendar.RowDefinitions.Count-2)return;
         DateTime day=_month.AddDays(-((int)_month.DayOfWeek+6)%7).AddDays(row*7+column);
         if(day==_dragStart&&!_dragMoved)return;
         _dragMoved=true;ExtendDrag(day);e.Handled=true;

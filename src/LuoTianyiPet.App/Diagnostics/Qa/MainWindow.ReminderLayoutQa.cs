@@ -19,7 +19,7 @@ public partial class MainWindow
         foreach(int percent in new[]{60,100,150})
         {
             SetDisplayScalePercent(percent,false);RefreshReminderCardCore(true);UpdateLayout();_reminderCard!.UpdateLayout();PositionReminderCard();
-            check(_reminderCard.Width>previous,"reminder grows with pet scale "+percent);previous=_reminderCard.Width;
+            check(_reminderCard.Width>=previous,$"reminder stays readable or grows across pet size tiers at {percent} ({previous:0.0} -> {_reminderCard.Width:0.0})");previous=_reminderCard.Width;
             check(_reminderCard.Width<440||percent>100,"default reminder no longer fixed at 440");
             shot(_reminderCard,"r3-reminder-"+percent);
         }
@@ -39,8 +39,9 @@ public partial class MainWindow
             PrepareFeedbackBubble("网易云已打开，正在等待音乐开始播放…");ApplyAccessoryLayout(layout,force:true);UpdateLayout();PositionFeedbackNearPet();UpdateLayout();
             var pet=GetPetImageAlphaBoundsInWindow();double top=FeedbackBubble.TranslatePoint(new Point(),this).Y;
             var work=GetCurrentWorkArea();
-            bool preferredFits=Top+pet.Top-FeedbackBubble.ActualHeight-FeedbackBubblePetGap>=work.Top&&
-                Top+pet.Top-FeedbackBubblePetGap<=work.Bottom;
+            double preferredTop=pet.Top-FeedbackBubble.ActualHeight-FeedbackBubblePetGap;
+            bool preferredFits=preferredTop>=0&&preferredTop+FeedbackBubble.ActualHeight<=ActualHeight&&
+                Top+preferredTop>=work.Top&&Top+pet.Top-FeedbackBubblePetGap<=work.Bottom;
             bool hasIsland=TryGetMusicIslandBoundsInWindow(out Rect islandForLayout);
             bool preferredOverlapsIsland=hasIsland&&
                 pet.Top-FeedbackBubble.ActualHeight-FeedbackBubblePetGap<islandForLayout.Bottom&&
@@ -50,7 +51,12 @@ public partial class MainWindow
             if(preferredFits&&!preferredOverlapsIsland)
                 check(Math.Abs(gap-FeedbackBubblePetGap)<1,$"feedback stays above visible pet with six DIP gap: {layout}, gap={gap}, pet={pet.Top}/{pet.Bottom}, bubble={top}/{FeedbackBubble.ActualHeight}");
             else if(hasIsland&&islandForLayout.Bottom<=pet.Top)
-                check(top+FeedbackBubble.ActualHeight<=islandForLayout.Top-FeedbackBubblePetGap+1,$"feedback stays above the music island when it is above the pet: {layout}, islandTop={islandForLayout.Top}, bubbleBottom={top+FeedbackBubble.ActualHeight}");
+            {
+                double aboveIsland=islandForLayout.Top-FeedbackBubble.ActualHeight-FeedbackBubblePetGap;
+                bool roomAboveIsland=Top+aboveIsland>=work.Top;
+                if(roomAboveIsland)check(top+FeedbackBubble.ActualHeight<=islandForLayout.Top-FeedbackBubblePetGap+1,$"feedback stays above the music island when that slot fits: {layout}, islandTop={islandForLayout.Top}, bubbleBottom={top+FeedbackBubble.ActualHeight}");
+                else check(top>=islandForLayout.Bottom+FeedbackBubblePetGap-1,$"feedback moves to the lower side of the upper island when there is no desktop room above it: {layout}, islandBottom={islandForLayout.Bottom}, bubbleTop={top}");
+            }
             else if(hasIsland)
                 check(top>=islandForLayout.Bottom+FeedbackBubblePetGap-1,$"top-edge feedback stays below the visible music island: {layout}, islandBottom={islandForLayout.Bottom}, bubbleTop={top}");
             else

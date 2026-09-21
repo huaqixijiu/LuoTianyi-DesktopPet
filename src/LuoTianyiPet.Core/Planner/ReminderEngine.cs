@@ -134,6 +134,16 @@ public static class ReminderEngine
         changed |= book.Occurrences.RemoveAll(o => o.At<now.AddDays(-7) && o.Phase is ReminderPhase.Done or ReminderPhase.Cancelled && book.Items.Any(i=>i.Id==o.RuleId && i.CheckedThrough>=o.At))>0;
         return changed;
     }
+    public static bool ActivateEarlyIfWithinWindow(ReminderBook book,ReminderItem item,DateTime now)
+    {
+        if(!Active(item)||item.Relative||item.EarlyEnabled!=true)return false;
+        DateTime? next=ReminderSchedule.Next(item,book,now);
+        if(next is not DateTime at||at<=now||at.AddMinutes(-ReminderSchedule.LimitEarlyMinutes(item.EarlyMinutes))>now||
+            book.Occurrences.Any(o=>o.RuleId==item.Id&&o.At==at))return false;
+        book.Occurrences.Add(new ReminderOccurrence{RuleId=item.Id,At=at,Phase=ReminderPhase.Early});
+        item.CheckedThrough=at;
+        return true;
+    }
     public static void Acknowledge(ReminderBook b, Guid id, DateTime at, ReminderPhase expected)
     {
         var o=b.Occurrences.FirstOrDefault(x=>x.RuleId==id && x.At==at);
@@ -199,6 +209,26 @@ public static class ReminderEngine
         var i=b.Items.FirstOrDefault(x=>x.Id==id);if(i==null)return;
         i.Enabled=enabled && i.HasTime;i.CheckedThrough=now;i.ReminderCreated=true;
         b.Occurrences.RemoveAll(o=>o.RuleId==id);i.PendingAt=null;i.SnoozeUntil=null;
+        // A finished standalone alarm is still a useful preset. Switching it on
+        // schedules the next occurrence at its saved time without opening edit.
+        if(i.Enabled&&!i.Calendar&&ReminderSchedule.Next(i,b,now)==null)
+        {
+            if(i.Relative)
+            {
+                i.Start=now.AddSeconds(Math.Max(1,i.DurationSeconds));
+                i.PausedSeconds=null;
+            }
+            else
+            {
+                DateTime next=now.Date+i.Start.TimeOfDay;
+                if(next<=now)next=next.AddDays(1);
+                if(i.Repeat==ReminderRepeat.Dates)
+                {
+                    if(!i.Dates.Contains(next.Date))i.Dates.Add(next.Date);
+                }
+                else i.Start=next;
+            }
+        }
     }
     public static double Remaining(ReminderItem i,DateTime now) => i.PausedSeconds ?? Math.Max(0,(i.Start-now).TotalSeconds);
     public static void Pause(ReminderBook b,Guid id,DateTime now)

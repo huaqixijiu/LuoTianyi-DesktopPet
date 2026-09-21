@@ -118,7 +118,7 @@ internal sealed partial class PlannerWindow
     {
         Grid overlay = new() { Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(72, 37, 63, 107)) };
         bool calendarEditor = editor && content is FrameworkElement element && Equals(element.Tag, "CalendarEditor");
-        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(editor ? (calendarEditor ? 32 : 26) : 24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
+        Border card = new() { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(editor ? (calendarEditor ? 24 : 26) : 24), BorderBrush = PlannerTheme.Line, BorderThickness = new Thickness(1), HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16) };
         // Keep the shadow on a separate, text-free visual. An effect on card rasterizes its text.
         Border shadow=new(){Background=Brushes.White,CornerRadius=card.CornerRadius,Margin=card.Margin,HorizontalAlignment=card.HorizontalAlignment,VerticalAlignment=card.VerticalAlignment,IsHitTestVisible=false,Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=30,ShadowDepth=6,Opacity=.14,Color=System.Windows.Media.Color.FromRgb(32,65,105)}};
         shadow.SetBinding(WidthProperty,new System.Windows.Data.Binding("ActualWidth"){Source=card});

@@ -70,11 +70,6 @@ internal sealed partial class PlannerWindow
             _viewportMonitor = screen.DeviceName;
             var dpi = VisualTreeHelper.GetDpi(this);
             FitViewport(screen.WorkingArea.Width / dpi.DpiScaleX, screen.WorkingArea.Height / dpi.DpiScaleY);
-            if(_pageSize=="fullscreen")
-            {
-                Left=screen.WorkingArea.Left/dpi.DpiScaleX;Top=screen.WorkingArea.Top/dpi.DpiScaleY;
-                return;
-            }
             Left = Math.Max(screen.WorkingArea.Left / dpi.DpiScaleX, Math.Min(Left, screen.WorkingArea.Right / dpi.DpiScaleX - Width));
             Top = Math.Max(screen.WorkingArea.Top / dpi.DpiScaleY, Math.Min(Top, screen.WorkingArea.Bottom / dpi.DpiScaleY - Height));
         }
@@ -84,13 +79,18 @@ internal sealed partial class PlannerWindow
     // Inputs are the monitor's available DIP, never physical pixels. Also used by layout QA.
     internal void FitViewport(double availableWidth, double availableHeight)
     {
-        bool full=_pageSize=="fullscreen";
-        double preferred=_pageSize switch {"mini"=>.625,"comfortable"=>.9375,_=>.8125};
-        // Width and height must fit independently. Coupling them caused a
-        // short, high-DPI desktop to shrink the width and wrap the header.
-        double nativeWidth=full?availableWidth:Math.Min(1280*preferred,Math.Max(1,availableWidth-24));
-        double nativeHeight=full?availableHeight:Math.Min(860*preferred,Math.Max(1,availableHeight-24));
-        if(_pageSize=="mini")nativeHeight=Math.Min(Math.Max(1,availableHeight-24),Math.Max(620,nativeHeight));
+        // The saved "fullscreen" value is kept for compatibility, but its
+        // fourth choice is now a roomy desktop tool rather than a screen fill.
+        // Width and height fit independently on narrow or short DPI work areas.
+        (double desiredWidth,double desiredHeight)=_pageSize switch
+        {
+            "mini"=>(800,680),
+            "comfortable"=>(980,750),
+            "fullscreen"=>(1060,800),
+            _=>(900,700)
+        };
+        double nativeWidth=Math.Min(desiredWidth,Math.Max(1,availableWidth-48));
+        double nativeHeight=Math.Min(desiredHeight,Math.Max(1,availableHeight-80));
         bool sizeChanged = Math.Abs(Width - nativeWidth) > .01 || Math.Abs(Height - nativeHeight) > .01;
         // Keep the four window-size presets, but lay out and rasterize WPF text
         // at the final DIP size. Scaling the whole shell softened glyphs and

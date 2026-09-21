@@ -34,23 +34,27 @@ public partial class MainWindow
         _headerReminderTarget=due?null:first.SnoozeAt??first.At;
         _headerReminderSnoozed=snoozed;
         string status=due?"时间到了":snoozed?SnoozeRemaining(_headerReminderTarget!.Value):RemainingUntil(_headerReminderTarget!.Value);
-        string title=ReminderEngine.Label(firstItem)+(occurrences.Count>1?$" · 还有{occurrences.Count-1}项":"");
+        bool multiple=occurrences.Count>1;
+        string title=multiple?$"{occurrences.Count}项{(due?"到点":"提前")}提醒":ReminderEngine.Label(firstItem);
         double s=_reminderCard.UiScale;
-        StackPanel body=new(){Margin=new Thickness(22*s,0,22*s,27*s)};
+        StackPanel body=new(){Margin=new Thickness((multiple?16:22)*s,0,(multiple?16:22)*s,(multiple?18:27)*s)};
         foreach(var o in occurrences)
         {
             var item=book.Items.FirstOrDefault(i=>i.Id==o.RuleId);
             if(item==null)continue;
-            if(o!=first)
+            if(multiple)
             {
-                body.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(0,17*s,0,20*s)});
-                body.Children.Add(new TextBlock{Text=ReminderEngine.Label(item),FontSize=Math.Max(12,17*s),FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap});
+                if(o!=first)body.Children.Add(new Border{Height=1,Background=PlannerTheme.Line,Margin=new Thickness(0,10*s,0,10*s)});
+                Grid itemHeading=new(){Margin=new Thickness(0,0,0,8*s)};
+                itemHeading.ColumnDefinitions.Add(new(){Width=new GridLength(48*s)});itemHeading.ColumnDefinitions.Add(new());itemHeading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+                var time=new TextBlock{Text=o.At.ToString("HH:mm"),FontSize=Math.Max(10,13*s),FontWeight=FontWeights.Medium,Foreground=PlannerTheme.TimeInk,VerticalAlignment=VerticalAlignment.Center};itemHeading.Children.Add(time);
+                var itemTitle=new TextBlock{Text=ReminderEngine.Label(item),FontSize=Math.Max(11,15*s),FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(itemTitle,1);itemHeading.Children.Add(itemTitle);
                 DateTime target=o.SnoozeAt??o.At;
-                TextBlock remaining=new(){FontSize=Math.Max(11,13*s),Foreground=PlannerTheme.WorkActionFill,Margin=new Thickness(0,3*s,0,0)};
-                body.Children.Add(remaining);_capsuleRemaining.Add((remaining,target,o.Phase==ReminderPhase.DueSnoozed));
+                TextBlock remaining=new(){FontSize=Math.Max(10,12*s),Foreground=PlannerTheme.ReminderAccent,Margin=new Thickness(8*s,0,0,0),VerticalAlignment=VerticalAlignment.Center};Grid.SetColumn(remaining,2);itemHeading.Children.Add(remaining);_capsuleRemaining.Add((remaining,target,o.Phase==ReminderPhase.DueSnoozed));
+                body.Children.Add(itemHeading);
             }
             else body.Children.Add(new Border{Height=1,Background=PlannerTheme.ReminderLine,Margin=new Thickness(0,0,0,23*s)});
-            if(!string.IsNullOrWhiteSpace(item.Notes))
+            if(!multiple&&!string.IsNullOrWhiteSpace(item.Notes))
             {
                 double lineHeight=Math.Max(17,21*s);
                 body.Children.Add(new TextBlock{
@@ -60,7 +64,7 @@ public partial class MainWindow
                     MaxHeight=3*lineHeight,Foreground=PlannerTheme.Ink,
                     Margin=new Thickness(0,0,0,18*s)});
             }
-            else if(o.Phase is ReminderPhase.Early or ReminderPhase.Due)
+            else if(!multiple&&(o.Phase is ReminderPhase.Early or ReminderPhase.Due))
                 body.Children.Add(new TextBlock{Text=o.Phase==ReminderPhase.Early?$"将于 {o.At:HH:mm} 正式提醒":$"设定时间 {o.At:HH:mm}",
                     FontSize=Math.Max(11,14*s),Foreground=PlannerTheme.Muted,Margin=new Thickness(0,0,0,28*s)});
             bool narrow=_reminderCard.ExpandedWidth<210;
