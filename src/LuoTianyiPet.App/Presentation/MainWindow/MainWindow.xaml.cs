@@ -1820,12 +1820,25 @@ public partial class MainWindow : Window
 
             if (_classicSpinDanceActive)
             {
-                ApplyDragReleasePlacement(GetPetImageDesktopBounds());
+                DesktopRectangle spinReleaseBounds = GetPetImageDesktopBounds();
+                PetPlaybackPlan spinResolvedPlan = _stateMachine.Resolve(DateTimeOffset.Now);
+                bool keepSpin = _stateMachine.CurrentContinuousState == PetContinuousState.Idle &&
+                    spinResolvedPlan.Source == PlaybackPlanSource.Continuous &&
+                    spinResolvedPlan.AnimationId == _animationPlayer?.CurrentAnimationId;
+                ApplyDragReleasePlacement(spinReleaseBounds);
                 _classicDragExpansionStarted = false;
                 _dragIntentPetBoundsInWindow = null;
                 _dragEdgeCandidate = EdgeDockSide.None;
                 SetEdgeMirror(false);
                 UpdateAccessoryLayoutForCurrentPosition();
+                if (!keepSpin)
+                {
+                    _classicSpinDanceActive = false;
+                    _ = TransitionToResolvedContinuousAnimationAsync(
+                        "animation.drag_state_changed",
+                        dragReleaseBounds: spinReleaseBounds);
+                    return;
+                }
                 _logger.Info(
                     "interaction.drag_ended",
                     "Classic spin dance remains active until the next click.");
@@ -1847,7 +1860,7 @@ public partial class MainWindow : Window
                     "animation.edge_dock_drag_restored",
                     dragReleaseBounds: releaseBounds);
             }
-            else if (_dragPreservesAnimation || !CanUseOrdinaryDragVisual() || _animationPlayer?.CurrentAnimationId == resolvedPlan.AnimationId)
+            else if (_dragPreservesAnimation || _animationPlayer?.CurrentAnimationId == resolvedPlan.AnimationId)
             {
                 ApplyDragReleasePlacement(releaseBounds);
                 UpdateBodyHitDebugOverlay();

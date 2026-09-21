@@ -96,10 +96,13 @@ public partial class MainWindow
             _stateMachine.SetContinuousState(PetContinuousState.MusicPlaying);
             EndWindowDrag();
             await Task.Delay(650);
-            Check(_animationPlayer?.CurrentAnimationId == _stateMachine.Resolve(DateTimeOffset.Now).AnimationId &&
+            PetPlaybackPlan musicPlan = _stateMachine.Resolve(DateTimeOffset.Now);
+            Check(_animationPlayer?.CurrentAnimationId == musicPlan.AnimationId &&
                 _stateMachine.VisualState.ContinuousState == PetContinuousState.MusicPlaying &&
                 Math.Abs(GetPetImageDesktopBounds().Top - area.Top) < 1,
-                "Music beginning during expansion restores current music at the top");
+                $"Music beginning during expansion restores current music at the top " +
+                $"(actual={_animationPlayer?.CurrentAnimationId ?? "<none>"}, expected={musicPlan.AnimationId ?? "<none>"}, " +
+                $"state={_stateMachine.VisualState.ContinuousState}, top={GetPetImageDesktopBounds().Top:F2}, area={area.Top:F2})");
             _stateMachine.SetContinuousState(PetContinuousState.Idle);
 
             foreach (string style in new[] { AppearanceOptionIds.FullBodyLongHair, AppearanceOptionIds.FullBodyCrystalDress })
