@@ -97,7 +97,7 @@ internal sealed class DateSelectionWindow : Window
         for (int i = 0; i < weeks*7; i++)
         {
             DateTime day = start.AddDays(i); Button b = Make(day.Day.ToString(), () => { if (_suppressNextClick) { _suppressNextClick = false; return; } Toggle(day); });
-            b.Name = "Date" + day.ToString("yyyyMMdd"); b.ToolTip = day.ToString("yyyy年M月d日") + " " + CalendarLabels.FullLunar(day);
+            b.Name = "Date" + day.ToString("yyyyMMdd"); b.ToolTip = day.ToString("yyyy年M月d日") + " " + CalendarLabels.DisplayLunar(day);
             b.Width=48;b.Height=_compact?(weeks>=6?20:22):42;b.Margin=new Thickness(_compact?0:2);b.Padding=new Thickness(2);b.FontSize=_compact?13:14;b.BorderThickness=new Thickness(0);
             b.IsEnabled = day >= ReminderSchedule.MinimumDate && day <= ReminderSchedule.MaximumDate;
             b.Tag = day;

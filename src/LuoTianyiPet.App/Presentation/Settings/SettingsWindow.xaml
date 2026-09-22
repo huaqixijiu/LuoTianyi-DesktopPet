@@ -415,7 +415,7 @@
                     <TextBlock Style="{StaticResource PageTitle}" Text="关于" /><TextBlock Style="{StaticResource PageDescription}" Text="了解洛天依桌宠的版本信息与相关说明。" />
                     <Border Style="{StaticResource GroupCard}" Padding="15"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="74" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <Border Width="62" Height="62" Background="{StaticResource SettingsTileBrush}" CornerRadius="17"><Image Margin="4" Source="/assets/app/luotianyi-pet.png" Stretch="Uniform" /></Border>
-                        <StackPanel Grid.Column="1" Margin="5,2,0,0"><TextBlock FontSize="17" FontWeight="SemiBold" Text="洛天依桌宠" /><TextBlock x:Name="VersionTextBlock" Margin="0,4,0,0" Foreground="{StaticResource Muted}" FontSize="10.5" Text="版本 0.1.0" /><TextBlock Margin="0,3,0,0" Foreground="{StaticResource Muted}" FontSize="10.5" Text="Windows 10 / 11 · 普通用户权限" /></StackPanel>
+                        <StackPanel Grid.Column="1" Margin="5,2,0,0"><TextBlock FontSize="17" FontWeight="SemiBold" Text="洛天依桌宠" /><TextBlock Margin="0,4,0,0" Foreground="{StaticResource Muted}" FontSize="10.5" Text="作者：椛" /><TextBlock x:Name="VersionTextBlock" Margin="0,3,0,0" Foreground="{StaticResource Muted}" FontSize="10.5" Text="版本 0.1.0.96" /><TextBlock Margin="0,3,0,0" Foreground="{StaticResource Muted}" FontSize="10.5" Text="Windows 10 / 11 · 普通用户权限" /></StackPanel>
                     </Grid></Border>
                     <Border Style="{StaticResource GroupCard}" Padding="14,12"><StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,7">

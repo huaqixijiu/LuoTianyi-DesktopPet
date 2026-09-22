@@ -116,8 +116,8 @@ public partial class SettingsWindow : Window
     {
         Version? version = typeof(SettingsWindow).Assembly.GetName().Version;
         VersionTextBlock.Text = version is null
-            ? "版本 0.1.0"
-            : $"版本 {version.Major}.{version.Minor}.{version.Build}";
+            ? "版本 0.1.0.96"
+            : $"版本 {version}";
         UpdateNotificationAccessDisplay();
     }
 

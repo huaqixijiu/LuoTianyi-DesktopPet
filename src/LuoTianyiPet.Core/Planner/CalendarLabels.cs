@@ -27,6 +27,17 @@ public static class CalendarLabels
         if (d == 10) return "初十"; if (d == 20) return "二十"; if (d == 30) return "三十";
         return (d < 10 ? "初" : d < 20 ? "十" : "廿") + "一二三四五六七八九"[(d - 1) % 10];
     }
+    public static string SpecialOccasion(DateTime day) => day.ToString("MM-dd") switch
+    {
+        "07-12" => "洛天依生日",
+        "12-12" => "诞生日（本人）",
+        _ => "",
+    };
+    public static string DisplayLunar(DateTime day)
+    {
+        string special=SpecialOccasion(day);
+        return special.Length>0?special:FullLunar(day);
+    }
     public static string FullLunar(DateTime day)
     {
         if (day.Date < ReminderSchedule.MinimumDate || day.Date > ReminderSchedule.MaximumDate) return "";
@@ -59,7 +70,8 @@ public static class CalendarLabels
     {
         term = null;
         List<string> labels = [];
-        string? fixedHoliday = day.ToString("MM-dd") switch
+        string? fixedHoliday = SpecialOccasion(day);
+        if (string.IsNullOrEmpty(fixedHoliday)) fixedHoliday = day.ToString("MM-dd") switch
         {
             "01-01" => "元旦", "02-14" => "情人节", "04-01" => "愚人节",
             "05-01" => "劳动节", "06-01" => "儿童节", "10-01" => "国庆节",
